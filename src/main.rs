@@ -91,9 +91,10 @@ async fn process_request(
                     },
                     PublishParams::Dynamic{title} => {
                         match String::from_utf8(body_bytes) {
-                            Ok(body) if method != Method::PATCH =>
+                            Ok(body) if body == "" && method != Method::PATCH =>
+                                page.set_body("").await,
+                            Ok(body) =>
                                 page.set_body(body).await,
-                            Ok(_) => { },
                             Err(_) => return Ok(bad_request("Invalid UTF-8.")),
                         };
                         match title {
