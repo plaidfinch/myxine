@@ -52,6 +52,27 @@ impl<'a> PublishParams<'a> {
     }
 }
 
+// fn query_map_tokenizing<'a>(query: &'a str) -> Option<HashMap<&'a str, Vec<&'a str>>> {
+//     let mut map: HashMap<&'a str, Vec<&'a str>> = HashMap::new();
+//     let mut key = None;
+//     let mut val = None;
+//     let mut quoted = false;
+//     let mut escaping = false;
+//     for (i, c) in query.chars().enumerate() {
+//         match c {
+//             '"' => if !escaping {
+//                 quoted = !quoted
+//             } else {
+//                 escaping =
+//             },
+//             '\\' if !escaping => escaping = true,
+//         }
+//     }
+//     return Some(map);
+// }
+
+// TODO: Do a better job of parsing the query string
+
 fn query_map<'a>(query: &'a str) -> Option<HashMap<&'a str, Vec<&'a str>>> {
     let mut map: HashMap<&'a str, Vec<&'a str>> = HashMap::new();
     if query == "" { return Some(map); }
@@ -60,7 +81,7 @@ fn query_map<'a>(query: &'a str) -> Option<HashMap<&'a str, Vec<&'a str>>> {
             &mut [key, values] => {
                 let key = key.trim();
                 if key == "" { return None }
-                for value in values.split(";") {
+                for value in values.split(",") {
                     let value = value.trim();
                     map.entry(key).or_insert(vec![]).push(value);
                 }
