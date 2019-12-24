@@ -1,5 +1,6 @@
 use hyper::Body;
 use hyper_usse::Event;
+use std::io::Write;
 use std::mem;
 
 #[derive(Debug)]
@@ -15,15 +16,26 @@ pub enum Page {
     }
 }
 
+/// The size of the dynamic page template in bytes
+const TEMPLATE_SIZE: usize = include_str!("dynamic.html").len();
+
 impl Page {
     /// Render a whole page as HTML (for first page load)
     pub fn render(&self, event_source: &str) -> Vec<u8> {
         match self {
             Page::Dynamic{title, body, ..} => {
-                format!(include_str!("dynamic.html"),
-                        event_source = event_source,
-                        title = title,
-                        body = body).into()
+                let mut bytes =
+                    Vec::with_capacity(TEMPLATE_SIZE
+                                       + event_source.len()
+                                       + title.len()
+                                       + body.len());
+                write!(&mut bytes,
+                       include_str!("dynamic.html"),
+                       event_source = event_source,
+                       title = title,
+                       body = body)
+                    .expect("Internal error: write!() failed on a Vec<u8>");
+                return bytes
             },
             Page::Static{raw_contents, ..} => {
                 raw_contents.clone()
