@@ -56,7 +56,7 @@ impl Page {
     pub async fn refresh(&mut self) {
         match self {
             Page::Dynamic{sse, ..} => {
-                let event = Event::new("").set_event("refresh").to_sse();
+                let event = Event::new(".").set_event("refresh").to_sse();
                 sse.send_to_clients(event).await;
             },
             Page::Static{..} => { },
