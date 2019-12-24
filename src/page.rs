@@ -20,7 +20,10 @@ impl Page {
     pub fn render(&self, event_source: &str) -> Vec<u8> {
         match self {
             Page::Dynamic{title, body, ..} => {
-                render_dynamic(event_source, title, body).into()
+                format!(include_str!("dynamic.html"),
+                        event_source = event_source,
+                        title = title,
+                        body = body).into()
             },
             Page::Static{raw_contents, ..} => {
                 raw_contents.clone()
@@ -126,14 +129,4 @@ impl Page {
             }
         }
     }
-}
-
-/// Generate a "live page" with embedded SSE listeners, given an event source
-/// URL, a page title, and HTML for the body.
-// TODO: Add a full CSS reset here?
-fn render_dynamic(event_source: &str, title: &str, body: &str) -> String {
-    format!(include_str!("dynamic.html"),
-            event_source = event_source,
-            title = title,
-            body = body)
 }
