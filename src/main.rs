@@ -32,9 +32,6 @@ async fn process_request(
     // Disassemble the request into the parts we care about
     let (parts, mut body) = request.into_parts();
 
-    // Log the request
-    println!("{:?}", parts);
-
     // More disassembly
     let Parts{method, uri, ..} = parts;
     let query = uri.query().unwrap_or("");

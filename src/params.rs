@@ -31,7 +31,6 @@ pub(crate) enum PublishParams<'a> {
 impl<'a> PublishParams<'a> {
     pub fn parse(query: &'a str) -> Option<PublishParams<'a>> {
         let params = query_map(query)?;
-        println!("{:?}", params);
         if !constrained_to_keys(&params, &["static", "title"]) {
             return None
         }
@@ -60,6 +59,7 @@ fn query_map<'a>(query: &'a str) -> Option<HashMap<&'a str, Vec<&'a str>>> {
         match mapping.split("=").collect::<Vec<_>>().as_mut_slice() {
             &mut [key, values] => {
                 let key = key.trim();
+                if key == "" { return None }
                 for value in values.split(",") {
                     let value = value.trim();
                     map.entry(key).or_insert(vec![]).push(value);
