@@ -129,37 +129,11 @@ impl Page {
 }
 
 /// Generate a "live page" with embedded SSE listeners, given an event source
-/// URL, a page title, and HTML for the body
+/// URL, a page title, and HTML for the body.
+// TODO: Add a full CSS reset here?
 fn render_dynamic(event_source: &str, title: &str, body: &str) -> String {
-    format!(r#"
-<!DOCTYPE html>
-<html>
-    <head>
-        <title>{title}</title>
-        <meta charset="utf-8" />
-        <script>
-        let sse = new EventSource("{event_source}");
-        sse.addEventListener("body", event => {{
-            document.body.innerHTML = event.data;
-        }});
-        sse.addEventListener("clear-body", event => {{
-            document.body.innerHTML = "";
-        }});
-        sse.addEventListener("title", event => {{
-            document.title = event.data;
-        }});
-        sse.addEventListener("clear-title", event => {{
-            document.title = "";
-        }});
-        sse.addEventListener("refresh", event => {{
-            location.reload();
-        }});
-        </script>
-    </head>
-    <body style="margin: 0px; padding: 0px">
-        {body}
-    </body>
-</html>"#, event_source = event_source,
-           title = title,
-           body = body)
+    format!(include_str!("dynamic.html"),
+            event_source = event_source,
+            title = title,
+            body = body)
 }

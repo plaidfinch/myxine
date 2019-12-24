@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>{title}</title>
+        <meta charset="utf-8" />
+        <script>
+         let sse = new EventSource("{event_source}");
+         sse.addEventListener("body", event => {{
+             document.body.innerHTML = event.data;
+         }});
+         sse.addEventListener("clear-body", event => {{
+             document.body.innerHTML = "";
+         }});
+         sse.addEventListener("title", event => {{
+             document.title = event.data;
+         }});
+         sse.addEventListener("clear-title", event => {{
+             document.title = "";
+         }});
+         sse.addEventListener("refresh", event => {{
+             location.reload();
+         }});
+        </script>
+    </head>
+    <body style="margin: 0px; padding: 0px">
+        {body}
+    </body>
+</html>
