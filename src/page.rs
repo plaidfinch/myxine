@@ -83,8 +83,12 @@ impl Page {
                     let new_title = new_title.into();
                     if new_title != *title {
                         *title = new_title.clone();
-                        let event = Event::new(new_title).set_event("title").to_sse();
-                        sse.send_to_clients(event).await;
+                        let event = if *title != "" {
+                            Event::new(new_title).set_event("title")
+                        } else {
+                            Event::new(".").set_event("clear-title")
+                        };
+                        sse.send_to_clients(event.to_sse()).await;
                     }
                     break; // title has been set
                 },
@@ -106,8 +110,12 @@ impl Page {
                     let new_body = new_body.into();
                     if new_body != *body {
                         *body = new_body.clone();
-                        let event = Event::new(new_body).set_event("body").to_sse();
-                        sse.send_to_clients(event).await;
+                        let event = if *body != "" {
+                            Event::new(new_body).set_event("body")
+                        } else {
+                            Event::new(".").set_event("clear-body")
+                        };
+                        sse.send_to_clients(event.to_sse()).await;
                     }
                     break; // body has been set
                 },
@@ -134,8 +142,14 @@ fn render_dynamic(event_source: &str, title: &str, body: &str) -> String {
         sse.addEventListener("body", event => {{
             document.body.innerHTML = event.data;
         }});
+        sse.addEventListener("clear-body", event => {{
+            document.body.innerHTML = "";
+        }});
         sse.addEventListener("title", event => {{
             document.title = event.data;
+        }});
+        sse.addEventListener("clear-title", event => {{
+            document.title = "";
         }});
         sse.addEventListener("refresh", event => {{
             location.reload();
