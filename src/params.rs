@@ -55,12 +55,12 @@ impl<'a> PublishParams<'a> {
 fn query_map<'a>(query: &'a str) -> Option<HashMap<&'a str, Vec<&'a str>>> {
     let mut map: HashMap<&'a str, Vec<&'a str>> = HashMap::new();
     if query == "" { return Some(map); }
-    for mapping in query.split(";") {
+    for mapping in query.split("&") {
         match mapping.split("=").collect::<Vec<_>>().as_mut_slice() {
             &mut [key, values] => {
                 let key = key.trim();
                 if key == "" { return None }
-                for value in values.split(",") {
+                for value in values.split(";") {
                     let value = value.trim();
                     map.entry(key).or_insert(vec![]).push(value);
                 }
