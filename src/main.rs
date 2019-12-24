@@ -76,7 +76,7 @@ async fn process_request(
                 return Ok(bad_request("Invalid query string in GET/HEAD."));
             }
         },
-        Method::PUT | Method::POST | Method::PATCH => {
+        Method::POST => {
             // Slurp the body into memory
             let mut body_bytes: Vec<u8> = Vec::new();
             while let Some(chunk) = body.next().await {
@@ -91,23 +91,16 @@ async fn process_request(
                     },
                     PublishParams::Dynamic{title} => {
                         match String::from_utf8(body_bytes) {
-                            Ok(body) if body == "" && method != Method::PATCH =>
-                                page.set_body("").await,
-                            Ok(body) =>
-                                page.set_body(body).await,
+                            Ok(body) => {
+                                page.set_title(title.unwrap_or("")).await;
+                                page.set_body(body).await;
+                            },
                             Err(_) => return Ok(bad_request("Invalid UTF-8.")),
                         };
-                        match title {
-                            None if method != Method::PATCH =>
-                                page.set_title("").await,
-                            Some(title) =>
-                                page.set_title(title).await,
-                            _ => { },
-                        }
                     },
                 }
             } else {
-                return Ok(bad_request("Invalid query string in PUT/POST/PATCH."));
+                return Ok(bad_request("Invalid query string in POST."));
             }
             Response::new(Body::empty())
         },
@@ -123,7 +116,7 @@ async fn process_request(
         },
         Method::OPTIONS => {
             let options = if PublishParams::parse(query).is_some() {
-                "OPTIONS, GET, HEAD, POST, PATCH, PUT, DELETE"
+                "OPTIONS, GET, HEAD, POST, DELETE"
             } else if RetrieveParams::parse(query).is_some() {
                 "OPTIONS, GET, HEAD"
             } else {
