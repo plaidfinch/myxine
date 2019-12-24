@@ -146,7 +146,9 @@ async fn main() {
     let pages = Arc::new(Mutex::new(HashMap::new()));
     let base_uri = Arc::new(base_uri);
 
-    // TODO: background task to keep connections alive
+    // TODO: background task to keep connections alive and prune empty pages
+    // This requires a new method on hyper_usse::Server to count current number
+    // of connected clients -- tiny PR!
 
     let service = make_service_fn(move |_| {
         let pages = pages.clone();
