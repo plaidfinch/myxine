@@ -1,5 +1,5 @@
 [package]
-name = "myxini"
+name = "myxine"
 version = "0.1.0"
 authors = ["Kenny Foner <kwf@galois.com>"]
 edition = "2018"

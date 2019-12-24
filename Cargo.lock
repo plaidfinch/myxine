@@ -358,7 +358,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "myxini"
+name = "myxine"
 version = "0.1.0"
 dependencies = [
  "futures",

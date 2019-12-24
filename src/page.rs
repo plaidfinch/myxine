@@ -156,7 +156,7 @@ fn render_dynamic(event_source: &str, title: &str, body: &str) -> String {
         }});
         </script>
     </head>
-    <body>
+    <body style="margin: 0px; padding: 0px">
         {body}
     </body>
 </html>"#, event_source = event_source,
