@@ -54,7 +54,10 @@ async fn process_request(
                     } else {
                         page.render(&event_stream_uri).into()
                     };
-                    Response::new(body)
+                    Response::builder()
+                        .header("Cache-Control", "no-cache")
+                        .body(body)
+                        .unwrap()
                 } else {
                     // Client wants event stream of changes to page
                     let body = if method == Method::HEAD {
