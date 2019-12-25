@@ -225,8 +225,7 @@ dependencies = [
 [[package]]
 name = "hyper-usse"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7f485f2ba8b0763b37e40746641fd0adcb30f812f0793ed0e1b44616d5fd3e1"
+source = "git+https://github.com/kwf/hyper-usse#76aa416390c409cc372ade1c10c62e4fffab4be6"
 dependencies = [
  "futures",
  "hyper",
@@ -365,6 +364,7 @@ dependencies = [
  "http",
  "hyper",
  "hyper-usse",
+ "lazy_static",
  "tokio",
 ]
 

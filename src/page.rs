@@ -20,6 +20,15 @@ pub enum Page {
 const TEMPLATE_SIZE: usize = include_str!("dynamic.html").len();
 
 impl Page {
+    /// Make a new empty (dynamic) page
+    pub fn new() -> Page {
+        Page::Dynamic {
+            title: String::new(),
+            body: String::new(),
+            sse: hyper_usse::Server::new()
+        }
+    }
+
     /// Render a whole page as HTML (for first page load)
     pub fn render(&self, event_source: &str) -> Vec<u8> {
         match self {
@@ -43,15 +52,6 @@ impl Page {
         }
     }
 
-    /// Make a new empty (dynamic) page
-    pub fn new() -> Page {
-        Page::Dynamic {
-            title: String::new(),
-            body: String::new(),
-            sse: hyper_usse::Server::new()
-        }
-    }
-
     /// Add a client to the dynamic content of a page, if it is dynamic. If it
     /// is static, this has no effect and returns None. Otherwise, returns the
     /// Body stream to give to the new client.
@@ -63,6 +63,18 @@ impl Page {
                 Some(body)
             },
             Page::Static{..} => None
+        }
+    }
+
+    /// Send an empty "heartbeat" message to all clients of a page, if it is
+    /// dynamic. This has no effect if it is (currently) static.
+    pub async fn heartbeat(&mut self) -> usize {
+        match self {
+            Page::Dynamic{sse, ..} => {
+                sse.send_heartbeat().await;
+                sse.connections()
+            },
+            Page::Static{..} => 0,
         }
     }
 

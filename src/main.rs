@@ -1,15 +1,17 @@
 #![feature(async_closure)]
-use futures::stream::StreamExt;
+use futures::{future, join, stream::StreamExt};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, StatusCode, Uri};
 use http::request::Parts;
+use lazy_static::lazy_static;
 use std::sync::Arc;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::mem;
-// use std::time::Duration;
+use std::iter::Iterator;
+use std::time::Duration;
 use tokio::sync::Mutex;
-// use tokio::time;
+use tokio::time;
 
 mod params;
 mod page;
@@ -23,9 +25,37 @@ fn bad_request(message: impl Into<String>) -> Response<Body> {
         .unwrap()
 }
 
+/// Send a heartbeat message to keep all page connections alive, simultaneously
+/// pruning all pages from memory which have no content and no subscribers.
+async fn heartbeat() {
+    let mut pages = PAGES.lock().await;
+    // Determine which pages to delete, in the process sending heartbeats.
+    let garbage: Vec<Option<String>> =
+        future::join_all(
+            pages.iter_mut().map(|(path, page)| async move {
+                // Send a heartbeat message to each page and count the number of
+                // still-extant connections
+                let connected = page.heartbeat().await;
+                match page {
+                    Page::Dynamic{title, body, ..}
+                    // We'll delete all the entries for pages for which:
+                    //   1) there are no connected clients, and
+                    //   2) the contents of the page are empty
+                    // That is to say, pages for which we need not preserve any
+                    // information to reconstruct them again on next load.
+                    if connected == 0 && title == "" && body == "" =>
+                        Some(path.clone()),
+                    _ => None
+                }
+            })).await;
+    // Actually collect the garbage, removing all pages slated for deletion.
+    for path in garbage {
+        path.map(|path| pages.remove(&path));
+    }
+}
+
 async fn process_request(
     base_uri: Arc<Uri>,
-    pages: Arc<Mutex<HashMap<String, Page>>>,
     request: Request<Body>,
 ) -> Result<Response<Body>, hyper::Error> {
 
@@ -38,7 +68,7 @@ async fn process_request(
     let path = uri.path().to_string();
 
     // Get (or create) the page at this path
-    let mut pages = pages.lock().await;
+    let mut pages = PAGES.lock().await;
     let mut page = pages.entry(path.clone()).or_insert(Page::new());
 
     let result = match method {
@@ -135,34 +165,52 @@ async fn process_request(
     Ok(result)
 }
 
+const HOST: [u8; 4] = [127, 0, 0, 1];
+const PORT: u16 = 8000;
+const HEARTBEAT_INTERVAL: u64 = 10;
+
+lazy_static! {
+    static ref PAGES: Mutex<HashMap<String, Page>>
+        = Mutex::new(HashMap::new());
+}
+
 #[tokio::main]
 async fn main() {
-    let host = [127, 0, 0, 1];
-    let port = 8000;
+    let socket_addr = (HOST, PORT).into();
+    let base_uri =
+        Arc::new(Uri::try_from(format!("http://{}", socket_addr)).unwrap());
 
-    let socket_addr = (host, port).into();
-    let base_uri = Uri::try_from(format!("http://{}", socket_addr)).unwrap();
+    // The main server future
+    let server = async {
+        hyper::Server::bind(&socket_addr)
+        .serve(make_service_fn(move |_| {
+            let base_uri = base_uri.clone();
+            async {
+                Ok::<_, hyper::Error>(service_fn(move |request: Request<Body>| {
+                    let base_uri = base_uri.clone();
+                    async move {
+                        // TODO: Reset no-activity timeout here
+                        process_request(base_uri.clone(), request).await
+                    }
+                }))
+            }
+        })).await.unwrap_or_else(|err| {
+            // TODO: Signal quit condition here
+            eprintln!("{}", err);
+        })
+    };
 
-    let pages = Arc::new(Mutex::new(HashMap::new()));
-    let base_uri = Arc::new(base_uri);
+    // TODO: a no-activity timeout future
 
-    // TODO: background task to keep connections alive and prune empty pages
-    // This requires a new method on hyper_usse::Server to count current number
-    // of connected clients -- tiny PR!
+    // The heartbeat / garbage collector future
+    let heartbeat = async {
+        tokio::spawn(async {
+            loop {
+                time::delay_for(Duration::from_secs(HEARTBEAT_INTERVAL)).await;
+                heartbeat().await;
+            }
+        }).await.unwrap();
+    };
 
-    let service = make_service_fn(move |_| {
-        let pages = pages.clone();
-        let base_uri = base_uri.clone();
-        async {
-            Ok::<_, hyper::Error>(service_fn(move |request: Request<Body>| {
-                process_request(base_uri.clone(), pages.clone(), request)
-            }))
-        }
-    });
-
-    let server = hyper::Server::bind(&socket_addr);
-
-    if let Err(err) = server.serve(service).await {
-        eprintln!("Server error: {}", err);
-    }
+    join!(server, heartbeat);
 }
