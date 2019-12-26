@@ -29,6 +29,14 @@ impl Page {
         }
     }
 
+    pub fn is_initial(&self) -> bool {
+        match self {
+            Page::Dynamic{title, body, sse}
+            if title == "" && body == "" && sse.connections() == 0 => true,
+            _ => false,
+        }
+    }
+
     /// Render a whole page as HTML (for first page load)
     pub fn render(&self, event_source: &str) -> Vec<u8> {
         match self {
@@ -67,14 +75,15 @@ impl Page {
     }
 
     /// Send an empty "heartbeat" message to all clients of a page, if it is
-    /// dynamic. This has no effect if it is (currently) static.
-    pub async fn heartbeat(&mut self) -> usize {
+    /// dynamic. This has no effect if it is (currently) static, and returns
+    /// `None` if so.
+    pub async fn heartbeat(&mut self) -> Option<usize> {
         match self {
             Page::Dynamic{sse, ..} => {
                 sse.send_heartbeat().await;
-                sse.connections()
+                Some(sse.connections())
             },
-            Page::Static{..} => 0,
+            Page::Static{..} => None,
         }
     }
 
