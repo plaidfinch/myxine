@@ -52,7 +52,7 @@ impl Page {
                        title = title,
                        body = body)
                     .expect("Internal error: write!() failed on a Vec<u8>");
-                return bytes
+                bytes
             },
             Page::Static{raw_contents, ..} => {
                 raw_contents.clone()

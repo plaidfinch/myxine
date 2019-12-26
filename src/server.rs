@@ -58,7 +58,7 @@ fn bad_request(message: impl Into<String>) -> Response<Body> {
 }
 
 fn eprint_header(headers: &HeaderMap<HeaderValue>, header: &str) {
-    if let Some(_) = headers.get(header) {
+    if headers.get(header).is_some() {
         eprint!("{}: ", header);
         eprintln!("{}", headers.get_all(header).iter()
                  .map(|host| host.to_str().unwrap_or("[invalid UTF-8]"))
@@ -89,16 +89,19 @@ async fn process_request(
     // Get (or create) the page at this path
     let mut pages = PAGES.lock().await;
     let page = pages.entry(path.clone())
-        .or_insert(Arc::new(Mutex::new(Page::new())));
+        .or_insert_with(|| Arc::new(Mutex::new(Page::new())));
 
-    // Insert a weak reference to this page into the heartbeat table
+    // Insert a weak reference to this page into the heartbeat table so that the
+    // heartbeat thread can keep all the listeners to this page alive
     HEARTBEAT_TABLE.lock().await
         .insert(path.clone(), Arc::downgrade(&page.clone()));
 
     // Await the lock on the page itself so we can modify it
     let mut page = page.lock().await;
 
+    // Just one big dispatch on the HTTP method...
     let result = match method {
+
         Method::GET | Method::HEAD => {
             if let Some(RetrieveParams{}) = RetrieveParams::parse(query) {
                 // The client wants an event-stream if they say so!
@@ -117,7 +120,7 @@ async fn process_request(
                     let body = if method == Method::HEAD {
                         Body::empty()
                     } else {
-                        page.new_client().unwrap_or(Body::empty())
+                        page.new_client().unwrap_or_else(Body::empty)
                     };
                     Response::builder()
                         .header("Content-Type", "text/event-stream")
@@ -128,7 +131,7 @@ async fn process_request(
                 } else {
                     // Client wants entire full page
                     let event_stream_uri =
-                        base_uri.to_string().trim_end_matches("/").to_owned()
+                        base_uri.to_string().trim_end_matches('/').to_owned()
                         + &path;
                     let body = if method == Method::HEAD {
                         Body::empty()
@@ -163,12 +166,11 @@ async fn process_request(
                     Some(Ok(content_type)) => {
                         let content_type = content_type.to_lowercase();
                         let split_content_type: Vec<&str> =
-                            content_type.split(";").map(|s| s.trim()).collect();
-                        match split_content_type.as_slice() {
-                            [] => None,
-                            ["text/html", ..] => None,
-                            ["application/x-www-form-urlencoded", ..] => None,
-                            ["multipart/form-data", ..] => None,
+                            content_type.split(';').map(|s| s.trim()).collect();
+                        match split_content_type.as_slice()[0] {
+                            "text/html" => None,
+                            "application/x-www-form-urlencoded" => None,
+                            "multipart/form-data" => None,
                             // The client specified a non-HTML content type,
                             // which we'll store statically without embedding in
                             // a fancy page
@@ -182,23 +184,22 @@ async fn process_request(
             // Dispatch on the detected content type to decide how to store it
             if let Some(content_type) = static_content_type {
                 page.set_static(content_type, body_bytes).await;
+            } else if let Some(PublishParams{title}) = PublishParams::parse(query) {
+                match String::from_utf8(body_bytes) {
+                    Ok(body) => {
+                        page.set_title(title.unwrap_or_else(|| "".to_string())).await;
+                        page.set_body(body).await;
+                    },
+                    Err(_) => return Ok(bad_request("Invalid UTF-8 in POST data (only UTF-8 is supported).")),
+                };
             } else {
-                if let Some(PublishParams{title}) = PublishParams::parse(query) {
-                    match String::from_utf8(body_bytes) {
-                        Ok(body) => {
-                            page.set_title(title.unwrap_or("".to_string())).await;
-                            page.set_body(body).await;
-                        },
-                        Err(_) => return Ok(bad_request("Invalid UTF-8 in POST data (only UTF-8 is supported).")),
-                    };
-                } else {
-                    return Ok(bad_request("Invalid query string in POST."));
-                }
+                return Ok(bad_request("Invalid query string in POST."));
             }
 
             // Give an empty response
             Response::new(Body::empty())
         },
+
         Method::DELETE => {
             if query != "" {
                 return Ok(bad_request("Invalid query string in DELETE."));
@@ -213,6 +214,7 @@ async fn process_request(
             old_page.refresh().await;
             Response::new(Body::empty())
         },
+
         Method::OPTIONS => {
             let options = if PublishParams::parse(query).is_some() {
                 "OPTIONS, GET, HEAD, POST, DELETE"

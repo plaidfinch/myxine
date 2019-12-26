@@ -29,48 +29,27 @@ impl<'a> PublishParams {
     }
 }
 
-// fn query_map_tokenizing<'a>(query: &'a str) -> Option<HashMap<&'a str, Vec<&'a str>>> {
-//     let mut map: HashMap<&'a str, Vec<&'a str>> = HashMap::new();
-//     let mut key = None;
-//     let mut val = None;
-//     let mut quoted = false;
-//     let mut escaping = false;
-//     for (i, c) in query.chars().enumerate() {
-//         match c {
-//             '"' => if !escaping {
-//                 quoted = !quoted
-//             } else {
-//                 escaping =
-//             },
-//             '\\' if !escaping => escaping = true,
-//         }
-//     }
-//     return Some(map);
-// }
-
-// TODO: Do a better job of parsing the query string
-
 fn query_map<'a>(query: &'a str) -> Option<HashMap<&'a str, Vec<&'a str>>> {
     let mut map: HashMap<&'a str, Vec<&'a str>> = HashMap::new();
     if query == "" { return Some(map); }
-    for mapping in query.split("&") {
-        match mapping.split("=").collect::<Vec<_>>().as_mut_slice() {
-            &mut [key, values] => {
+    for mapping in query.split('&') {
+        match mapping.split('=').collect::<Vec<_>>().as_mut_slice() {
+            [key, values] => {
                 let key = key.trim();
                 if key == "" { return None }
-                for value in values.split(",") {
+                for value in values.split(',') {
                     let value = value.trim();
-                    map.entry(key).or_insert(vec![]).push(value);
+                    map.entry(key).or_insert_with(|| vec![]).push(value);
                 }
             },
-            &mut [key] => {
+            [key] => {
                 let key = key.trim();
-                map.entry(key).or_insert(vec![]);
+                map.entry(key).or_insert_with(|| vec![]);
             }
             _ => return None,
         }
     }
-    return Some(map);
+    Some(map)
 }
 
 fn constrained_to_keys<'a, K: PartialEq + 'a, V>(
@@ -87,5 +66,5 @@ fn constrained_to_keys<'a, K: PartialEq + 'a, V>(
         }
         if !ok { return false; }
     }
-    return true;
+    true
 }

@@ -1,4 +1,3 @@
-#![feature(async_closure, slice_patterns)]
 use tokio::sync::oneshot;
 use futures::future::FutureExt;
 use futures::{join, select, pin_mut};
