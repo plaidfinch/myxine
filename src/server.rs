@@ -1,7 +1,7 @@
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, StatusCode, Uri};
 use http::request::Parts;
-use http::header::HeaderValue;
+use http::header::{HeaderMap, HeaderValue};
 use lazy_static::lazy_static;
 use std::sync::Arc;
 use std::collections::HashMap;
@@ -10,6 +10,7 @@ use std::mem;
 use std::net::SocketAddr;
 use tokio::sync::{Mutex, oneshot};
 use futures::stream::StreamExt;
+use itertools::Itertools;
 
 use crate::page::Page;
 use crate::heartbeat::HEARTBEAT_TABLE;
@@ -26,6 +27,10 @@ lazy_static! {
 pub async fn server(socket_addr: SocketAddr, quit: oneshot::Sender<()>) {
     let base_uri =
         Arc::new(Uri::try_from(format!("http://{}", socket_addr)).unwrap());
+
+    // Print the base URI to stdout: in a managed mode, a calling process could
+    // read this to determine where to direct its future requests.
+    println!("{}", base_uri);
 
     hyper::Server::bind(&socket_addr)
         .serve(make_service_fn(move |_| {
@@ -52,6 +57,14 @@ fn bad_request(message: impl Into<String>) -> Response<Body> {
         .unwrap()
 }
 
+fn eprint_header(headers: &HeaderMap<HeaderValue>, header: &str) {
+    if let Some(_) = headers.get(header) {
+        eprint!("{}: ", header);
+        eprintln!("{}", headers.get_all(header).iter()
+                 .map(|host| host.to_str().unwrap_or("[invalid UTF-8]"))
+                 .format(","));
+    }
+}
 
 async fn process_request(
     base_uri: Arc<Uri>,
@@ -61,12 +74,17 @@ async fn process_request(
     // Disassemble the request into the parts we care about
     let (parts, mut body) = request.into_parts();
 
-    println!("{:?}", parts);
-
     // More disassembly
     let Parts{method, uri, headers, ..} = parts;
     let query = uri.query().unwrap_or("");
     let path = uri.path().to_string();
+
+    if cfg!(debug_assertions) {
+        // Diagnostics about the requests we're receiving
+        eprintln!("\n{} {}", method, uri);
+        eprint_header(&headers, "Accept");
+        eprint_header(&headers, "Content-Type");
+    }
 
     // Get (or create) the page at this path
     let mut pages = PAGES.lock().await;
