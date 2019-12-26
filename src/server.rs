@@ -1,6 +1,7 @@
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, StatusCode, Uri};
 use http::request::Parts;
+use http::header::HeaderValue;
 use lazy_static::lazy_static;
 use std::sync::Arc;
 use std::collections::HashMap;
@@ -60,8 +61,10 @@ async fn process_request(
     // Disassemble the request into the parts we care about
     let (parts, mut body) = request.into_parts();
 
+    println!("{:?}", parts);
+
     // More disassembly
-    let Parts{method, uri, ..} = parts;
+    let Parts{method, uri, headers, ..} = parts;
     let query = uri.query().unwrap_or("");
     let path = uri.path().to_string();
 
@@ -79,22 +82,19 @@ async fn process_request(
 
     let result = match method {
         Method::GET | Method::HEAD => {
-            if let Some(params) = RetrieveParams::parse(query) {
-                if !params.stream {
-                    // Client wants entire full page
-                    let event_stream_uri =
-                        base_uri.to_string().trim_end_matches("/").to_owned()
-                        + &path + "?stream=true";
-                    let body = if method == Method::HEAD {
-                        Body::empty()
-                    } else {
-                        page.render(&event_stream_uri).into()
+            if let Some(RetrieveParams{}) = RetrieveParams::parse(query) {
+                // The client wants an event-stream if they say so!
+                let wants_stream =
+                    match headers.get("Accept").map(HeaderValue::to_str) {
+                        None => false,
+                        Some(Ok(accept)) => {
+                            let accept = accept.to_owned().to_lowercase();
+                            accept == "text/event-stream"
+                        },
+                        Some(Err(_)) =>
+                            return Ok(bad_request("Invalid ASCII in Accept header.")),
                     };
-                    Response::builder()
-                        .header("Cache-Control", "no-cache")
-                        .body(body)
-                        .unwrap()
-                } else {
+                if wants_stream {
                     // Client wants event stream of changes to page
                     let body = if method == Method::HEAD {
                         Body::empty()
@@ -107,11 +107,29 @@ async fn process_request(
                         .header("Access-Control-Allow-Origin", "*")
                         .body(body)
                         .unwrap()
+                } else {
+                    // Client wants entire full page
+                    let event_stream_uri =
+                        base_uri.to_string().trim_end_matches("/").to_owned()
+                        + &path;
+                    let body = if method == Method::HEAD {
+                        Body::empty()
+                    } else {
+                        page.render(&event_stream_uri).into()
+                    };
+                    let mut builder = Response::builder()
+                        .header("Cache-Control", "no-cache");
+                    if let Some(content_type) = page.content_type() {
+                        // If there's a custom content-type, set it here
+                        builder = builder.header("Content-Type", content_type);
+                    }
+                    builder.body(body).unwrap()
                 }
             } else {
                 return Ok(bad_request("Invalid query string in GET/HEAD."));
             }
         },
+
         Method::POST => {
             // Slurp the body into memory
             let mut body_bytes: Vec<u8> = Vec::new();
@@ -119,25 +137,48 @@ async fn process_request(
                 let chunk = chunk?;
                 body_bytes.extend_from_slice(&chunk);
             };
-            // Dispatch on the query parameters
-            if let Some(params) = PublishParams::parse(query) {
-                match params {
-                    PublishParams::Static => {
-                        page.set_static(body_bytes).await;
+            // The page should be dynamic if the Content-Type is missing or is
+            // "text/html" or is "text/html; charset=utf-8".
+            let static_content_type: Option<String> =
+                match headers.get("Content-Type").map(HeaderValue::to_str) {
+                    None => None,
+                    Some(Ok(content_type)) => {
+                        let content_type = content_type.to_lowercase();
+                        let split_content_type: Vec<&str> =
+                            content_type.split(";").map(|s| s.trim()).collect();
+                        match split_content_type.as_slice() {
+                            [] => None,
+                            ["text/html", ..] => None,
+                            ["application/x-www-form-urlencoded", ..] => None,
+                            ["multipart/form-data", ..] => None,
+                            // The client specified a non-HTML content type,
+                            // which we'll store statically without embedding in
+                            // a fancy page
+                            _ => Some(content_type.to_owned()),
+                        }
                     },
-                    PublishParams::Dynamic{title} => {
-                        match String::from_utf8(body_bytes) {
-                            Ok(body) => {
-                                page.set_title(title.unwrap_or("")).await;
-                                page.set_body(body).await;
-                            },
-                            Err(_) => return Ok(bad_request("Invalid UTF-8.")),
-                        };
-                    },
-                }
+                    Some(Err(_)) =>
+                        return Ok(bad_request("Invalid ASCII in Content-Type header.")),
+                };
+
+            // Dispatch on the detected content type to decide how to store it
+            if let Some(content_type) = static_content_type {
+                page.set_static(content_type, body_bytes).await;
             } else {
-                return Ok(bad_request("Invalid query string in POST."));
+                if let Some(PublishParams{title}) = PublishParams::parse(query) {
+                    match String::from_utf8(body_bytes) {
+                        Ok(body) => {
+                            page.set_title(title.unwrap_or("".to_string())).await;
+                            page.set_body(body).await;
+                        },
+                        Err(_) => return Ok(bad_request("Invalid UTF-8 in POST data (only UTF-8 is supported).")),
+                    };
+                } else {
+                    return Ok(bad_request("Invalid query string in POST."));
+                }
             }
+
+            // Give an empty response
             Response::new(Body::empty())
         },
         Method::DELETE => {

@@ -1,54 +1,31 @@
 use std::collections::HashMap;
+use percent_encoding::percent_decode;
 
-pub(crate) struct RetrieveParams {
-    pub stream: bool,
-}
+/// Parsed parameters from a query string for a GET/HEAD request.
+pub(crate) struct RetrieveParams { }
 
 impl RetrieveParams {
     pub fn parse(query: &str) -> Option<RetrieveParams> {
         let params = query_map(query)?;
-        if !constrained_to_keys(&params, &["stream"]) { return None }
-        match params.get("stream").map(Vec::as_slice) {
-            // Client wants whole page
-            None | Some(["false"]) =>
-                Some(RetrieveParams{stream: false}),
-            // Client wants event stream of changes to page
-            Some([]) | Some(["true"]) =>
-                Some(RetrieveParams{stream: true}),
-            // Bad client request (mapping "events" key to non-boolean)
-            _ => None,
+        if constrained_to_keys(&params, &[]) {
+            Some(RetrieveParams{})
+        } else {
+            None
         }
     }
 }
 
-pub(crate) enum PublishParams<'a> {
-    Dynamic {
-        title: Option<&'a str>,
-    },
-    Static,
+/// Parsed parameters from a query string for a POST request of a .
+pub(crate) struct PublishParams {
+    pub title: Option<String>,
 }
 
-impl<'a> PublishParams<'a> {
-    pub fn parse(query: &'a str) -> Option<PublishParams<'a>> {
-        let params = query_map(query)?;
-        if !constrained_to_keys(&params, &["static", "title"]) {
-            return None
-        }
-        match params.get("static").map(Vec::as_slice) {
-            Some([]) | Some(["true"]) => {
-                if let Some(_) = params.get("title") { return None; }
-                Some(PublishParams::Static)
-            },
-            None | Some(["false"]) => {
-                match params.get("title").map(Vec::as_slice) {
-                    None          => Some(None),
-                    Some([])      => Some(Some("")),
-                    Some([title]) => Some(Some(*title)),
-                    Some(_)       => None,
-                }.map(|title| PublishParams::Dynamic{title})
-            },
-            _ => None,
-        }
+impl<'a> PublishParams {
+    pub fn parse(query: &str) -> Option<PublishParams> {
+        let decoded = percent_decode(query.as_bytes()).decode_utf8_lossy();
+        Some(PublishParams {
+            title: if query == "" { None } else { Some(decoded.to_string()) }
+        })
     }
 }
 

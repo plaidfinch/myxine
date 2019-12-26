@@ -11,7 +11,7 @@ pub enum Page {
         sse: hyper_usse::Server,
     },
     Static {
-        // TODO: Store and repeat the stated content-type for the thing
+        content_type: String,
         raw_contents: Vec<u8>,
     }
 }
@@ -103,10 +103,23 @@ impl Page {
     /// self-refreshing functionality. All clients will be told to refresh their
     /// page to load the new static content (which will not be able to update
     /// itself until a client refreshes their page again).
-    pub async fn set_static(&mut self, raw_contents: impl Into<Vec<u8>>) {
-        let mut page = Page::Static{raw_contents: raw_contents.into()};
+    pub async fn set_static(&mut self,
+                            content_type: String,
+                            raw_contents: impl Into<Vec<u8>>) {
+        let mut page =
+            Page::Static{content_type, raw_contents: raw_contents.into()};
         mem::swap(&mut page, self);
         page.refresh().await;
+    }
+
+    /// Get the content type of a static page, or return `None` if we should
+    /// just use the normal `text/html; charset=utf8` that will be usually
+    /// produced.
+    pub fn content_type(&self) -> Option<String> {
+        match self {
+            Page::Dynamic{..} => None,
+            Page::Static{content_type, ..} => Some(content_type.clone()),
+        }
     }
 
     /// Tell all clients to change the title, if necessary. This converts the
