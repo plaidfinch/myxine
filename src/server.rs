@@ -92,6 +92,8 @@ async fn process_request(
     // Make sure this path receives heartbeats
     heartbeat::touch_path(path.clone());
 
+    // TODO: per-path backpressure to prevent overloading web browser
+
     // Just one big dispatch on the HTTP method...
     Ok(match method {
 
@@ -151,6 +153,7 @@ async fn process_request(
 
         Method::POST => {
             // Slurp the body into memory
+            // TODO: Accept text/event-stream to allow keep-alive connections
             let mut body_bytes: Vec<u8> = Vec::new();
             while let Some(chunk) = body.next().await {
                 let chunk = chunk?;
