@@ -14,6 +14,7 @@ use itertools::Itertools;
 use crate::page::Page;
 use crate::params::{RetrieveParams, PublishParams};
 use crate::heartbeat;
+use crate::windowing::WindowManager;
 
 /// The mode of operation for the server
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -48,12 +49,12 @@ macro_rules! unwrap_or_abort {
 }
 
 /// Run the main server loop
-pub async fn server(mode: Mode, socket_addr: SocketAddr) {
+pub async fn server(mode: Mode, socket_addr: SocketAddr, window_manager: WindowManager) {
     // Bind the server to this socket address
     let listener   = unwrap_or_abort!(TcpListener::bind(socket_addr));
     let local_addr = unwrap_or_abort!(listener.local_addr());
     let server     = unwrap_or_abort!(hyper::Server::from_tcp(listener));
-    let base_uri   = Arc::new(unwrap_or_abort!(Uri::try_from(format!("http://{}", local_addr))));
+    let base_uri   = unwrap_or_abort!(Uri::try_from(format!("http://{}", local_addr)));
 
     // Print the base URI to stdout: in a managed mode, a calling process could
     // read this to determine where to direct its future requests.
@@ -68,9 +69,10 @@ pub async fn server(mode: Mode, socket_addr: SocketAddr) {
 
     unwrap_or_abort!(server.serve(make_service_fn(move |_| {
         let base_uri = base_uri.clone();
+        let window_manager = window_manager.clone();
         async move {
             Ok::<_, hyper::Error>(service_fn(move |request: Request<Body>| {
-                process_request(mode, base_uri.clone(), request)
+                process_request(mode, base_uri.clone(), window_manager.clone(), request)
             }))
         }
     })).await);
@@ -78,7 +80,8 @@ pub async fn server(mode: Mode, socket_addr: SocketAddr) {
 
 async fn process_request(
     mode: Mode,
-    base_uri: Arc<Uri>,
+    base_uri: Uri,
+    window_manager: WindowManager,
     request: Request<Body>,
 ) -> Result<Response<Body>, hyper::Error> {
 
@@ -168,6 +171,9 @@ async fn process_request(
                 body_bytes.extend_from_slice(&chunk);
             };
 
+            // TODO: routes: ?events gives UI event-stream (specified by the
+            // JSON in the body), ?title=..., ?static=true/false,
+
             // The page should be dynamic if the Content-Type is missing or is
             // text/html or one of the defaults for `curl` (for convenience).
             // Here, returning `None` means make a dynamic page, and returning
@@ -204,8 +210,13 @@ async fn process_request(
                 match String::from_utf8(body_bytes) {
                     Ok(body) => {
                         let mut page = page.lock().await;
-                        page.set_title(title.unwrap_or_else(|| "".to_string())).await;
+                        let title = title.unwrap_or_else(|| "".to_string());
+                        page.set_title(title.clone()).await;
                         page.set_body(body).await;
+                        // If we are running in windowing mode, make sure we
+                        // have a window for this path. Otherwise, this does
+                        // nothing.
+                        window_manager.ensure_window(base_uri.to_string(), path, title);
                     },
                     Err(_) => return Ok(bad_request("Invalid UTF-8 in POST data (only UTF-8 is supported).")),
                 };
