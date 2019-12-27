@@ -154,8 +154,6 @@ async fn process_request(
         },
 
         Method::POST => {
-            let mut page = page.lock().await;
-
             // Slurp the body into memory
             let mut body_bytes: Vec<u8> = Vec::new();
             while let Some(chunk) = body.next().await {
@@ -188,14 +186,17 @@ async fn process_request(
                         return Ok(bad_request("Invalid ASCII in Content-Type header.")),
                 };
 
+
             // Client wants to store a static file of a known Content-Type:
             if let Some(content_type) = static_content_type {
+                let mut page = page.lock().await;
                 page.set_static(content_type, body_bytes).await;
 
             // Client wants to publish some HTML to a dynamic page:
             } else if let Some(PublishParams{title}) = PublishParams::parse(query) {
                 match String::from_utf8(body_bytes) {
                     Ok(body) => {
+                        let mut page = page.lock().await;
                         page.set_title(title.unwrap_or_else(|| "".to_string())).await;
                         page.set_body(body).await;
                     },
