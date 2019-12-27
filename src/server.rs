@@ -85,7 +85,9 @@ async fn process_request(
         eprint_header(&headers, "Content-Type");
     }
 
-    // Get (or create) the page at this path
+    // Get (or create) the page at this path. Note that this does *not* hold the
+    // lock on PAGES, but rather extracts a clone of the `Arc<Mutex<Page>>` at
+    // this path.
     let page = PAGES.lock().await
         .entry(path.clone())
         .or_insert_with(|| Arc::new(Mutex::new(Page::new())))
@@ -95,12 +97,14 @@ async fn process_request(
     heartbeat::touch_path(path.clone());
 
     // Just one big dispatch on the HTTP method...
-    let result = match method {
+    Ok(match method {
 
         Method::GET | Method::HEAD => {
             let mut page = page.lock().await;
+            // Parse the query parameters and proceed if they're okay
             if let Some(RetrieveParams{}) = RetrieveParams::parse(query) {
-                // The client wants an event-stream if they say so!
+
+                // The client wants an event-stream if their Accept header says
                 let wants_stream =
                     match headers.get("Accept").map(HeaderValue::to_str) {
                         None => false,
@@ -111,8 +115,9 @@ async fn process_request(
                         Some(Err(_)) =>
                             return Ok(bad_request("Invalid ASCII in Accept header.")),
                     };
+
+                // If client wants event stream of changes to page:
                 if wants_stream {
-                    // Client wants event stream of changes to page
                     let body = if method == Method::HEAD {
                         Body::empty()
                     } else {
@@ -124,8 +129,9 @@ async fn process_request(
                         .header("Access-Control-Allow-Origin", "*")
                         .body(body)
                         .unwrap()
+
+                // If client wants entire full page:
                 } else {
-                    // Client wants entire full page
                     let event_stream_uri =
                         base_uri.to_string().trim_end_matches('/').to_owned()
                         + &path;
@@ -149,14 +155,18 @@ async fn process_request(
 
         Method::POST => {
             let mut page = page.lock().await;
+
             // Slurp the body into memory
             let mut body_bytes: Vec<u8> = Vec::new();
             while let Some(chunk) = body.next().await {
                 let chunk = chunk?;
                 body_bytes.extend_from_slice(&chunk);
             };
+
             // The page should be dynamic if the Content-Type is missing or is
-            // "text/html" or is "text/html; charset=utf-8".
+            // text/html or one of the defaults for `curl` (for convenience).
+            // Here, returning `None` means make a dynamic page, and returning
+            // `Some` means make a static page with that Content-Type.
             let static_content_type: Option<String> =
                 match headers.get("Content-Type").map(HeaderValue::to_str) {
                     None => None,
@@ -178,9 +188,11 @@ async fn process_request(
                         return Ok(bad_request("Invalid ASCII in Content-Type header.")),
                 };
 
-            // Dispatch on the detected content type to decide how to store it
+            // Client wants to store a static file of a known Content-Type:
             if let Some(content_type) = static_content_type {
                 page.set_static(content_type, body_bytes).await;
+
+            // Client wants to publish some HTML to a dynamic page:
             } else if let Some(PublishParams{title}) = PublishParams::parse(query) {
                 match String::from_utf8(body_bytes) {
                     Ok(body) => {
@@ -198,6 +210,7 @@ async fn process_request(
         },
 
         Method::DELETE => {
+            // This is equivalent to an empty-body POST with no query string
             if query != "" {
                 return Ok(bad_request("Invalid query string in DELETE."));
             }
@@ -207,23 +220,9 @@ async fn process_request(
             Response::new(Body::empty())
         },
 
-        Method::OPTIONS => {
-            let options = if PublishParams::parse(query).is_some() {
-                "OPTIONS, GET, HEAD, POST, DELETE"
-            } else if RetrieveParams::parse(query).is_some() {
-                "OPTIONS, GET, HEAD"
-            } else {
-                return Ok(bad_request("Invalid query string in OPTIONS."));
-            };
-            Response::builder()
-                .header("Allow", options)
-                .body(Body::empty())
-                .unwrap()
-        }
         _ => Response::builder()
             .status(StatusCode::METHOD_NOT_ALLOWED)
             .body(Body::empty())
             .unwrap(),
-    };
-    Ok(result)
+    })
 }
