@@ -1,6 +1,5 @@
-use tokio::sync::oneshot;
 use futures::future::FutureExt;
-use futures::{join, select, pin_mut};
+use futures::{select, pin_mut};
 
 mod server;
 mod params;
@@ -11,29 +10,23 @@ use heartbeat::heartbeat_loop;
 use server::server;
 
 const HOST: [u8; 4] = [127, 0, 0, 1];
-const PORT: u16 = 8000;
+const INTERFACE_PORT: u16 = 8000;
+const CONTROL_PORT:   u16 = 8001;
+
+// TODO: specify options on the command line
 
 #[tokio::main]
 async fn main() {
-    let socket_addr = (HOST, PORT).into();
+    let control_server =
+        server(server::Mode::Control, (HOST, CONTROL_PORT).into()).fuse();
+    let interface_server =
+        server(server::Mode::Interface, (HOST, INTERFACE_PORT).into()).fuse();
+    let heartbeat = heartbeat_loop().fuse();
 
-    // Provide a way for the server to signal that it's quit
-    let (quit, wait_quit) = oneshot::channel::<()>();
-
-    // Wait for the server to quit, then emit a `()`
-    let wait_quit = async {
-        wait_quit.await.unwrap_or(())
-    }.fuse();
-
-    // Run the server and the heartbeat loop concurrently
-    let main_loop = async {
-        join!(server(socket_addr, quit),
-              heartbeat_loop())
-    }.fuse();
-
-    pin_mut!(main_loop, wait_quit);
+    pin_mut!(control_server, interface_server, heartbeat);
     select! {
-        ((), ()) = main_loop => (),
-        () = wait_quit => (),
+        () = control_server => (),
+        () = interface_server => (),
+        () = heartbeat => (),
     }
 }

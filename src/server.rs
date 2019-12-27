@@ -6,14 +6,23 @@ use lazy_static::lazy_static;
 use std::sync::Arc;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::net::SocketAddr;
-use tokio::sync::{Mutex, oneshot};
+use std::net::{SocketAddr, TcpListener};
+use tokio::sync::Mutex;
 use futures::stream::StreamExt;
 use itertools::Itertools;
 
 use crate::page::Page;
 use crate::params::{RetrieveParams, PublishParams};
 use crate::heartbeat;
+
+/// The mode of operation for the server
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum Mode {
+    /// The end of the server that browsers connect to, for rendering the view
+    Interface,
+    /// The end of the server that clients connect to, for controlling the view
+    Control,
+}
 
 lazy_static! {
     /// The current contents of the server, indexed by path
@@ -22,46 +31,53 @@ lazy_static! {
         = Mutex::new(HashMap::new());
 }
 
+/// Try to unwrap a `Result`, returning it if it is `Ok`. If it is an `Err`,
+/// print the error to stderr, send `()` to the provided `Sender`, and return
+/// early. (The lattermost part of this is why this has to be a macro and not a
+/// function.)
+macro_rules! unwrap_or_abort {
+    ($e:expr) => {
+        match $e {
+            Err(err) => {
+                eprintln!("{}", err);
+                return;
+            },
+            Ok(result) => result,
+        }
+    };
+}
+
 /// Run the main server loop
-pub async fn server(socket_addr: SocketAddr, quit: oneshot::Sender<()>) {
-    let base_uri =
-        Arc::new(Uri::try_from(format!("http://{}", socket_addr)).unwrap());
+pub async fn server(mode: Mode, socket_addr: SocketAddr) {
+    // Bind the server to this socket address
+    let listener   = unwrap_or_abort!(TcpListener::bind(socket_addr));
+    let local_addr = unwrap_or_abort!(listener.local_addr());
+    let server     = unwrap_or_abort!(hyper::Server::from_tcp(listener));
+    let base_uri   = Arc::new(unwrap_or_abort!(Uri::try_from(format!("http://{}", local_addr))));
 
     // Print the base URI to stdout: in a managed mode, a calling process could
     // read this to determine where to direct its future requests.
-    println!("{}", base_uri);
-
-    hyper::Server::bind(&socket_addr)
-        .serve(make_service_fn(move |_| {
-            let base_uri = base_uri.clone();
-            async {
-                Ok::<_, hyper::Error>(service_fn(move |request: Request<Body>| {
-                    process_request(base_uri.clone(), request)
-                }))
-            }
-        })).await.unwrap_or_else(|err| {
-            eprintln!("{}", err);
-            quit.send(()).unwrap_or(());
-        })
-}
-
-fn bad_request(message: impl Into<String>) -> Response<Body> {
-    Response::builder()
-        .status(StatusCode::BAD_REQUEST)
-        .body(Body::from(message.into()))
-        .unwrap()
-}
-
-fn eprint_header(headers: &HeaderMap<HeaderValue>, header: &str) {
-    if headers.get(header).is_some() {
-        eprint!("{}: ", header);
-        eprintln!("{}", headers.get_all(header).iter()
-                 .map(|host| host.to_str().unwrap_or("[invalid UTF-8]"))
-                 .format(","));
+    match mode {
+        Mode::Interface => {
+            println!("View:    {}", base_uri.to_string().trim_end_matches('/'));
+        },
+        Mode::Control => {
+            println!("Control: {}", base_uri.to_string().trim_end_matches('/'));
+        },
     }
+
+    unwrap_or_abort!(server.serve(make_service_fn(move |_| {
+        let base_uri = base_uri.clone();
+        async move {
+            Ok::<_, hyper::Error>(service_fn(move |request: Request<Body>| {
+                process_request(mode, base_uri.clone(), request)
+            }))
+        }
+    })).await);
 }
 
 async fn process_request(
+    mode: Mode,
     base_uri: Arc<Uri>,
     request: Request<Body>,
 ) -> Result<Response<Body>, hyper::Error> {
@@ -95,9 +111,9 @@ async fn process_request(
     // TODO: per-path backpressure to prevent overloading web browser
 
     // Just one big dispatch on the HTTP method...
-    Ok(match method {
+    Ok(match (mode, method) {
 
-        Method::GET | Method::HEAD => {
+        (Mode::Interface, Method::GET) => {
             let mut page = page.lock().await;
             // Parse the query parameters and proceed if they're okay
             if let Some(RetrieveParams{}) = RetrieveParams::parse(query) {
@@ -116,11 +132,7 @@ async fn process_request(
 
                 // If client wants event stream of changes to page:
                 if wants_stream {
-                    let body = if method == Method::HEAD {
-                        Body::empty()
-                    } else {
-                        page.new_client().unwrap_or_else(Body::empty)
-                    };
+                    let body = page.new_client().unwrap_or_else(Body::empty);
                     Response::builder()
                         .header("Content-Type", "text/event-stream")
                         .header("Cache-Control", "no-cache")
@@ -133,11 +145,7 @@ async fn process_request(
                     let event_stream_uri =
                         base_uri.to_string().trim_end_matches('/').to_owned()
                         + &path;
-                    let body = if method == Method::HEAD {
-                        Body::empty()
-                    } else {
-                        page.render(&event_stream_uri).into()
-                    };
+                    let body = page.render(&event_stream_uri).into();
                     let mut builder = Response::builder()
                         .header("Cache-Control", "no-cache");
                     if let Some(content_type) = page.content_type() {
@@ -151,7 +159,7 @@ async fn process_request(
             }
         },
 
-        Method::POST => {
+        (Mode::Control, Method::POST) => {
             // Slurp the body into memory
             // TODO: Accept text/event-stream to allow keep-alive connections
             let mut body_bytes: Vec<u8> = Vec::new();
@@ -209,7 +217,7 @@ async fn process_request(
             Response::new(Body::empty())
         },
 
-        Method::DELETE => {
+        (Mode::Control, Method::DELETE) => {
             // This is equivalent to an empty-body POST with no query string
             if query != "" {
                 return Ok(bad_request("Invalid query string in DELETE."));
@@ -225,4 +233,24 @@ async fn process_request(
             .body(Body::empty())
             .unwrap(),
     })
+}
+
+// Some utilities for this module:
+
+/// Assemble a BAD_REQUEST response with the given message
+fn bad_request(message: impl Into<String>) -> Response<Body> {
+    Response::builder()
+        .status(StatusCode::BAD_REQUEST)
+        .body(Body::from(message.into()))
+        .unwrap()
+}
+
+/// Print a header value to stderr, for debugging purposes
+fn eprint_header(headers: &HeaderMap<HeaderValue>, header: &str) {
+    if headers.get(header).is_some() {
+        eprint!("{}: ", header);
+        eprintln!("{}", headers.get_all(header).iter()
+                 .map(|host| host.to_str().unwrap_or("[invalid UTF-8]"))
+                 .format(","));
+    }
 }
