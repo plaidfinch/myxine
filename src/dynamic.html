@@ -4,25 +4,29 @@
         <title>{title}</title>
         <meta charset="utf-8" />
         <script>
-         let sse = new EventSource("{event_source}");
-         sse.addEventListener("body", event => {{
+         function setBody(event) {{
              document.body.innerHTML = event.data;
-         }});
-         sse.addEventListener("clear-body", event => {{
+         }}
+         function clearBody(event) {{
              document.body.innerHTML = "";
-         }});
-         sse.addEventListener("title", event => {{
+         }}
+         function setTitle(event) {{
              document.title = event.data;
-         }});
-         sse.addEventListener("clear-title", event => {{
+         }}
+         function clearTitle(event) {{
              document.title = "";
-         }});
-         sse.addEventListener("refresh", event => {{
+         }}
+         function refresh(event) {{
              location.reload();
-         }});
+         }}
+         let sse = new EventSource("{event_source}");
+         sse.addEventListener("body", setBody);
+         sse.addEventListener("clear-body", clearBody);
+         sse.addEventListener("title", setTitle);
+         sse.addEventListener("clear-title", clearTitle);
+         sse.addEventListener("refresh", refresh);
         </script>
     </head>
-    <!-- TODO: Add a full CSS reset here? -->
     <body style="margin: 0px; padding: 0px">
         {body}
     </body>
