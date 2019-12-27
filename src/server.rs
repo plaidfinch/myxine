@@ -6,15 +6,14 @@ use lazy_static::lazy_static;
 use std::sync::Arc;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::mem;
 use std::net::SocketAddr;
 use tokio::sync::{Mutex, oneshot};
 use futures::stream::StreamExt;
 use itertools::Itertools;
 
 use crate::page::Page;
-use crate::heartbeat::HEARTBEAT_TABLE;
 use crate::params::{RetrieveParams, PublishParams};
+use crate::heartbeat;
 
 lazy_static! {
     /// The current contents of the server, indexed by path
@@ -87,22 +86,19 @@ async fn process_request(
     }
 
     // Get (or create) the page at this path
-    let mut pages = PAGES.lock().await;
-    let page = pages.entry(path.clone())
-        .or_insert_with(|| Arc::new(Mutex::new(Page::new())));
+    let page = PAGES.lock().await
+        .entry(path.clone())
+        .or_insert_with(|| Arc::new(Mutex::new(Page::new())))
+        .clone();
 
-    // Insert a weak reference to this page into the heartbeat table so that the
-    // heartbeat thread can keep all the listeners to this page alive
-    HEARTBEAT_TABLE.lock().await
-        .insert(path.clone(), Arc::downgrade(&page.clone()));
-
-    // Await the lock on the page itself so we can modify it
-    let mut page = page.lock().await;
+    // Make sure this path receives heartbeats
+    heartbeat::touch_path(path.clone());
 
     // Just one big dispatch on the HTTP method...
     let result = match method {
 
         Method::GET | Method::HEAD => {
+            let mut page = page.lock().await;
             if let Some(RetrieveParams{}) = RetrieveParams::parse(query) {
                 // The client wants an event-stream if they say so!
                 let wants_stream =
@@ -152,6 +148,7 @@ async fn process_request(
         },
 
         Method::POST => {
+            let mut page = page.lock().await;
             // Slurp the body into memory
             let mut body_bytes: Vec<u8> = Vec::new();
             while let Some(chunk) = body.next().await {
@@ -204,14 +201,9 @@ async fn process_request(
             if query != "" {
                 return Ok(bad_request("Invalid query string in DELETE."));
             }
-            // What are we doing here? We swap in an initial-state page for our
-            // page, then force a client-side refresh to immediately clear the
-            // client view. At some point in the future, if this page isn't
-            // modified, and once all clients disconnect, it will be garbage
-            // collected from the PAGES table by the heartbeat loop.
-            let mut old_page = Page::new();
-            mem::swap(&mut old_page, &mut page);
-            old_page.refresh().await;
+            let mut page = page.lock().await;
+            page.set_title("").await;
+            page.set_body("").await;
             Response::new(Body::empty())
         },
 
