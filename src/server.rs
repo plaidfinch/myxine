@@ -36,11 +36,7 @@ pub async fn server(socket_addr: SocketAddr, quit: oneshot::Sender<()>) {
             let base_uri = base_uri.clone();
             async {
                 Ok::<_, hyper::Error>(service_fn(move |request: Request<Body>| {
-                    let base_uri = base_uri.clone();
-                    async move {
-                        // TODO: Reset no-activity timeout here
-                        process_request(base_uri.clone(), request).await
-                    }
+                    process_request(base_uri.clone(), request)
                 }))
             }
         })).await.unwrap_or_else(|err| {
