@@ -1,4 +1,4 @@
-<img src="/images/myxine_glutinosa.png" width="400px" alt="woodcut sketch of myxine glutinosa, the hagfish">
+<img src="/images/myxine_glutinosa.png" width="600px" alt="woodcut sketch of myxine glutinosa, the hagfish">
 
 # `myxine`: a friendly eel to help you get _GUI_ fast
 
