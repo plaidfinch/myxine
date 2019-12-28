@@ -10,8 +10,8 @@ use heartbeat::heartbeat_loop;
 use server::server;
 
 const HOST: [u8; 4] = [127, 0, 0, 1];
-const INTERFACE_PORT: u16 = 8000;
-const CONTROL_PORT:   u16 = 8001;
+const INTERFACE_PORT: u16 = 2628; // B-O-A-T on a telephone keypad
+const CONTROL_PORT:   u16 = 7245; // S-A-I-L on a telephone keypad
 
 // TODO: specify options on the command line
 
