@@ -11,3 +11,30 @@
   </td>
 </tr>
 </table>
+
+## TL;DR:
+
+If you can write a function (in any language) from some internal data to a fragment of HTML, `myxine` will give your program a **dynamic webpage** whose content instantly reflects whatever your imagination wills it to show.
+
+The interface is HTTP: if you can make a web request to `localhost` from your program, you can use `myxine`:
+
+```
+$ curl localhost:7245/swimming.html -d "<h1>Splish splash!</h1>"
+```
+
+1. **POST** some HTML to `localhost:7245/some/arbitrary/path`, and then
+2. **GET** (i.e. navigate with your web browser) to `localhost:2628/some/arbitrary/path`: you'll see a web page with the HTML you just posted as its body.
+3. If you **POST** some more HTML to that same path, the changes will be _instantly_ updated on the web page.
+
+You can store other kinds of data with `myxine`, too, but it won't be served dynamically. Just set the `Content-Type` header on your `POST` request to something specific like `application/json`. With `curl`, this amounts to something like:
+
+```
+$ curl -H "Content-Type: application/json" localhost:7245/swimming.json -d '{ "splish": "splash" }'
+```
+
+You can still update the content with further `POST` requests, but a web browser won't see those changes until someone reloads the page.
+
+## FAQ
+
+**Q:** Why these particular port numbers? <br>
+**A:** On a telephone keypad, `7245` spells `S`-`A`-`I`-`L`, and `2628` spells `B`-`O`-`A`-`T`.
