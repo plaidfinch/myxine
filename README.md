@@ -26,6 +26,8 @@ $ curl localhost:7245/swimming.html -d "<h1>Splish splash!</h1>"
 2. **GET** (i.e. navigate with your web browser) to `localhost:2628/some/arbitrary/path`: you'll see a web page with the HTML you just posted as its body.
 3. If you **POST** some more HTML to that same path, the changes will be _instantly_ updated on the web page.
 
+### Static content
+
 You can store other kinds of data with `myxine`, too, but it won't be served dynamically. Just set the `Content-Type` header on your `POST` request to something specific like `application/json`. With `curl`, this amounts to something like:
 
 ```
@@ -33,6 +35,14 @@ $ curl -H "Content-Type: application/json" localhost:7245/swimming.json -d '{ "s
 ```
 
 You can still update the content with further `POST` requests, but a web browser won't see those changes until someone reloads the page.
+
+### Static _binary_ content
+
+A common gotcha is trying to upload non-text static content (like an image) but forgetting to send it in binary mode. This will corrupt your content in transmission. To fix, just make sure you send the request in binary mode. For example, with `curl`, we would say:
+
+```
+$ curl -H "Content-Type: image/png" "http://localhost:7245/eel.png" --data-binary @"eel.png"
+```
 
 ## FAQ
 
