@@ -9,9 +9,12 @@ edition = "2018"
 [dependencies]
 hyper = "0.13.1"
 http = "0.2.0"
-hyper-usse = { git = "https://github.com/kwf/hyper-usse" }
+hyper-usse = "0.3.0"
 futures = "0.3.1"
 tokio = { version = "0.2.4", features = ["full"] }
 lazy_static = "1.4.0"
 percent-encoding = "2.1.0"
 itertools = "0.8.2"
+
+[profile.release]
+panic = 'abort'

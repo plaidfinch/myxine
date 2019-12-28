@@ -1,5 +1,5 @@
 use hyper::Body;
-use hyper_usse::Event;
+use hyper_usse::EventBuilder;
 use std::io::Write;
 use std::mem;
 
@@ -92,7 +92,7 @@ impl Page {
     pub async fn refresh(&mut self) {
         match self {
             Page::Dynamic{sse, ..} => {
-                let event = Event::new(".").set_event("refresh").to_sse();
+                let event = EventBuilder::new(".").event_type("refresh").build();
                 sse.send_to_clients(event).await;
             },
             Page::Static{..} => { },
@@ -133,11 +133,11 @@ impl Page {
                     if new_title != *title {
                         *title = new_title.clone();
                         let event = if *title != "" {
-                            Event::new(new_title).set_event("title")
+                            EventBuilder::new(&new_title).event_type("title")
                         } else {
-                            Event::new(".").set_event("clear-title")
+                            EventBuilder::new(".").event_type("clear-title")
                         };
-                        sse.send_to_clients(event.to_sse()).await;
+                        sse.send_to_clients(event.build()).await;
                     }
                     break; // title has been set
                 },
@@ -160,11 +160,11 @@ impl Page {
                     if new_body != *body {
                         *body = new_body.clone();
                         let event = if *body != "" {
-                            Event::new(new_body).set_event("body")
+                            EventBuilder::new(&new_body).event_type("body")
                         } else {
-                            Event::new(".").set_event("clear-body")
+                            EventBuilder::new(".").event_type("clear-body")
                         };
-                        sse.send_to_clients(event.to_sse()).await;
+                        sse.send_to_clients(event.build()).await;
                     }
                     break; // body has been set
                 },

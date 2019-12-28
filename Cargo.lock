@@ -230,8 +230,9 @@ dependencies = [
 
 [[package]]
 name = "hyper-usse"
-version = "0.2.0"
-source = "git+https://github.com/kwf/hyper-usse#76aa416390c409cc372ade1c10c62e4fffab4be6"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3dd2d5e82ca26322fadc6d535db286c9adbd122ec9177c5ad279c86314bcf254"
 dependencies = [
  "futures",
  "hyper",
