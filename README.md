@@ -3,7 +3,7 @@
 <table style="border: 0">
 <tr style="border: 0">
   <td width="425px" style="border: 0">
-    <img src="/images/myxine_glutinosa.png" width="425px" alt="woodcut sketch of myxine glutinosa, the hagfish">
+    <img src="/images/myxine_glutinosa.png" target="_blank" width="425px" alt="woodcut sketch of myxine glutinosa, the hagfish">
   </td>
   <td style="border: 0">
     <p>The hagfish, <a href="https://en.wikipedia.org/wiki/Hagfish"><i>myxine glutinosa</i></a>, is a sea creature who hasn't changed much since well before dinosaurs roamed the planet. If it ain't broke, don't fix it! These creatures are best known for their ability to generate copious amounts of slime in short order.</p/>
