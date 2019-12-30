@@ -113,7 +113,8 @@ async fn process_request(
                         + &path;
                     let body = page.render(&event_stream_uri).into();
                     let mut builder = Response::builder()
-                        .header("Cache-Control", "no-cache");
+                        .header("Cache-Control", "no-cache")
+                        .header("Content-Disposition", "inline");
                     if let Some(content_type) = page.content_type() {
                         // If there's a custom content-type, set it here
                         builder = builder.header("Content-Type", content_type);
@@ -121,7 +122,7 @@ async fn process_request(
                     builder.body(body).unwrap()
                 },
                 None => {
-                    return Ok(bad_request("Invalid query string in GET/HEAD."));
+                    return Ok(bad_request("Invalid query string in GET."));
                 },
             }
         },
@@ -137,7 +138,17 @@ async fn process_request(
             let content_type: Option<&str> =
                 match headers.get("Content-Type").map(HeaderValue::to_str) {
                     None => None,
-                    Some(Ok(content_type)) => Some(content_type),
+                    Some(Ok(content_type)) =>
+                        // One of these content types means it's just data, we
+                        // know nothing about it, and we should just serve it up
+                        // as a unicode string. The user should specify some
+                        // particular content type if they desire one.
+                        if content_type.starts_with("application/x-www-form-urlencoded")
+                        || content_type.starts_with("multipart/form-data") {
+                            None
+                        } else {
+                            Some(content_type)
+                        },
                     Some(Err(_)) =>
                         return Ok(bad_request("Invalid ASCII in Content-Type header.")),
                 };
