@@ -48,7 +48,7 @@ pub async fn server(socket_addr: SocketAddr) {
 
     // Print the base URI to stdout: in a managed mode, a calling process could
     // read this to determine where to direct its future requests.
-    println!("Running at: {}", base_uri.to_string().trim_end_matches('/'));
+    // println!("Running at: {}", base_uri.to_string().trim_end_matches('/'));
 
     unwrap_or_abort!(server.serve(make_service_fn(move |_| {
         let base_uri = base_uri.clone();
