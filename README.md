@@ -32,12 +32,22 @@ $ curl localhost:1123/swimming.html -d "<h1>Splish splash!</h1>"
 
 1. **POST** some HTML to `localhost:1123/some/arbitrary/path`, and then
 2. **GET** (i.e. navigate with your web browser) to
-   `localhost:1123/some/arbitrary/path`: you'll see a web page with the HTML you
-   just posted as its body.
+   `localhost:1123/some/arbitrary/path`: you'll see a web page with the HTML
+   fragment you just posted set as its body.
 3. If you **POST** some more HTML to that same path, the changes will be
-   _instantly_ updated on the web page.
+   _instantly_ updated on the web page before your eyes!
 
-### Static content
+## Setting the page title
+
+You can also set the title of the page! Just use the `?title` query parameter, like this:
+
+```
+$ curl localhost:1123/?title=Hello%20Atlantic%20Ocean! -d "<h1>What a fine day it is!</h1>"
+```
+
+Titles will be URL-decoded, so you can use, e.g. `%20` to put a space in your title.
+
+## Static content
 
 You can store other kinds of data with `myxine` (such as assets you want to link
 to from a dynamic page). Since `myxine`'s default behavior is to inject your
@@ -50,7 +60,7 @@ served by sending a `Content-Type` header with your request.
 For instance, to publish a static piece of JSON data with `curl`, you might say:
 
 ```
-$ curl  -H "Content-Type: application/json" localhost:1123/swimming.json?static=true -d '{ "splish": "splash" }'
+$ curl -H "Content-Type: application/json" localhost:1123/swimming.json?static=true -d '{ "splish": "splash" }'
 ```
 
 You can still update the content with further `POST` requests, but a web browser
