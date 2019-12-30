@@ -74,5 +74,5 @@ transmission. To fix, just make sure you send the request in binary mode. For
 example, with `curl`, we would say:
 
 ```
-$ curl -H "Content-Type: image/png" "http://localhost:1123/eel.png?static=true" --data-binary @"eel.png"
+$ curl -H "Content-Type: image/png" "localhost:1123/eel.png?static=true" --data-binary @"eel.png"
 ```
