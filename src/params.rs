@@ -29,7 +29,7 @@ impl PostParams {
     pub fn parse(query: &str) -> Option<PostParams> {
         let params = query_params(query)?;
         if let Some([]) = params.get("subscribe").map(Vec::as_slice) {
-            if constrained_to_keys(&params, &["events"]) {
+            if constrained_to_keys(&params, &["subscribe"]) {
                 Some(PostParams::Subscribe)
             } else {
                 None
