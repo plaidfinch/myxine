@@ -53,14 +53,14 @@ You can store other kinds of data with `myxine` (such as assets you want to link
 to from a dynamic page). Since `myxine`'s default behavior is to inject your
 provided content into a dynamic HTML wrapper, you need to specify when you'd
 like something to be hosted as a raw piece of data. This is done by appending to
-your request path the query parameter `?static=true`. Further, if your content
+your request path the query parameter `?static`. Further, if your content
 is not HTML, you can change the `Content-Type` header with which it will be
 served by sending a `Content-Type` header with your request.
 
 For instance, to publish a static piece of JSON data with `curl`, you might say:
 
 ```
-$ curl -H "Content-Type: application/json" localhost:1123/swimming.json?static=true -d '{ "splish": "splash" }'
+$ curl -H "Content-Type: application/json" localhost:1123/swimming.json?static -d '{ "splish": "splash" }'
 ```
 
 You can still update the content with further `POST` requests, but a web browser
