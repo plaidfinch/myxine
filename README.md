@@ -20,7 +20,7 @@ content instantly reflects whatever your imagination wills it to show. Just run
 in the background:
 
 ```
-$ myxine --port 1123
+$ myxine --port 1123 &
 ```
 
 The interface is HTTP: if you can make a web request to `localhost` from your
