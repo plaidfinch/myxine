@@ -89,7 +89,7 @@ async fn process_request(
         .clone();
 
     // Make sure this path receives heartbeats
-    heartbeat::touch_path(path.clone());
+    heartbeat::hold_path(path.clone());
 
     // Just one big dispatch on the HTTP method...
     Ok(match method {
