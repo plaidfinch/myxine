@@ -3,14 +3,20 @@ use percent_encoding::percent_decode;
 use std::borrow::Cow;
 
 /// Parsed parameters from a query string for a GET/HEAD request.
-pub(crate) struct GetParams;
+pub(crate) enum GetParams {
+    FullPage,
+    PageUpdates,
+}
 
 impl GetParams {
     /// Parse a query string from a GET request.
     pub fn parse(query: &str) -> Option<GetParams> {
         let params = query_params(query)?;
-        if constrained_to_keys(&params, &[]) {
-            Some(GetParams)
+        if param_as_bool("updates", &params)?
+        && constrained_to_keys(&params, &["updates"]) {
+            Some(GetParams::PageUpdates)
+        } else if constrained_to_keys(&params, &[]) {
+            Some(GetParams::FullPage)
         } else {
             None
         }
@@ -19,35 +25,34 @@ impl GetParams {
 
 /// Parsed parameters from a query string for a POST request.
 pub(crate) enum PostParams {
-    Dynamic{title: String},
-    Static,
-    Subscribe,
+    DynamicPage{title: String},
+    StaticPage,
+    SubscribeEvents,
+    PageEvent{event: String, id: String},
 }
 
 impl PostParams {
     /// Parse a query string from a POST request.
     pub fn parse(query: &str) -> Option<PostParams> {
         let params = query_params(query)?;
-        if let Some([]) = params.get("subscribe").map(Vec::as_slice) {
-            if constrained_to_keys(&params, &["subscribe"]) {
-                Some(PostParams::Subscribe)
-            } else {
-                None
-            }
-        } else if param_as_bool("static", &params)? {
-            if constrained_to_keys(&params, &["static"]) {
-                Some(PostParams::Static)
-            } else {
-                None
-            }
-        } else {
-            let title = param_as_str("title", &params)?.to_string();
-            if constrained_to_keys(&params, &["title"]) {
-                Some(PostParams::Dynamic{title})
-            } else {
-                None
-            }
+        if param_as_bool("subscribe", &params)?
+            && constrained_to_keys(&params, &["subscribe"]) {
+                return Some(PostParams::SubscribeEvents)
+        } else if param_as_bool("static", &params)?
+            && constrained_to_keys(&params, &["static"]) {
+                return Some(PostParams::StaticPage)
+        } else if let (Some(event), Some(id)) =
+            (param_as_str("event", &params)?.map(String::from),
+             param_as_str("id", &params)?.map(String::from)) {
+                if constrained_to_keys(&params, &["event", "id"])
+                && event != "" && id != "" {
+                    return Some(PostParams::PageEvent{event, id})
+                }
+        } else if constrained_to_keys(&params, &["title"]) {
+            let title = param_as_str("title", &params)?.unwrap_or("").to_string();
+            return Some(PostParams::DynamicPage{title})
         }
+        return None;
     }
 }
 
@@ -56,11 +61,6 @@ impl PostParams {
 /// something other than "true" or "false", return `None`.
 fn param_as_bool<'a, 'b: 'a>(param: &'b str, params: &'a HashMap<&'a str, Vec<Cow<'a, str>>>) -> Option<bool> {
     match params.get(param).map(Vec::as_slice) {
-        Some([boolean]) => match boolean.as_ref() {
-            "true" => Some(true),
-            "false" => Some(false),
-            _ => None,
-        },
         Some([]) => Some(true),
         None => Some(false),
         _ => None,
@@ -70,10 +70,11 @@ fn param_as_bool<'a, 'b: 'a>(param: &'b str, params: &'a HashMap<&'a str, Vec<Co
 /// Parse a given parameter as a string, where its presence without a mapping
 /// (or its absence entirely) is interpreted as the empty string. If it is
 /// mapped to multiple values, retrun `None`.
-fn param_as_str<'a, 'b: 'a>(param: &'b str, params: &'a HashMap<&'a str, Vec<Cow<'a, str>>>) -> Option<&'a str> {
+fn param_as_str<'a, 'b: 'a>(param: &'b str, params: &'a HashMap<&'a str, Vec<Cow<'a, str>>>) -> Option<Option<&'a str>> {
     match params.get(param).map(Vec::as_slice) {
-        Some([string]) => Some(string.as_ref()),
-        Some([]) | None => Some(""),
+        Some([string]) => Some(Some(string.as_ref())),
+        Some([]) => Some(Some("")),
+        None => Some(None),
         _ => None,
     }
 }

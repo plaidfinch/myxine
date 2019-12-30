@@ -96,23 +96,9 @@ async fn process_request(
 
         Method::GET => {
             let mut page = page.lock().await;
-            // Parse the query parameters and proceed if they're okay
-            if let Some(GetParams) = GetParams::parse(query) {
-
-                // The client wants an event-stream if their Accept header says
-                let wants_stream =
-                    match headers.get("Accept").map(HeaderValue::to_str) {
-                        None => false,
-                        Some(Ok(accept)) => {
-                            let accept = accept.to_owned().to_lowercase();
-                            accept == "text/event-stream"
-                        },
-                        Some(Err(_)) =>
-                            return Ok(bad_request("Invalid ASCII in Accept header.")),
-                    };
-
+            match GetParams::parse(query) {
                 // If client wants event stream of changes to page:
-                if wants_stream {
+                Some(GetParams::PageUpdates) => {
                     let body = page.new_client().unwrap_or_else(Body::empty);
                     Response::builder()
                         .header("Content-Type", "text/event-stream")
@@ -120,9 +106,8 @@ async fn process_request(
                         .header("Access-Control-Allow-Origin", "*")
                         .body(body)
                         .unwrap()
-
-                // If client wants entire full page:
-                } else {
+                },
+                Some(GetParams::FullPage) => {
                     let event_stream_uri =
                         base_uri.to_string().trim_end_matches('/').to_owned()
                         + &path;
@@ -134,9 +119,10 @@ async fn process_request(
                         builder = builder.header("Content-Type", content_type);
                     }
                     builder.body(body).unwrap()
-                }
-            } else {
-                return Ok(bad_request("Invalid query string in GET/HEAD."));
+                },
+                None => {
+                    return Ok(bad_request("Invalid query string in GET/HEAD."));
+                },
             }
         },
 
@@ -158,13 +144,13 @@ async fn process_request(
 
             match PostParams::parse(query) {
                 // Client wants to store a static file of a known Content-Type:
-                Some(PostParams::Static) => {
+                Some(PostParams::StaticPage) => {
                     let mut page = page.lock().await;
                     page.set_static(content_type.map(String::from), body_bytes).await;
                     Response::new(Body::empty())
                 },
                 // Client wants to publish some HTML to a dynamic page:
-                Some(PostParams::Dynamic{title}) => {
+                Some(PostParams::DynamicPage{title}) => {
                     match String::from_utf8(body_bytes) {
                         Ok(body) => {
                             let mut page = page.lock().await;
@@ -177,9 +163,13 @@ async fn process_request(
                     }
                 },
                 // Client wants to subscribe to interface events on this page:
-                Some(PostParams::Subscribe) => {
+                Some(PostParams::SubscribeEvents) => {
                     todo!("Implement event subscription")
                 },
+                // Browser wants to notify client of an event
+                Some(PostParams::PageEvent{event, id}) => {
+                    todo!("Implement event notification from browser")
+                }
                 None => {
                     return Ok(bad_request("Invalid query string in POST."));
                 }

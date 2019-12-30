@@ -19,7 +19,7 @@
          function refresh(event) {{
              location.reload();
          }}
-         let sse = new EventSource("{event_source}");
+         let sse = new EventSource("{event_source}?updates");
          sse.addEventListener("body", setBody);
          sse.addEventListener("clear-body", clearBody);
          sse.addEventListener("title", setTitle);
