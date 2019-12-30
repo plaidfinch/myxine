@@ -14,37 +14,55 @@
 
 ## TL;DR:
 
-If you can write a function (in any language) from some internal data to a fragment of HTML, `myxine` will give your program a **dynamic webpage** whose content instantly reflects whatever your imagination wills it to show.
-
-The interface is HTTP: if you can make a web request to `localhost` from your program, you can use `myxine`:
+If you can write a function (in any language) from some internal data to a
+fragment of HTML, `myxine` will give your program a **dynamic webpage** whose
+content instantly reflects whatever your imagination wills it to show. Just run
+in the background:
 
 ```
-$ curl localhost:7245/swimming.html -d "<h1>Splish splash!</h1>"
+$ myxine --port 1123
 ```
 
-1. **POST** some HTML to `localhost:7245/some/arbitrary/path`, and then
-2. **GET** (i.e. navigate with your web browser) to `localhost:2628/some/arbitrary/path`: you'll see a web page with the HTML you just posted as its body.
-3. If you **POST** some more HTML to that same path, the changes will be _instantly_ updated on the web page.
+The interface is HTTP: if you can make a web request to `localhost` from your
+program, you can use `myxine`:
+
+```
+$ curl localhost:1123/swimming.html -d "<h1>Splish splash!</h1>"
+```
+
+1. **POST** some HTML to `localhost:1123/some/arbitrary/path`, and then
+2. **GET** (i.e. navigate with your web browser) to
+   `localhost:1123/some/arbitrary/path`: you'll see a web page with the HTML you
+   just posted as its body.
+3. If you **POST** some more HTML to that same path, the changes will be
+   _instantly_ updated on the web page.
 
 ### Static content
 
-You can store other kinds of data with `myxine`, too, but it won't be served dynamically. Just set the `Content-Type` header on your `POST` request to something specific like `application/json`. With `curl`, this amounts to something like:
+You can store other kinds of data with `myxine` (such as assets you want to link
+to from a dynamic page). Since `myxine`'s default behavior is to inject your
+provided content into a dynamic HTML wrapper, you need to specify when you'd
+like something to be hosted as a raw piece of data. This is done by appending to
+your request path the query parameter `?static=true`. Further, if your content
+is not HTML, you can change the `Content-Type` header with which it will be
+served by sending a `Content-Type` header with your request.
+
+For instance, to publish a static piece of JSON data with `curl`, you might say:
 
 ```
-$ curl -H "Content-Type: application/json" localhost:7245/swimming.json -d '{ "splish": "splash" }'
+$ curl  -H "Content-Type: application/json" localhost:1123/swimming.json?static=true -d '{ "splish": "splash" }'
 ```
 
-You can still update the content with further `POST` requests, but a web browser won't see those changes until someone reloads the page.
+You can still update the content with further `POST` requests, but a web browser
+won't see those changes until someone reloads the page.
 
 ### Static _binary_ content
 
-A common gotcha is trying to upload non-text static content (like an image) but forgetting to send it in binary mode. This will corrupt your content in transmission. To fix, just make sure you send the request in binary mode. For example, with `curl`, we would say:
+A common gotcha is trying to upload non-text static content (like an image) but
+forgetting to send it in binary mode. This will corrupt your content in
+transmission. To fix, just make sure you send the request in binary mode. For
+example, with `curl`, we would say:
 
 ```
-$ curl -H "Content-Type: image/png" "http://localhost:7245/eel.png" --data-binary @"eel.png"
+$ curl -H "Content-Type: image/png" "http://localhost:1123/eel.png?static=true" --data-binary @"eel.png"
 ```
-
-## FAQ
-
-**Q:** Why these particular port numbers? <br>
-**A:** On a telephone keypad, `7245` spells `S`-`A`-`I`-`L`, and `2628` spells `B`-`O`-`A`-`T`.

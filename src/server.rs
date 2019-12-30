@@ -12,17 +12,8 @@ use futures::stream::StreamExt;
 use itertools::Itertools;
 
 use crate::page::Page;
-use crate::params::{RetrieveParams, PublishParams};
+use crate::params::{GetParams, PostParams};
 use crate::heartbeat;
-
-/// The mode of operation for the server
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum Mode {
-    /// The end of the server that browsers connect to, for rendering the view
-    Interface,
-    /// The end of the server that clients connect to, for controlling the view
-    Control,
-}
 
 lazy_static! {
     /// The current contents of the server, indexed by path
@@ -48,7 +39,7 @@ macro_rules! unwrap_or_abort {
 }
 
 /// Run the main server loop
-pub async fn server(mode: Mode, socket_addr: SocketAddr) {
+pub async fn server(socket_addr: SocketAddr) {
     // Bind the server to this socket address
     let listener   = unwrap_or_abort!(TcpListener::bind(socket_addr));
     let local_addr = unwrap_or_abort!(listener.local_addr());
@@ -57,27 +48,19 @@ pub async fn server(mode: Mode, socket_addr: SocketAddr) {
 
     // Print the base URI to stdout: in a managed mode, a calling process could
     // read this to determine where to direct its future requests.
-    match mode {
-        Mode::Interface => {
-            println!("View:    {}", base_uri.to_string().trim_end_matches('/'));
-        },
-        Mode::Control => {
-            println!("Control: {}", base_uri.to_string().trim_end_matches('/'));
-        },
-    }
+    println!("Running at: {}", base_uri.to_string().trim_end_matches('/'));
 
     unwrap_or_abort!(server.serve(make_service_fn(move |_| {
         let base_uri = base_uri.clone();
         async move {
             Ok::<_, hyper::Error>(service_fn(move |request: Request<Body>| {
-                process_request(mode, base_uri.clone(), request)
+                process_request(base_uri.clone(), request)
             }))
         }
     })).await);
 }
 
 async fn process_request(
-    mode: Mode,
     base_uri: Arc<Uri>,
     request: Request<Body>,
 ) -> Result<Response<Body>, hyper::Error> {
@@ -108,15 +91,13 @@ async fn process_request(
     // Make sure this path receives heartbeats
     heartbeat::touch_path(path.clone());
 
-    // TODO: per-path backpressure to prevent overloading web browser
-
     // Just one big dispatch on the HTTP method...
-    Ok(match (mode, method) {
+    Ok(match method {
 
-        (Mode::Interface, Method::GET) => {
+        Method::GET => {
             let mut page = page.lock().await;
             // Parse the query parameters and proceed if they're okay
-            if let Some(RetrieveParams{}) = RetrieveParams::parse(query) {
+            if let Some(GetParams) = GetParams::parse(query) {
 
                 // The client wants an event-stream if their Accept header says
                 let wants_stream =
@@ -159,65 +140,53 @@ async fn process_request(
             }
         },
 
-        (Mode::Control, Method::POST) => {
+        Method::POST => {
             // Slurp the body into memory
-            // TODO: Accept text/event-stream to allow keep-alive connections
             let mut body_bytes: Vec<u8> = Vec::new();
             while let Some(chunk) = body.next().await {
                 let chunk = chunk?;
                 body_bytes.extend_from_slice(&chunk);
             };
 
-            // The page should be dynamic if the Content-Type is missing or is
-            // text/html or one of the defaults for `curl` (for convenience).
-            // Here, returning `None` means make a dynamic page, and returning
-            // `Some` means make a static page with that Content-Type.
-            let static_content_type: Option<String> =
+            let content_type: Option<&str> =
                 match headers.get("Content-Type").map(HeaderValue::to_str) {
                     None => None,
-                    Some(Ok(content_type)) => {
-                        let content_type = content_type.to_lowercase();
-                        let split_content_type: Vec<&str> =
-                            content_type.split(';').map(|s| s.trim()).collect();
-                        match split_content_type.as_slice()[0] {
-                            "text/html" => None,
-                            "application/x-www-form-urlencoded" => None,
-                            "multipart/form-data" => None,
-                            // The client specified a non-HTML content type,
-                            // which we'll store statically without embedding in
-                            // a fancy page
-                            _ => Some(content_type.to_owned()),
-                        }
-                    },
+                    Some(Ok(content_type)) => Some(content_type),
                     Some(Err(_)) =>
                         return Ok(bad_request("Invalid ASCII in Content-Type header.")),
                 };
 
-
-            // Client wants to store a static file of a known Content-Type:
-            if let Some(content_type) = static_content_type {
-                let mut page = page.lock().await;
-                page.set_static(content_type, body_bytes).await;
-
-            // Client wants to publish some HTML to a dynamic page:
-            } else if let Some(PublishParams{title}) = PublishParams::parse(query) {
-                match String::from_utf8(body_bytes) {
-                    Ok(body) => {
-                        let mut page = page.lock().await;
-                        page.set_title(title.unwrap_or_else(|| "".to_string())).await;
-                        page.set_body(body).await;
-                    },
-                    Err(_) => return Ok(bad_request("Invalid UTF-8 in POST data (only UTF-8 is supported).")),
-                };
-            } else {
-                return Ok(bad_request("Invalid query string in POST."));
+            match PostParams::parse(query) {
+                // Client wants to store a static file of a known Content-Type:
+                Some(PostParams::Static) => {
+                    let mut page = page.lock().await;
+                    page.set_static(content_type.map(String::from), body_bytes).await;
+                    Response::new(Body::empty())
+                },
+                // Client wants to publish some HTML to a dynamic page:
+                Some(PostParams::Dynamic{title}) => {
+                    match String::from_utf8(body_bytes) {
+                        Ok(body) => {
+                            let mut page = page.lock().await;
+                            page.set_title(title).await;
+                            page.set_body(body).await;
+                            Response::new(Body::empty())
+                        },
+                        Err(_) =>
+                            return Ok(bad_request("Invalid UTF-8 in POST data (only UTF-8 is supported).")),
+                    }
+                },
+                // Client wants to subscribe to interface events on this page:
+                Some(PostParams::Subscribe) => {
+                    todo!("Implement event subscription")
+                },
+                None => {
+                    return Ok(bad_request("Invalid query string in POST."));
+                }
             }
-
-            // Give an empty response
-            Response::new(Body::empty())
         },
 
-        (Mode::Control, Method::DELETE) => {
+        Method::DELETE => {
             // This is equivalent to an empty-body POST with no query string
             if query != "" {
                 return Ok(bad_request("Invalid query string in DELETE."));

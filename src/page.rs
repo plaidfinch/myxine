@@ -11,7 +11,7 @@ pub enum Page {
         sse: hyper_usse::Server,
     },
     Static {
-        content_type: String,
+        content_type: Option<String>,
         raw_contents: Vec<u8>,
     }
 }
@@ -104,7 +104,7 @@ impl Page {
     /// page to load the new static content (which will not be able to update
     /// itself until a client refreshes their page again).
     pub async fn set_static(&mut self,
-                            content_type: String,
+                            content_type: Option<String>,
                             raw_contents: impl Into<Vec<u8>>) {
         let mut page =
             Page::Static{content_type, raw_contents: raw_contents.into()};
@@ -118,7 +118,7 @@ impl Page {
     pub fn content_type(&self) -> Option<String> {
         match self {
             Page::Dynamic{..} => None,
-            Page::Static{content_type, ..} => Some(content_type.clone()),
+            Page::Static{content_type, ..} => content_type.clone(),
         }
     }
 

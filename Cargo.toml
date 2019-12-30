@@ -15,8 +15,7 @@ tokio = { version = "0.2.4", features = ["full"] }
 lazy_static = "1.4.0"
 percent-encoding = "2.1.0"
 itertools = "0.8.2"
+structopt = "0.3"
 
 [profile.release]
-panic = 'abort'
 lto = true
-codegen-units = 1

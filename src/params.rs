@@ -1,14 +1,15 @@
 use std::collections::HashMap;
 use percent_encoding::percent_decode;
+use std::borrow::Cow;
 
 /// Parsed parameters from a query string for a GET/HEAD request.
-pub(crate) struct RetrieveParams { }
+pub(crate) struct GetParams;
 
-impl RetrieveParams {
-    pub fn parse(query: &str) -> Option<RetrieveParams> {
-        let params = query_map(query)?;
+impl GetParams {
+    pub fn parse(query: &str) -> Option<GetParams> {
+        let params = query_params(query)?;
         if constrained_to_keys(&params, &[]) {
-            Some(RetrieveParams{})
+            Some(GetParams)
         } else {
             None
         }
@@ -16,21 +17,62 @@ impl RetrieveParams {
 }
 
 /// Parsed parameters from a query string for a POST request of a .
-pub(crate) struct PublishParams {
-    pub title: Option<String>,
+pub(crate) enum PostParams {
+    Dynamic{title: String},
+    Static,
+    Subscribe,
 }
 
-impl<'a> PublishParams {
-    pub fn parse(query: &str) -> Option<PublishParams> {
-        let decoded = percent_decode(query.as_bytes()).decode_utf8_lossy();
-        Some(PublishParams {
-            title: if query == "" { None } else { Some(decoded.to_string()) }
-        })
+impl PostParams {
+    pub fn parse(query: &str) -> Option<PostParams> {
+        let params = query_params(query)?;
+        if let Some([]) = params.get("subscribe").map(Vec::as_slice) {
+            if constrained_to_keys(&params, &["events"]) {
+                Some(PostParams::Subscribe)
+            } else {
+                None
+            }
+        } else if param_as_bool("static", &params)? {
+            if constrained_to_keys(&params, &["static"]) {
+                Some(PostParams::Static)
+            } else {
+                None
+            }
+        } else {
+            let title = param_as_str("title", &params)?.to_string();
+            if constrained_to_keys(&params, &["title"]) {
+                Some(PostParams::Dynamic{title})
+            } else {
+                None
+            }
+        }
     }
 }
 
-fn query_map<'a>(query: &'a str) -> Option<HashMap<&'a str, Vec<&'a str>>> {
-    let mut map: HashMap<&'a str, Vec<&'a str>> = HashMap::new();
+fn param_as_bool<'a, 'b: 'a>(param: &'b str, params: &'a HashMap<&'a str, Vec<Cow<'a, str>>>) -> Option<bool> {
+    match params.get(param).map(Vec::as_slice) {
+        Some([boolean]) => match boolean.as_ref() {
+            "true" => Some(true),
+            "false" => Some(false),
+            _ => None,
+        },
+        Some([]) => Some(true),
+        None => Some(false),
+        _ => None,
+    }
+}
+
+fn param_as_str<'a, 'b: 'a>(param: &'b str, params: &'a HashMap<&'a str, Vec<Cow<'a, str>>>) -> Option<&'a str> {
+    match params.get(param).map(Vec::as_slice) {
+        Some([string]) => Some(string.as_ref()),
+        Some([]) | None => Some(""),
+        _ => None,
+    }
+}
+
+
+fn query_params<'a>(query: &'a str) -> Option<HashMap<&'a str, Vec<Cow<'a, str>>>> {
+    let mut map: HashMap<&'a str, Vec<Cow<'a, str>>> = HashMap::new();
     if query == "" { return Some(map); }
     for mapping in query.split('&') {
         match mapping.split('=').collect::<Vec<_>>().as_mut_slice() {
@@ -39,7 +81,8 @@ fn query_map<'a>(query: &'a str) -> Option<HashMap<&'a str, Vec<&'a str>>> {
                 if key == "" { return None }
                 for value in values.split(',') {
                     let value = value.trim();
-                    map.entry(key).or_insert_with(|| vec![]).push(value);
+                    map.entry(key).or_insert_with(|| vec![])
+                        .push(percent_decode(value.as_bytes()).decode_utf8_lossy());
                 }
             },
             [key] => {
