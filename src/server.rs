@@ -209,7 +209,7 @@ async fn process_request(
 
         _ => Response::builder()
             .status(StatusCode::METHOD_NOT_ALLOWED)
-            .body(Body::empty())
+            .body(format!("Method not allowed: {}", method).into())
             .unwrap(),
     })
 }
