@@ -94,12 +94,15 @@ async fn process_request(
     // Just one big dispatch on the HTTP method...
     Ok(match method {
 
-        Method::GET => {
+        Method::GET | Method::HEAD => {
             let mut page = page.lock().await;
+            let mut body = Body::empty();
             match GetParams::parse(query) {
                 // If client wants event stream of changes to page:
                 Some(GetParams::PageUpdates) => {
-                    let body = page.new_client().unwrap_or_else(Body::empty);
+                    if method == Method::GET {
+                        body = page.new_client().unwrap_or_else(Body::empty);
+                    }
                     Response::builder()
                         .header("Content-Type", "text/event-stream")
                         .header("Cache-Control", "no-cache")
@@ -108,10 +111,12 @@ async fn process_request(
                         .unwrap()
                 },
                 Some(GetParams::FullPage) => {
-                    let event_stream_uri =
-                        base_uri.to_string().trim_end_matches('/').to_owned()
-                        + &path;
-                    let body = page.render(&event_stream_uri).into();
+                    if method == Method::GET {
+                        let event_stream_uri =
+                            base_uri.to_string().trim_end_matches('/').to_owned()
+                            + &path;
+                        body = page.render(&event_stream_uri).into();
+                    }
                     let mut builder = Response::builder()
                         .header("Cache-Control", "no-cache")
                         .header("Content-Disposition", "inline");
@@ -122,7 +127,11 @@ async fn process_request(
                     builder.body(body).unwrap()
                 },
                 None => {
-                    return Ok(bad_request("Invalid query string in GET."));
+                    return Ok(bad_request(if method == Method::GET {
+                        "Invalid query string in GET."
+                    } else {
+                        ""
+                    }));
                 },
             }
         },
