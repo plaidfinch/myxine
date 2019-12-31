@@ -101,7 +101,7 @@ async fn process_request(
                 // If client wants event stream of changes to page:
                 Some(GetParams::PageUpdates) => {
                     if method == Method::GET {
-                        body = page.new_client().unwrap_or_else(Body::empty);
+                        body = page.update_stream().unwrap_or_else(Body::empty);
                     }
                     Response::builder()
                         .header("Content-Type", "text/event-stream")
@@ -184,11 +184,28 @@ async fn process_request(
                 },
                 // Client wants to subscribe to interface events on this page:
                 Some(PostParams::SubscribeEvents) => {
-                    todo!("Implement event subscription")
+                    if let Ok(subscription) = serde_json::from_slice(&body_bytes) {
+                        let body = page.lock().await.event_stream(subscription).await;
+                        Response::builder()
+                            .header("Content-Type", "text/event-stream")
+                            .header("Cache-Control", "no-cache")
+                            .header("Access-Control-Allow-Origin", "*")
+                            .body(body)
+                            .unwrap()
+                    } else {
+                        return Ok(bad_request("Invalid subscription request."));
+                    }
                 },
                 // Browser wants to notify client of an event
                 Some(PostParams::PageEvent{event, id}) => {
-                    todo!("Implement event notification from browser")
+                    if let Ok(fields) = serde_json::from_slice(&body_bytes) {
+                        tokio::spawn(async move {
+                            page.lock().await.send_event(&event, &id, fields).await
+                        });
+                        Response::new(Body::empty())
+                    } else {
+                        return Ok(bad_request("Invalid page event."));
+                    }
                 }
                 None => {
                     return Ok(bad_request("Invalid query string in POST."));

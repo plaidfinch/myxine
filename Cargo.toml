@@ -16,7 +16,7 @@ lazy_static = "1.4.0"
 percent-encoding = "2.1.0"
 itertools = "0.8.2"
 structopt = "0.3"
-serde = { verison = "1.0", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 [profile.release]
