@@ -3,8 +3,9 @@ use hyper_usse::EventBuilder;
 use std::io::Write;
 use std::mem;
 use futures::join;
+use serde_json::Value;
 
-use crate::events::{Subscribers, Subscription, Fields};
+use crate::events::{Subscribers, Subscription};
 
 #[derive(Debug)]
 pub enum Page {
@@ -34,6 +35,9 @@ impl Page {
         }
     }
 
+    /// Test if this page is empty, where "empty" means that it is dynamic, with
+    /// an empty title, empty body, and no subscribers waiting on its page
+    /// events: that is, it's identical to `Page::new()`.
     pub fn is_empty(&self) -> bool {
         match self {
             Page::Dynamic{title, body, update_streams, event_subscribers}
@@ -132,9 +136,9 @@ impl Page {
         page.refresh().await;
     }
 
-    /// Get the content type of a static page, or return `None` if we should
-    /// just use the normal `text/html; charset=utf8` that will be usually
-    /// produced.
+    /// Get the content type of a page, or return `None` if none has been set
+    /// (as in the case of a dynamic page, where the content type is not
+    /// client-configurable).
     pub fn content_type(&self) -> Option<String> {
         match self {
             Page::Dynamic{..} => None,
@@ -215,12 +219,15 @@ impl Page {
     /// Send an event to all subscribers. This should only be called with events
     /// that have come from the corresponding page itself, or confusion will
     /// result!
-    pub(crate) async fn send_event(&mut self, event_type: &str, id: &str, fields: Fields) {
+    pub(crate) async fn send_event(&mut self,
+                                   event_type: &str,
+                                   event_id: &str,
+                                   event_data: &Value) {
         match self {
             Page::Static{..} => { },
             Page::Dynamic{event_subscribers, ..} => {
                 if let Some(total_subscription) =
-                    event_subscribers.send_event(event_type, id, fields).await {
+                    event_subscribers.send_event(event_type, event_id, event_data).await {
                         self.set_subscriptions(total_subscription).await;
                     }
             }

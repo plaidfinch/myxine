@@ -7,18 +7,19 @@ use serde_json::Value;
 use hyper::Body;
 use futures::future;
 
+use crate::select::{Selectors, CanonSelectors};
+
 // Exterior interface is opaque type `Subscription` which can only be
 // constructed by deserializing it (i.e. from JSON)...
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Subscription(HashMap<Id, HashMap<EventType, HashSet<FieldName>>>);
+#[derive(Debug, Clone, Deserialize)]
+pub struct Subscription(HashMap<Id, HashMap<EventType, Selectors>>);
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Fields(HashMap<String, Value>);
+#[derive(Debug, Clone, Serialize)]
+pub struct CanonSubscription<'a>(HashMap<Id, HashMap<EventType, CanonSelectors<'a>>>);
 
 type EventType = String;
 type Id = String;
-type FieldName = String;
 
 #[derive(Debug)]
 pub struct Subscribers {
@@ -28,7 +29,7 @@ pub struct Subscribers {
 
 #[derive(Debug, Clone)]
 struct Sink {
-    field_names: HashSet<FieldName>,
+    selectors: Selectors,
     server: Arc<Mutex<hyper_usse::Server>>,
 }
 
@@ -73,10 +74,10 @@ impl Subscribers {
         for (id, events) in subscription.0 {
             let existing_events =
                 self.routes.entry(id).or_insert_with(|| HashMap::new());
-            for (event, field_names) in events {
+            for (event, selectors) in events {
                 let existing_sinks =
                     existing_events.entry(event).or_insert_with(|| Vec::new());
-                existing_sinks.push(Sink{server: server.clone(), field_names});
+                existing_sinks.push(Sink{server: server.clone(), selectors});
             }
         }
         // Return the body, for sending to whoever subscribed
@@ -89,26 +90,21 @@ impl Subscribers {
     /// returns the union of all now-current subscriptions.
     pub async fn send_event(&mut self,
                             event_type: &str,
-                            id: &str,
-                            fields: Fields) -> Option<Subscription> {
+                            event_id: &str,
+                            event_data: &Value) -> Option<Subscription> {
         if let Some(sinks) =
-            self.routes.get_mut(id).and_then(|m| m.get_mut(event_type)) {
+            self.routes.get_mut(event_id).and_then(|m| m.get_mut(event_type)) {
                 let mut sent = future::join_all(sinks.iter_mut().map(|sink| {
                     // Filter the fields of the event to those expected by this
                     // particular subscriber
-                    let mut filtered_fields = HashMap::new();
-                    for field_name in &sink.field_names {
-                        if let Some(field) = fields.0.get(field_name) {
-                            filtered_fields.insert(field_name.clone(), field.clone());
-                        }
-                    }
+                    let filtered = sink.selectors.filter(event_data);
                     // Serialize the fields to JSON
-                    let data = serde_json::to_string(&Fields(filtered_fields))
+                    let data = serde_json::to_string(&filtered)
                         .expect("Serializing fields to a string shouldn't fail");
                     // Build a text/event-stream message to send to subscriber
                     let message =
                         EventBuilder::new(&data)
-                        .id(id)
+                        .id(event_id)
                         .event_type(event_type)
                         .build();
                     // Make a future for sending the message to the subscriber

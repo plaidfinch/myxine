@@ -198,9 +198,9 @@ async fn process_request(
                 },
                 // Browser wants to notify client of an event
                 Some(PostParams::PageEvent{event, id}) => {
-                    if let Ok(fields) = serde_json::from_slice(&body_bytes) {
+                    if let Ok(event_data) = serde_json::from_slice(&body_bytes) {
                         tokio::spawn(async move {
-                            page.lock().await.send_event(&event, &id, fields).await
+                            page.lock().await.send_event(&event, &id, &event_data).await
                         });
                         Response::new(Body::empty())
                     } else {
