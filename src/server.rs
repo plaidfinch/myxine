@@ -185,6 +185,7 @@ async fn process_request(
                 // Client wants to subscribe to interface events on this page:
                 Some(PostParams::SubscribeEvents) => {
                     if let Ok(subscription) = serde_json::from_slice(&body_bytes) {
+                        println!("SUBSCRIBE: {:?}", subscription);
                         let body = page.lock().await.event_stream(subscription).await;
                         Response::builder()
                             .header("Content-Type", "text/event-stream")
@@ -197,10 +198,10 @@ async fn process_request(
                     }
                 },
                 // Browser wants to notify client of an event
-                Some(PostParams::PageEvent{event, id}) => {
+                Some(PostParams::PageEvent{event, path}) => {
                     if let Ok(event_data) = serde_json::from_slice(&body_bytes) {
                         tokio::spawn(async move {
-                            page.lock().await.send_event(&event, &id, &event_data).await
+                            page.lock().await.send_event(&event, &path, &event_data).await;
                         });
                         Response::new(Body::empty())
                     } else {

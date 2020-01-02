@@ -7,7 +7,7 @@ mod params;
 mod page;
 mod heartbeat;
 mod events;
-mod select;
+// mod select;
 
 use heartbeat::heartbeat_loop;
 use server::server;

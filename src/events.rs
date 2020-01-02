@@ -6,30 +6,26 @@ use serde::{Serialize, Deserialize};
 use serde_json::Value;
 use hyper::Body;
 use futures::future;
+use std::string::ToString;
 
-use crate::select::{Selectors, CanonSelectors};
+mod path;
+pub use path::{Path, AbsolutePath, RelativePath};
 
 // Exterior interface is opaque type `Subscription` which can only be
 // constructed by deserializing it (i.e. from JSON)...
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct Subscription(HashMap<Id, HashMap<EventType, Selectors>>);
-
-#[derive(Debug, Clone, Serialize)]
-pub struct CanonSubscription<'a>(HashMap<Id, HashMap<EventType, CanonSelectors<'a>>>);
-
-type EventType = String;
-type Id = String;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Subscription(HashMap<AbsolutePath, HashMap<String, HashSet<Path>>>);
 
 #[derive(Debug)]
 pub struct Subscribers {
     servers: Vec<Weak<Mutex<hyper_usse::Server>>>,
-    routes: HashMap<Id, HashMap<EventType, Vec<Sink>>>,
+    routes: HashMap<AbsolutePath, HashMap<String, Vec<Sink>>>,
 }
 
 #[derive(Debug, Clone)]
 struct Sink {
-    selectors: Selectors,
+    return_paths: HashSet<Path>,
     server: Arc<Mutex<hyper_usse::Server>>,
 }
 
@@ -53,7 +49,10 @@ impl Subscribers {
 
     /// Add a new subscription to this set of subscribers, returning a streaming
     /// body to be sent to the subscribing client.
-    pub async fn add_subscriber(&mut self, subscription: Subscription) -> (Option<Subscription>, Body) {
+    pub async fn add_subscriber<'a>(
+        &'a mut self,
+        subscription: Subscription,
+    ) -> (Option<Subscription>, Body) {
         // If the subscription is empty, don't bother doing anything else and
         // return an empty body so the subscriber won't wait at all. This
         // ensures the invariant that subscribing servers always refer to at
@@ -71,13 +70,13 @@ impl Subscribers {
         self.servers.push(Arc::downgrade(&server));
         // Add a reference to the server, with the appropriate property filter,
         // to each place corresponding to its desired subscription.
-        for (id, events) in subscription.0 {
+        for (path, events) in subscription.0 {
             let existing_events =
-                self.routes.entry(id).or_insert_with(|| HashMap::new());
-            for (event, selectors) in events {
+                self.routes.entry(path.into()).or_insert_with(|| HashMap::new());
+            for (event, return_paths) in events {
                 let existing_sinks =
                     existing_events.entry(event).or_insert_with(|| Vec::new());
-                existing_sinks.push(Sink{server: server.clone(), selectors});
+                existing_sinks.push(Sink{server: server.clone(), return_paths});
             }
         }
         // Return the body, for sending to whoever subscribed
@@ -88,23 +87,27 @@ impl Subscribers {
     /// only those fields of the event which that subscriber cares about. If the
     /// list of subscribers has changed (that is, by client disconnection),
     /// returns the union of all now-current subscriptions.
-    pub async fn send_event(&mut self,
-                            event_type: &str,
-                            event_id: &str,
-                            event_data: &Value) -> Option<Subscription> {
+    pub async fn send_event<'a>(&'a mut self,
+                                event_type: &str,
+                                event_path: &AbsolutePath,
+                                event_data: &HashMap<Path, Value>) -> Option<Subscription> {
         if let Some(sinks) =
-            self.routes.get_mut(event_id).and_then(|m| m.get_mut(event_type)) {
+            self.routes.get_mut(event_path).and_then(|m| m.get_mut(event_type)) {
                 let mut sent = future::join_all(sinks.iter_mut().map(|sink| {
                     // Filter the fields of the event to those expected by this
                     // particular subscriber
-                    let filtered = sink.selectors.filter(event_data);
+                    let filtered: HashMap<&Path, &Value> =
+                        sink.return_paths.iter().filter_map(|path| {
+                            event_data.get(path).map(|value| (path, value))
+                        }).collect();
                     // Serialize the fields to JSON
                     let data = serde_json::to_string(&filtered)
                         .expect("Serializing fields to a string shouldn't fail");
+                    println!("FILTERED: {:?}", filtered);
                     // Build a text/event-stream message to send to subscriber
                     let message =
                         EventBuilder::new(&data)
-                        .id(event_id)
+                        .id(&event_path.to_string())
                         .event_type(event_type)
                         .build();
                     // Make a future for sending the message to the subscriber
@@ -132,7 +135,7 @@ impl Subscribers {
     /// Send a heartbeat message to all subscribers, returning a new
     /// Subscription representing the union of all subscriptions, if there have
     /// been any noticed changes, or `None` if every client is still connected.
-    pub async fn send_heartbeat(&mut self) -> Option<Subscription> {
+    pub async fn send_heartbeat<'a>(&'a mut self) -> Option<Subscription> {
         let mut sent = future::join_all(self.servers.iter_mut().map(|server| {
             async move {
                 if let Some(server) = server.upgrade() {
@@ -155,15 +158,15 @@ impl Subscribers {
     }
 
     /// Calculate the union of all subscriptions currently active
-    pub fn total_subscription(&self) -> Subscription {
+    pub fn total_subscription<'a>(&'a self) -> Subscription {
         let subscription =
             self.routes.iter().map(|(id, events)| {
                 (id.clone(),
                  events.iter().map(|(event_type, sinks)| {
                      (event_type.clone(),
-                      sinks.iter().fold(HashSet::new(), |all, Sink{field_names, ..}| {
-                          field_names.iter().fold(all, |mut all, field_name| {
-                              all.insert(field_name.clone());
+                      sinks.iter().fold(HashSet::new(), |all, Sink{return_paths, ..}| {
+                          return_paths.iter().fold(all, |mut all, return_path| {
+                              all.insert(return_path.clone());
                               all
                           })
                       }))

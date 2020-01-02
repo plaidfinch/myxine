@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 use percent_encoding::percent_decode;
 use std::borrow::Cow;
+use std::convert::TryFrom;
+
+use crate::events::AbsolutePath;
 
 /// Parsed parameters from a query string for a GET/HEAD request.
 pub(crate) enum GetParams {
@@ -28,7 +31,7 @@ pub(crate) enum PostParams {
     DynamicPage{title: String},
     StaticPage,
     SubscribeEvents,
-    PageEvent{event: String, id: String},
+    PageEvent{event: String, path: AbsolutePath},
 }
 
 impl PostParams {
@@ -41,12 +44,22 @@ impl PostParams {
         } else if param_as_bool("static", &params)?
             && constrained_to_keys(&params, &["static"]) {
                 return Some(PostParams::StaticPage)
-        } else if let (Some(event), Some(id)) =
-            (param_as_str("event", &params)?.map(String::from),
-             param_as_str("id", &params)?.map(String::from)) {
-                if constrained_to_keys(&params, &["event", "id"])
-                && event != "" && id != "" {
-                    return Some(PostParams::PageEvent{event, id})
+        } else if let Some(event) =
+            param_as_str("event", &params)?.map(String::from) {
+                if let Some(id) = param_as_str("id", &params)? {
+                    if constrained_to_keys(&params, &["event", "id"])
+                        && event != "" && id != "" {
+                            if let Ok(path) = AbsolutePath::try_from("#".to_string() + &id) {
+                                return Some(PostParams::PageEvent{event, path});
+                            }
+                        }
+                } else if let Some(path) = param_as_str("path", &params)? {
+                    if constrained_to_keys(&params, &["event", "path"])
+                        && event != "" {
+                            if let Ok(path) = AbsolutePath::try_from(path.to_string()) {
+                                return Some(PostParams::PageEvent{event, path});
+                            }
+                        }
                 }
         } else if constrained_to_keys(&params, &["title"]) {
             let title = param_as_str("title", &params)?.unwrap_or("").to_string();

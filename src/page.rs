@@ -2,10 +2,11 @@ use hyper::Body;
 use hyper_usse::EventBuilder;
 use std::io::Write;
 use std::mem;
+use std::collections::HashMap;
 use futures::join;
 use serde_json::Value;
 
-use crate::events::{Subscribers, Subscription};
+use crate::events::{Subscribers, Subscription, AbsolutePath, Path};
 
 #[derive(Debug)]
 pub enum Page {
@@ -221,13 +222,14 @@ impl Page {
     /// result!
     pub(crate) async fn send_event(&mut self,
                                    event_type: &str,
-                                   event_id: &str,
-                                   event_data: &Value) {
+                                   event_path: &AbsolutePath,
+                                   event_data: &HashMap<Path, Value>) {
         match self {
             Page::Static{..} => { },
             Page::Dynamic{event_subscribers, ..} => {
+                println!("EVENT: {}: {:?}: {:?}", event_type, event_path, event_data);
                 if let Some(total_subscription) =
-                    event_subscribers.send_event(event_type, event_id, event_data).await {
+                    event_subscribers.send_event(event_type, event_path, event_data).await {
                         self.set_subscriptions(total_subscription).await;
                     }
             }
