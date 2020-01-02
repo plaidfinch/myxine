@@ -227,7 +227,6 @@ impl Page {
         match self {
             Page::Static{..} => { },
             Page::Dynamic{event_subscribers, ..} => {
-                println!("EVENT: {}: {:?}: {:?}", event_type, event_path, event_data);
                 if let Some(total_subscription) =
                     event_subscribers.send_event(event_type, event_path, event_data).await {
                         self.set_subscriptions(total_subscription).await;

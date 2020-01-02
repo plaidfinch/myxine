@@ -185,7 +185,6 @@ async fn process_request(
                 // Client wants to subscribe to interface events on this page:
                 Some(PostParams::SubscribeEvents) => {
                     if let Ok(subscription) = serde_json::from_slice(&body_bytes) {
-                        println!("SUBSCRIBE: {:?}", subscription);
                         let body = page.lock().await.event_stream(subscription).await;
                         Response::builder()
                             .header("Content-Type", "text/event-stream")

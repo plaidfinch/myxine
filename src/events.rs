@@ -103,7 +103,6 @@ impl Subscribers {
                     // Serialize the fields to JSON
                     let data = serde_json::to_string(&filtered)
                         .expect("Serializing fields to a string shouldn't fail");
-                    println!("FILTERED: {:?}", filtered);
                     // Build a text/event-stream message to send to subscriber
                     let message =
                         EventBuilder::new(&data)
