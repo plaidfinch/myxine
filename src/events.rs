@@ -26,14 +26,14 @@ pub struct AggregateSubscription<'a>(
 
 #[derive(Debug)]
 pub struct Subscribers {
-    servers: Vec<Weak<Mutex<hyper_usse::Server>>>,
+    servers: Vec<Arc<Mutex<hyper_usse::Server>>>,
     routes: HashMap<AbsolutePath, HashMap<String, Vec<Sink>>>,
 }
 
 #[derive(Debug, Clone)]
 struct Sink {
     return_paths: HashSet<Path>,
-    server: Arc<Mutex<hyper_usse::Server>>,
+    server: Weak<Mutex<hyper_usse::Server>>,
 }
 
 impl Subscribers {
@@ -73,7 +73,6 @@ impl Subscribers {
         let (sender, body) = Body::channel();
         server.add_client(sender);
         let server = Arc::new(Mutex::new(server));
-        self.servers.push(Arc::downgrade(&server));
         // Add a reference to the server, with the appropriate property filter,
         // to each place corresponding to its desired subscription.
         for (path, events) in subscription.0 {
@@ -82,9 +81,11 @@ impl Subscribers {
             for (event, return_paths) in events {
                 let existing_sinks =
                     existing_events.entry(event).or_insert_with(|| Vec::new());
-                existing_sinks.push(Sink{server: server.clone(), return_paths});
+                existing_sinks.push(Sink{server: Arc::downgrade(&server), return_paths});
             }
         }
+        // Add the server to the top-level list of server references
+        self.servers.push(server);
         // Return the body, for sending to whoever subscribed
         (Some(self.total_subscription()), body)
     }
@@ -98,6 +99,7 @@ impl Subscribers {
                                 event_path: &AbsolutePath,
                                 event_data: &HashMap<Path, Value>
     ) -> Option<AggregateSubscription<'a>> {
+        let mut subscription_changed = false;
         if let Some(sinks) =
             self.routes.get_mut(event_path).and_then(|m| m.get_mut(event_type)) {
                 let mut sent = future::join_all(sinks.iter_mut().map(|sink| {
@@ -118,31 +120,36 @@ impl Subscribers {
                         .build();
                     // Make a future for sending the message to the subscriber
                     async move {
-                        let remaining =
-                            sink.server.lock().await
-                            .send_to_clients(message).await;
-                        assert!(remaining <= 1, "Subscriber SSE exceeds 1 client");
-                        1 == remaining
+                        if let Some(server) = sink.server.upgrade() {
+                            let remaining = server.lock().await
+                                .send_to_clients(message).await;
+                            assert!(remaining <= 1, "Subscriber SSE exceeds 1 client");
+                            1 == remaining
+                        } else {
+                            false
+                        }
                     }
                 })).await.into_iter();
                 // Remove all sinks that failed to send (client disconnected)
+                let previous_len = sinks.len();
                 sinks.retain(|_| sent.next().unwrap());
+                if sinks.len() != previous_len { subscription_changed = true }
             }
         // Prune the routes to remove empty hashmaps
         if let Some(events) = self.routes.get_mut(event_path) {
             if let Some(sinks) = events.get_mut(event_type) {
                 if sinks.is_empty() {
                     events.remove(event_type);
-                    if events.is_empty() {
-                        self.routes.remove(event_path);
-                    }
+                    subscription_changed = true;
                 }
             }
+            if events.is_empty() {
+                self.routes.remove(event_path);
+                subscription_changed = true;
+            }
         }
-        // Check subscriber servers for disconnection
-        let previous_subscriber_count = self.servers.len();
-        self.servers.retain(|weak| weak.upgrade().is_some());
-        if 0 != previous_subscriber_count - self.servers.len() {
+        // Return a new aggregate subscription if things have changed
+        if subscription_changed {
             Some(self.total_subscription())
         } else {
             None
@@ -155,25 +162,38 @@ impl Subscribers {
     pub async fn send_heartbeat<'a>(&'a mut self) -> Option<AggregateSubscription<'a>> {
         let mut sent = future::join_all(self.servers.iter_mut().map(|server| {
             async move {
-                if let Some(server) = server.upgrade() {
-                    let remaining = server.lock().await.send_heartbeat().await;
-                    assert!(remaining <= 1, "Subscriber SSE exceeds 1 client");
-                    1 == remaining
-                } else {
-                    false
-                }
+                let remaining = server.lock().await.send_heartbeat().await;
+                assert!(remaining <= 1, "Subscriber SSE exceeds 1 client");
+                1 == remaining
             }
         })).await.into_iter();
-        // Check subscriber servers for disconnection
-        let previous_subscriber_count = self.servers.len();
+        // Prune all servers for which heartbeat failed (since there's exactly
+        // one Arc for each one of them, the corresponding Weaks within the
+        // routes will now return None on upgrade)
         self.servers.retain(|_| sent.next().unwrap());
-        // Check subscriber servers for disconnection
-        if 0 != previous_subscriber_count - self.servers.len() {
+        // Prune all routes corresponding to the dropped servers
+        let mut subscription_changed = false;
+        self.routes.retain(|_, events| {
+            let previous_len = events.len();
+            events.retain(|_, sinks| {
+                let previous_len = sinks.len();
+                sinks.retain(|Sink{server, ..}| {
+                    if !server.upgrade().is_some() {
+                        subscription_changed = true;
+                        false // prune this route
+                    } else {
+                        true // keep this route
+                    }
+                });
+                previous_len == sinks.len()
+            });
+            previous_len == events.len()
+        });
+        if subscription_changed {
             Some(self.total_subscription())
         } else {
             None
         }
-        // TODO: properly prune routes (invert Weak <-> Arc references?)
     }
 
     /// Calculate the union of all subscriptions currently active
