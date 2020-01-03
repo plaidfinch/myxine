@@ -185,8 +185,10 @@ impl Subscribers {
                         true // keep this route
                     }
                 });
+                sinks.shrink_to_fit();
                 previous_len == sinks.len()
             });
+            events.shrink_to_fit();
             previous_len == events.len()
         });
         if subscription_changed {

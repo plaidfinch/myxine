@@ -76,7 +76,6 @@ pub async fn heartbeat_loop() {
             // Free memory for all the removed pages and paths
             paths.shrink_to_fit();
             PAGES.lock().await.shrink_to_fit();
-            // TODO: do same pruning on the subscriber lists inside pages
         }
     };
 
