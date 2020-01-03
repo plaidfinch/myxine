@@ -7,7 +7,7 @@ use tokio::sync::{Mutex, mpsc};
 use tokio::time;
 use futures::{join, future};
 
-use crate::server::PAGES;
+use super::PAGES;
 
 /// The interval between heartbeats, in seconds.
 const HEARTBEAT_INTERVAL: u64 = 10;

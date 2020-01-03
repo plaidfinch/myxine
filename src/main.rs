@@ -1,18 +1,7 @@
-use futures::future::FutureExt;
-use futures::{select, pin_mut};
 use structopt::StructOpt;
 
 mod server;
-mod params;
 mod page;
-mod heartbeat;
-mod events;
-// mod select;
-
-use heartbeat::heartbeat_loop;
-use server::server;
-
-const HOST: [u8; 4] = [127, 0, 0, 1];
 
 #[derive(Debug, StructOpt)]
 struct Options {
@@ -24,13 +13,5 @@ struct Options {
 #[tokio::main]
 async fn main() {
     let options = Options::from_args();
-
-    let server = server((HOST, options.port).into()).fuse();
-    let heartbeat = heartbeat_loop().fuse();
-
-    pin_mut!(server, heartbeat);
-    select! {
-        () = server => (),
-        () = heartbeat => (),
-    }
+    server::run(([127, 0, 0, 1], options.port).into()).await;
 }

@@ -6,7 +6,8 @@ use std::collections::HashMap;
 use futures::join;
 use serde_json::Value;
 
-use crate::events::{Subscribers, Subscription, AggregateSubscription, AbsolutePath, Path};
+pub mod events;
+use events::{Subscribers, Subscription, AggregateSubscription, AbsolutePath, Path};
 
 #[derive(Debug)]
 pub enum Page {
@@ -23,7 +24,7 @@ pub enum Page {
 }
 
 /// The size of the dynamic page template in bytes
-const TEMPLATE_SIZE: usize = include_str!("dynamic.html").len();
+const TEMPLATE_SIZE: usize = include_str!("page/dynamic.html").len();
 
 impl Page {
     /// Make a new empty (dynamic) page
@@ -57,7 +58,7 @@ impl Page {
                     serde_json::to_string(&event_subscribers.total_subscription()).unwrap();
                 let mut bytes = Vec::with_capacity(TEMPLATE_SIZE);
                 write!(&mut bytes,
-                       include_str!("dynamic.html"),
+                       include_str!("page/dynamic.html"),
                        base_url = base_url,
                        this_url = this_url,
                        subscription = subscription,

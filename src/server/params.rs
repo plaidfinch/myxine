@@ -3,7 +3,7 @@ use percent_encoding::percent_decode;
 use std::borrow::Cow;
 use std::convert::TryFrom;
 
-use crate::events::AbsolutePath;
+use crate::page::events::AbsolutePath;
 
 /// Parsed parameters from a query string for a GET/HEAD request.
 pub(crate) enum GetParams {

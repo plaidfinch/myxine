@@ -8,12 +8,16 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::net::{SocketAddr, TcpListener};
 use tokio::sync::Mutex;
+use futures::future::FutureExt;
+use futures::{select, pin_mut};
 use futures::stream::StreamExt;
 use itertools::Itertools;
 
+mod params;
+mod heartbeat;
+
 use crate::page::Page;
-use crate::params::{GetParams, PostParams};
-use crate::heartbeat;
+use params::{GetParams, PostParams};
 
 lazy_static! {
     /// The current contents of the server, indexed by path
@@ -38,8 +42,8 @@ macro_rules! unwrap_or_abort {
     };
 }
 
-/// Run the main server loop
-pub async fn server(socket_addr: SocketAddr) {
+/// Run the main server loop alongside the heartbeat to all SSE clients
+pub async fn run(socket_addr: SocketAddr) {
     // Bind the server to this socket address
     let listener   = unwrap_or_abort!(TcpListener::bind(socket_addr));
     let local_addr = unwrap_or_abort!(listener.local_addr());
@@ -48,16 +52,27 @@ pub async fn server(socket_addr: SocketAddr) {
 
     // Print the base URI to stdout: in a managed mode, a calling process could
     // read this to determine where to direct its future requests.
-    // println!("Running at: {}", base_uri.to_string().trim_end_matches('/'));
+    println!("Running at: {}", base_uri.to_string().trim_end_matches('/'));
 
-    unwrap_or_abort!(server.serve(make_service_fn(move |_| {
-        let base_uri = base_uri.clone();
-        async move {
-            Ok::<_, hyper::Error>(service_fn(move |request: Request<Body>| {
-                process_request(base_uri.clone(), request)
-            }))
-        }
-    })).await);
+    // The heartbeat loop
+    let heartbeat = heartbeat::heartbeat_loop().fuse();
+
+    // The regular server
+    let serve =
+        server.serve(make_service_fn(move |_| {
+            let base_uri = base_uri.clone();
+            async move {
+                Ok::<_, hyper::Error>(service_fn(move |request: Request<Body>| {
+                    process_request(base_uri.clone(), request)
+                }))
+                }
+        })).fuse();
+
+    pin_mut!(serve, heartbeat);
+    select! {
+        result = serve => result.unwrap_or_else(|err| eprintln!("{}", err)),
+        () = heartbeat => (),
+    }
 }
 
 /// Get a page from the global table (creating it if it does not yet exist) and
