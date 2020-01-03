@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use futures::join;
 use serde_json::Value;
 
-use crate::events::{Subscribers, Subscription, AbsolutePath, Path};
+use crate::events::{Subscribers, Subscription, AggregateSubscription, AbsolutePath, Path};
 
 #[derive(Debug)]
 pub enum Page {
@@ -50,18 +50,17 @@ impl Page {
     }
 
     /// Render a whole page as HTML (for first page load)
-    pub fn render(&self, event_source: &str) -> Vec<u8> {
+    pub fn render(&self, this_url: &str) -> Vec<u8> {
         match self {
-            Page::Dynamic{title, body, ..} => {
-                let mut bytes =
-                    Vec::with_capacity(TEMPLATE_SIZE
-                                       + event_source.len()
-                                       + title.len()
-                                       + body.len());
-                // TODO: include generated javascript for subscriptions
+            Page::Dynamic{title, body, event_subscribers, ..} => {
+                let subscription =
+                    serde_json::to_string(&event_subscribers.total_subscription()).unwrap();
+                let mut bytes = Vec::with_capacity(TEMPLATE_SIZE);
                 write!(&mut bytes,
                        include_str!("dynamic.html"),
-                       event_source = event_source,
+                       this_url = this_url,
+                       subscription = subscription,
+                       debug = cfg!(debug_assertions),
                        title = title,
                        body = body)
                     .expect("Internal error: write!() failed on a Vec<u8>");
@@ -104,7 +103,7 @@ impl Page {
                 // disconnected, update the client page with a new union set of
                 // subscriptions
                 if let Some(updated_subscriptions) = updated_subscriptions {
-                    self.set_subscriptions(updated_subscriptions).await;
+                    set_subscriptions(update_streams, updated_subscriptions).await;
                 }
                 Some(updates_clients)
             },
@@ -206,11 +205,11 @@ impl Page {
     pub async fn event_stream(&mut self, subscription: Subscription) -> Body {
         match self {
             Page::Static{..} => Body::empty(),
-            Page::Dynamic{event_subscribers, ..} => {
+            Page::Dynamic{event_subscribers, update_streams, ..} => {
                 let (total_subscription, body) =
                     event_subscribers.add_subscriber(subscription).await;
                 if let Some(total_subscription) = total_subscription {
-                    self.set_subscriptions(total_subscription).await;
+                    set_subscriptions(update_streams, total_subscription).await;
                 }
                 body
             }
@@ -226,30 +225,27 @@ impl Page {
                                    event_data: &HashMap<Path, Value>) {
         match self {
             Page::Static{..} => { },
-            Page::Dynamic{event_subscribers, ..} => {
+            Page::Dynamic{event_subscribers, update_streams, ..} => {
                 if let Some(total_subscription) =
                     event_subscribers.send_event(event_type, event_path, event_data).await {
-                        self.set_subscriptions(total_subscription).await;
+                        set_subscriptions(update_streams, total_subscription).await;
                     }
             }
         }
     }
+}
 
-    /// Send a new total set of subscriptions to the page, so it can update its
-    /// event hooks. This function should *only* ever be called *directly* after
-    /// obtaining such a new set of subscriptions from adding a subscriber,
-    /// sending an event, or sending a heartbeat! It will cause unexpected loss
-    /// of messages if you arbitrarily set the subscriptions of a page outside
-    /// of these contexts.
-    async fn set_subscriptions(&mut self, subscriptions: Subscription) {
-        match self {
-            Page::Static{..} => { },
-            Page::Dynamic{update_streams, ..} => {
-                let data = serde_json::to_string(&subscriptions)
-                    .expect("Serializing subscriptions to JSON shouldn't fail");
-                let event = EventBuilder::new(&data).event_type("subscribe");
-                update_streams.send_to_clients(event.build()).await;
-            }
-        }
-    }
+/// Send a new total set of subscriptions to the page, so it can update its
+/// event hooks. This function should *only* ever be called *directly* after
+/// obtaining such a new set of subscriptions from adding a subscriber,
+/// sending an event, or sending a heartbeat! It will cause unexpected loss
+/// of messages if you arbitrarily set the subscriptions of a page outside
+/// of these contexts.
+async fn set_subscriptions<'a>(
+    server: &'a mut hyper_usse::Server,
+    subscriptions: AggregateSubscription<'a>) {
+        let data = serde_json::to_string(&subscriptions)
+            .expect("Serializing subscriptions to JSON shouldn't fail");
+        let event = EventBuilder::new(&data).event_type("subscribe");
+        server.send_to_clients(event.build()).await;
 }

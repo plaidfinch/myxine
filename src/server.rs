@@ -119,6 +119,7 @@ async fn process_request(
                     }
                     let mut builder = Response::builder()
                         .header("Cache-Control", "no-cache")
+                        .header("Access-Control-Allow-Origin", "*")
                         .header("Content-Disposition", "inline");
                     if let Some(content_type) = page.content_type() {
                         // If there's a custom content-type, set it here
@@ -199,9 +200,7 @@ async fn process_request(
                 // Browser wants to notify client of an event
                 Some(PostParams::PageEvent{event, path}) => {
                     if let Ok(event_data) = serde_json::from_slice(&body_bytes) {
-                        tokio::spawn(async move {
-                            page.lock().await.send_event(&event, &path, &event_data).await;
-                        });
+                        page.lock().await.send_event(&event, &path, &event_data).await;
                         Response::new(Body::empty())
                     } else {
                         return Ok(bad_request("Invalid page event."));

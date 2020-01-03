@@ -14,8 +14,15 @@ pub use path::{Path, AbsolutePath, RelativePath};
 // Exterior interface is opaque type `Subscription` which can only be
 // constructed by deserializing it (i.e. from JSON)...
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Subscription(HashMap<AbsolutePath, HashMap<String, HashSet<Path>>>);
+#[derive(Debug, Clone, Deserialize)]
+pub struct Subscription(
+    HashMap<AbsolutePath, HashMap<String, HashSet<Path>>>
+);
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AggregateSubscription<'a>(
+    HashMap<&'a AbsolutePath, HashMap<&'a String, HashSet<&'a Path>>>
+);
 
 #[derive(Debug)]
 pub struct Subscribers {
@@ -41,9 +48,8 @@ impl Subscribers {
     /// Returns `true` if there are no subscribers to any events in this set of
     /// subscribers, `false` otherwise.
     pub fn is_empty(&self) -> bool {
-        assert!(self.routes.is_empty() == self.servers.is_empty(),
-                "Subscribers can't have empty routes with non-empty servers, \
-                 or empty servers with non-empty routes (due to cleanup).");
+        assert!(if self.routes.is_empty() { self.servers.is_empty() } else { true },
+                "Subscribers can't have empty routes with non-empty servers.");
         self.servers.is_empty()
     }
 
@@ -52,7 +58,7 @@ impl Subscribers {
     pub async fn add_subscriber<'a>(
         &'a mut self,
         subscription: Subscription,
-    ) -> (Option<Subscription>, Body) {
+    ) -> (Option<AggregateSubscription<'a>>, Body) {
         // If the subscription is empty, don't bother doing anything else and
         // return an empty body so the subscriber won't wait at all. This
         // ensures the invariant that subscribing servers always refer to at
@@ -90,7 +96,8 @@ impl Subscribers {
     pub async fn send_event<'a>(&'a mut self,
                                 event_type: &str,
                                 event_path: &AbsolutePath,
-                                event_data: &HashMap<Path, Value>) -> Option<Subscription> {
+                                event_data: &HashMap<Path, Value>
+    ) -> Option<AggregateSubscription<'a>> {
         if let Some(sinks) =
             self.routes.get_mut(event_path).and_then(|m| m.get_mut(event_type)) {
                 let mut sent = future::join_all(sinks.iter_mut().map(|sink| {
@@ -121,6 +128,17 @@ impl Subscribers {
                 // Remove all sinks that failed to send (client disconnected)
                 sinks.retain(|_| sent.next().unwrap());
             }
+        // Prune the routes to remove empty hashmaps
+        if let Some(events) = self.routes.get_mut(event_path) {
+            if let Some(sinks) = events.get_mut(event_type) {
+                if sinks.is_empty() {
+                    events.remove(event_type);
+                    if events.is_empty() {
+                        self.routes.remove(event_path);
+                    }
+                }
+            }
+        }
         // Check subscriber servers for disconnection
         let previous_subscriber_count = self.servers.len();
         self.servers.retain(|weak| weak.upgrade().is_some());
@@ -134,7 +152,7 @@ impl Subscribers {
     /// Send a heartbeat message to all subscribers, returning a new
     /// Subscription representing the union of all subscriptions, if there have
     /// been any noticed changes, or `None` if every client is still connected.
-    pub async fn send_heartbeat<'a>(&'a mut self) -> Option<Subscription> {
+    pub async fn send_heartbeat<'a>(&'a mut self) -> Option<AggregateSubscription<'a>> {
         let mut sent = future::join_all(self.servers.iter_mut().map(|server| {
             async move {
                 if let Some(server) = server.upgrade() {
@@ -149,28 +167,30 @@ impl Subscribers {
         // Check subscriber servers for disconnection
         let previous_subscriber_count = self.servers.len();
         self.servers.retain(|_| sent.next().unwrap());
+        // Check subscriber servers for disconnection
         if 0 != previous_subscriber_count - self.servers.len() {
             Some(self.total_subscription())
         } else {
             None
         }
+        // TODO: properly prune routes (invert Weak <-> Arc references?)
     }
 
     /// Calculate the union of all subscriptions currently active
-    pub fn total_subscription<'a>(&'a self) -> Subscription {
+    pub fn total_subscription<'a>(&'a self) -> AggregateSubscription<'a> {
         let subscription =
             self.routes.iter().map(|(id, events)| {
-                (id.clone(),
+                (id,
                  events.iter().map(|(event_type, sinks)| {
-                     (event_type.clone(),
+                     (event_type,
                       sinks.iter().fold(HashSet::new(), |all, Sink{return_paths, ..}| {
                           return_paths.iter().fold(all, |mut all, return_path| {
-                              all.insert(return_path.clone());
+                              all.insert(return_path);
                               all
                           })
                       }))
                  }).collect())
             }).collect();
-        Subscription(subscription)
+        AggregateSubscription(subscription)
     }
 }
