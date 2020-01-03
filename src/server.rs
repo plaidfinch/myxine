@@ -77,17 +77,11 @@ async fn process_special_request(
     method: Method, path: &str, _query: &str
 ) -> Result<Response<Body>, hyper::Error> {
     Ok(match (method, path) {
-        (Method::GET, "/assets/react-dom.production.min.js") =>
+        (Method::GET, "/assets/diffhtml.min.js") =>
             Response::builder()
             .header("Access-Control-Allow-Origin", "*")
             .header("Content-Type", "application/javascript")
-            .body(Body::from(include_str!("server/assets/react-dom.production.min.js")))
-            .unwrap(),
-        (Method::GET, "/assets/react.production.min.js") =>
-            Response::builder()
-            .header("Access-Control-Allow-Origin", "*")
-            .header("Content-Type", "application/javascript")
-            .body(Body::from(include_str!("server/assets/react.production.min.js")))
+            .body(Body::from(include_str!("server/assets/diffhtml.min.js")))
             .unwrap(),
         (Method::GET, _) =>
             Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap(),
@@ -231,7 +225,9 @@ async fn process_request(
                 // Browser wants to notify client of an event
                 Some(PostParams::PageEvent{event, path}) => {
                     if let Ok(event_data) = serde_json::from_slice(&body_bytes) {
-                        page.lock().await.send_event(&event, &path, &event_data).await;
+                        tokio::spawn(async move {
+                            page.lock().await.send_event(&event, &path, &event_data).await;
+                        });
                         Response::new(Body::empty())
                     } else {
                         return Ok(bad_request("Invalid page event."));

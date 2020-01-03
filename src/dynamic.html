@@ -3,13 +3,14 @@
     <head>
         <title>{title}</title>
         <meta charset="utf-8" />
-        <script src="{base_url}/.myxine/assets/react.production.min.js" crossorigin></script>
-        <script src="{base_url}/.myxine/assets/react-dom.production.min.js" crossorigin></script>
+        <script src="{base_url}/.myxine/assets/diffhtml.min.js"></script>
         <script>
          // The current server url for this page
          const thisUrl = '{this_url}';
          // The initial subscription at page load time
          let subscription = JSON.parse('{subscription}');
+         // The new body, cached before it's put in place
+         let body = "";
          // Print debug info if in debug build mode
          function debug(string) {{
              if ({debug}) {{
@@ -66,7 +67,7 @@
              }}
              this.listeners.forEach(e => {{
                  debug("Removing listener: " + e.eventTarget + ": " + e.eventType);
-                 e.eventTarget.removeEventListener(e.eventType, e.eventListener);
+                 e.eventTarget.removeEventListener(e.eventType, e.eventListener, true);
              }});
              this.listeners = [];
              debug("Setting up new subscription: " + JSON.stringify(subscription));
@@ -95,7 +96,7 @@
                              eventListener: eventListener,
                          }});
                          debug("Adding event listener: " + eventTarget + ": " + eventType);
-                         eventTarget.addEventListener(eventType, eventListener);
+                         eventTarget.addEventListener(eventType, eventListener, true);
                      }} else {{
                          debug("Could not look up target path: " + targetPath);
                      }}
@@ -109,14 +110,12 @@
                  updateSubscription();
              }});
          }}
-         // Set the body using React
+         // Set the body using DiffHTML
          function setBodyTo(string) {{
-             ReactDOM.render(React.createElement("div", {{
-                 id: "page",
-                 dangerouslySetInnerHTML: {{
-                     __html: string
-                 }}
-             }}), document.body);
+             body = string;
+             setTimeout(() => {{
+                 diff.innerHTML(document.body, body);
+             }});
          }}
          // These are the handlers for SSE events...
          function subscribe(event) {{
