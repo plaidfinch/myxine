@@ -60,6 +60,8 @@ pub async fn server(socket_addr: SocketAddr) {
     })).await);
 }
 
+/// Get a page from the global table (creating it if it does not yet exist) and
+/// make sure that it receives heartbeats in the future
 async fn get_page(path: &str) -> Arc<Mutex<Page>> {
     // Make sure this path receives heartbeats
     heartbeat::hold_path(path.to_string());
@@ -73,6 +75,8 @@ async fn get_page(path: &str) -> Arc<Mutex<Page>> {
         .clone()
 }
 
+/// Process requests specific to the special '/.myxine/' path (the only path
+/// which is not useable as a normal endpoint). This is used for ser
 async fn process_special_request(
     method: Method, path: &str, _query: &str
 ) -> Result<Response<Body>, hyper::Error> {
@@ -81,6 +85,7 @@ async fn process_special_request(
             Response::builder()
             .header("Access-Control-Allow-Origin", "*")
             .header("Content-Type", "application/javascript")
+            .header("Cache-Control", "public, max-age=31536000")
             .body(Body::from(include_str!("server/assets/diffhtml.min.js")))
             .unwrap(),
         (Method::GET, _) =>
