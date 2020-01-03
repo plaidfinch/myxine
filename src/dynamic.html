@@ -3,6 +3,8 @@
     <head>
         <title>{title}</title>
         <meta charset="utf-8" />
+        <script src="{base_url}/.myxine/assets/react.production.min.js" crossorigin></script>
+        <script src="{base_url}/.myxine/assets/react-dom.production.min.js" crossorigin></script>
         <script>
          // The current server url for this page
          const thisUrl = '{this_url}';
@@ -107,6 +109,15 @@
                  updateSubscription();
              }});
          }}
+         // Set the body using React
+         function setBodyTo(string) {{
+             ReactDOM.render(React.createElement("div", {{
+                 id: "page",
+                 dangerouslySetInnerHTML: {{
+                     __html: string
+                 }}
+             }}), document.body);
+         }}
          // These are the handlers for SSE events...
          function subscribe(event) {{
              debug("Received new subscription: " + event.data);
@@ -114,11 +125,11 @@
              updateSubscription();
          }}
          function setBody(event) {{
-             document.body.innerHTML = event.data;
+             setBodyTo(event.data);
              updateSubscription();
          }}
          function clearBody(event) {{
-             document.body.innerHTML = "";
+             setBodyTo("");
              updateSubscription();
          }}
          function setTitle(event) {{

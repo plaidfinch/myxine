@@ -50,7 +50,7 @@ impl Page {
     }
 
     /// Render a whole page as HTML (for first page load)
-    pub fn render(&self, this_url: &str) -> Vec<u8> {
+    pub fn render(&self, base_url: &str, this_url: &str) -> Vec<u8> {
         match self {
             Page::Dynamic{title, body, event_subscribers, ..} => {
                 let subscription =
@@ -58,6 +58,7 @@ impl Page {
                 let mut bytes = Vec::with_capacity(TEMPLATE_SIZE);
                 write!(&mut bytes,
                        include_str!("dynamic.html"),
+                       base_url = base_url,
                        this_url = this_url,
                        subscription = subscription,
                        debug = cfg!(debug_assertions),

@@ -78,9 +78,17 @@ async fn process_special_request(
 ) -> Result<Response<Body>, hyper::Error> {
     Ok(match (method, path) {
         (Method::GET, "/assets/react-dom.production.min.js") =>
-            Response::new(Body::from(include_str!("server/assets/react-dom.production.min.js"))),
+            Response::builder()
+            .header("Access-Control-Allow-Origin", "*")
+            .header("Content-Type", "application/javascript")
+            .body(Body::from(include_str!("server/assets/react-dom.production.min.js")))
+            .unwrap(),
         (Method::GET, "/assets/react.production.min.js") =>
-            Response::new(Body::from(include_str!("server/assets/react.production.min.js"))),
+            Response::builder()
+            .header("Access-Control-Allow-Origin", "*")
+            .header("Content-Type", "application/javascript")
+            .body(Body::from(include_str!("server/assets/react.production.min.js")))
+            .unwrap(),
         (Method::GET, _) =>
             Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap(),
         _ => Response::builder().status(StatusCode::METHOD_NOT_ALLOWED).body(Body::empty()).unwrap(),
@@ -136,10 +144,9 @@ async fn process_request(
                 },
                 Some(GetParams::FullPage) => {
                     if method == Method::GET {
-                        let event_stream_uri =
-                            base_uri.to_string().trim_end_matches('/').to_owned()
-                            + &path;
-                        body = page.render(&event_stream_uri).into();
+                        let base_url = base_uri.to_string().trim_end_matches('/').to_owned();
+                        let this_page_url = base_url.clone() + &path;
+                        body = page.render(&base_url, &this_page_url).into();
                     }
                     let mut builder = Response::builder()
                         .header("Cache-Control", "no-cache")
