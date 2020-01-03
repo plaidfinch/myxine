@@ -60,6 +60,33 @@ pub async fn server(socket_addr: SocketAddr) {
     })).await);
 }
 
+async fn get_page(path: &str) -> Arc<Mutex<Page>> {
+    // Make sure this path receives heartbeats
+    heartbeat::hold_path(path.to_string());
+
+    // Get (or create) the page at this path. Note that this does *not* hold the
+    // lock on PAGES, but rather extracts a clone of the `Arc<Mutex<Page>>` at
+    // this path.
+    PAGES.lock().await
+        .entry(path.to_string())
+        .or_insert_with(|| Arc::new(Mutex::new(Page::new())))
+        .clone()
+}
+
+async fn process_special_request(
+    method: Method, path: &str, _query: &str
+) -> Result<Response<Body>, hyper::Error> {
+    Ok(match (method, path) {
+        (Method::GET, "/assets/react-dom.production.min.js") =>
+            Response::new(Body::from(include_str!("server/assets/react-dom.production.min.js"))),
+        (Method::GET, "/assets/react.production.min.js") =>
+            Response::new(Body::from(include_str!("server/assets/react.production.min.js"))),
+        (Method::GET, _) =>
+            Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap(),
+        _ => Response::builder().status(StatusCode::METHOD_NOT_ALLOWED).body(Body::empty()).unwrap(),
+    })
+}
+
 async fn process_request(
     base_uri: Arc<Uri>,
     request: Request<Body>,
@@ -80,16 +107,13 @@ async fn process_request(
         eprint_header(&headers, "Content-Type");
     }
 
-    // Get (or create) the page at this path. Note that this does *not* hold the
-    // lock on PAGES, but rather extracts a clone of the `Arc<Mutex<Page>>` at
-    // this path.
-    let page = PAGES.lock().await
-        .entry(path.clone())
-        .or_insert_with(|| Arc::new(Mutex::new(Page::new())))
-        .clone();
+    // Shortcut to special processing if the path is in our reserved namespace
+    if path.starts_with("/.myxine/") {
+        return process_special_request(method, &path[8..], query).await;
+    }
 
-    // Make sure this path receives heartbeats
-    heartbeat::hold_path(path.clone());
+    // Get the page at this path
+    let page = get_page(&path).await;
 
     // Just one big dispatch on the HTTP method...
     Ok(match method {
