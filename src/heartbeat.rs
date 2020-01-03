@@ -9,9 +9,12 @@ use futures::{join, future};
 
 use crate::server::PAGES;
 
+/// The interval between heartbeats, in seconds.
 const HEARTBEAT_INTERVAL: u64 = 10;
 
 lazy_static! {
+    /// The sender and receiver, globally accessible, for incoming paths to keep
+    /// alive via heartbeat.
     static ref TOUCHED_PATHS:
     (mpsc::UnboundedSender<String>,
      Arc<Mutex<mpsc::UnboundedReceiver<String>>>) = {
@@ -19,10 +22,15 @@ lazy_static! {
         (send, Arc::new(Mutex::new(recv)))
     };
 
+    /// The set of paths which are currently active and in need of heartbeats.
     static ref ACTIVE_PATHS: Mutex<HashSet<String>>
         = Mutex::new(HashSet::new());
 }
 
+/// Register a new server path as in need of page heartbeats. It will be
+/// automatically de-registered when it is no longer alive. It's okay to call
+/// this function whenever we see a path: we just want to make sure every path
+/// receives heartbeats.
 pub fn hold_path(path: String) {
     TOUCHED_PATHS.0.send(path).unwrap_or(());
 }
