@@ -36,22 +36,15 @@ export function activate(thisUrl, initialSubscription, innerHTML, debugMode) {
         }
     }
     // Actually send an event back to the server
+    // This uses a web worker to avoid doing the sending work in the main thread
+    let sendEventWorker = new Worker('send-event.js');
     function sendEvent(targetPath, eventType, returnData) {
-        let request = new XMLHttpRequest();
-        let targetIdString;
-        if (targetPath.length > 0 && targetPath[0] === "#") {
-            targetIdString = "id=" + targetPath.substring(1);
-        } else {
-            targetIdString = "path=" + targetPath;
-        }
-        const url = thisUrl + "?event=" + eventType + "&" + targetIdString;
-        const jsonData = JSON.stringify(returnData);
-        request.open("POST", url);
-        request.setRequestHeader("Content-Type", "application/json");
-        request.addEventListener('load', () => {
-            debug("Sent event to: " + url + ": " + jsonData);
+        sendEventWorker.postMessage({
+            thisUrl: thisUrl,
+            targetPath: targetPath,
+            eventType: eventType,
+            returnData: returnData,
         });
-        request.send(jsonData);
     }
     // Remove all event listeners we set, then set again from subscriptions
     function updateSubscription() {
