@@ -15,3 +15,6 @@ async fn main() {
     let options = Options::from_args();
     server::run(([127, 0, 0, 1], options.port).into()).await;
 }
+
+// TODO: Factor out javascript in dynamic page template so it can be statically
+// served as a linked asset.
