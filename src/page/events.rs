@@ -10,6 +10,7 @@ use std::string::ToString;
 
 mod path;
 pub use path::{Path, AbsolutePath, RelativePath};
+use super::sse;
 
 // Exterior interface is opaque type `Subscription` which can only be
 // constructed by deserializing it (i.e. from JSON)...
@@ -24,16 +25,23 @@ pub struct AggregateSubscription<'a>(
     HashMap<&'a AbsolutePath, HashMap<&'a String, HashSet<&'a Path>>>
 );
 
+/// The maximum number of messages to buffer before blocking a send. This means
+/// a client can send a burst of up to this number of UI events before it
+/// experiences backpressure. It usually makes sense for this to be much higher
+/// than the buffer size for page content, because page content is likely to be
+/// larger and less "bursty."
+const EVENT_BUFFER_SIZE: usize = 10_000;
+
 #[derive(Debug)]
 pub struct Subscribers {
-    servers: Vec<Arc<Mutex<hyper_usse::Server>>>,
+    servers: Vec<Arc<Mutex<sse::BufferedServer>>>,
     routes: HashMap<AbsolutePath, HashMap<String, Vec<Sink>>>,
 }
 
 #[derive(Debug, Clone)]
 struct Sink {
     return_paths: HashSet<Path>,
-    server: Weak<Mutex<hyper_usse::Server>>,
+    server: Weak<Mutex<sse::BufferedServer>>,
 }
 
 impl Subscribers {
@@ -67,9 +75,9 @@ impl Subscribers {
         // Create a new single-client SSE server (new clients will never be
         // added after this, because each event subscription is potentially
         // unique).
-        let mut server = hyper_usse::Server::new();
+        let mut server = sse::BufferedServer::new(EVENT_BUFFER_SIZE).await;
         let (sender, body) = Body::channel();
-        server.add_client(sender);
+        server.add_client(sender).await;
         let server = Arc::new(Mutex::new(server));
         // Add a reference to the server, with the appropriate property filter,
         // to each place corresponding to its desired subscription.
@@ -120,7 +128,7 @@ impl Subscribers {
                     async move {
                         if let Some(server) = sink.server.upgrade() {
                             let remaining = server.lock().await
-                                .send_to_clients(message).await;
+                                .send_to_clients(message).await.await;
                             assert!(remaining <= 1, "Subscriber SSE exceeds 1 client");
                             1 == remaining
                         } else {
@@ -160,7 +168,7 @@ impl Subscribers {
     pub async fn send_heartbeat<'a>(&'a mut self) -> Option<AggregateSubscription<'a>> {
         let mut sent = future::join_all(self.servers.iter_mut().map(|server| {
             async move {
-                let remaining = server.lock().await.send_heartbeat().await;
+                let remaining = server.lock().await.send_heartbeat().await.await;
                 assert!(remaining <= 1, "Subscriber SSE exceeds 1 client");
                 1 == remaining
             }

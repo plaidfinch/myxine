@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use futures::join;
 use serde_json::Value;
 
+pub mod sse;
 pub mod events;
 mod content;
 
@@ -25,9 +26,9 @@ const TEMPLATE_SIZE: usize = include_str!("page/dynamic.html").len();
 
 impl Page {
     /// Make a new empty (dynamic) page
-    pub fn new() -> Page {
+    pub async fn new() -> Page {
         Page {
-            content: Mutex::new(Content::new()),
+            content: Mutex::new(Content::new().await),
             subscribers: Mutex::new(Subscribers::new()),
         }
     }
@@ -126,7 +127,7 @@ impl Page {
     /// events: that is, it's identical to `Page::new()`.
     pub async fn is_empty(&self) -> bool {
         let (content_empty, subscribers_empty) =
-            join!(async { self.content.lock().await.is_empty() },
+            join!(async { self.content.lock().await.is_empty().await },
                   async { self.subscribers.lock().await.is_empty() });
         content_empty && subscribers_empty
     }
@@ -135,7 +136,7 @@ impl Page {
     /// is static, this has no effect and returns None. Otherwise, returns the
     /// Body stream to give to the new client.
     pub async fn update_stream(&self) -> Option<Body> {
-        self.content.lock().await.update_stream()
+        self.content.lock().await.update_stream().await
     }
 
     /// Set the contents of the page to be a static raw set of bytes with no
@@ -176,10 +177,12 @@ impl Page {
 /// sending an event, or sending a heartbeat! It will cause unexpected loss
 /// of messages if you arbitrarily set the subscriptions of a page outside
 /// of these contexts.
-async fn set_subscriptions<'a>(server: &'a mut hyper_usse::Server,
+async fn set_subscriptions<'a>(server: &'a mut sse::BufferedServer,
                                subscription: AggregateSubscription<'a>) {
     let data = serde_json::to_string(&subscription)
         .expect("Serializing subscriptions to JSON shouldn't fail");
     let event = EventBuilder::new(&data).event_type("subscribe");
-    server.send_to_clients(event.build()).await;
+    // We're not using the future returned here because we don't care what the
+    // number of client connections is, so we don't need to wait to find out
+    let _unused_response = server.send_to_clients(event.build()).await;
 }

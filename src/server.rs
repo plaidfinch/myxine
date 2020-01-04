@@ -4,7 +4,7 @@ use http::request::Parts;
 use http::header::{HeaderMap, HeaderValue};
 use lazy_static::lazy_static;
 use std::sync::Arc;
-use std::collections::HashMap;
+use std::collections::{hash_map::Entry, HashMap};
 use std::convert::TryFrom;
 use std::net::{SocketAddr, TcpListener};
 use tokio::sync::Mutex;
@@ -84,10 +84,14 @@ async fn get_page(path: &str) -> Arc<Page> {
     // Get (or create) the page at this path. Note that this does *not* hold the
     // lock on PAGES, but rather extracts a clone of the `Arc<Mutex<Page>>` at
     // this path.
-    PAGES.lock().await
-        .entry(path.to_string())
-        .or_insert_with(|| Arc::new(Page::new()))
-        .clone()
+    match PAGES.lock().await.entry(path.to_string()) {
+        Entry::Vacant(e) => {
+            let page = Arc::new(Page::new().await);
+            e.insert(page.clone());
+            page
+        },
+        Entry::Occupied(e) => e.get().clone(),
+    }
 }
 
 /// The response for serving a particular file as a static asset with liberal

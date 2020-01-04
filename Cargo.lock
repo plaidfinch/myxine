@@ -419,6 +419,7 @@ dependencies = [
 name = "myxine"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "futures",
  "http",
  "hyper",

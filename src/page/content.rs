@@ -2,12 +2,22 @@ use hyper::Body;
 use hyper_usse::EventBuilder;
 use std::mem;
 
+use super::sse;
+
+/// The `Content` of a page is either `Dynamic` or `Static`. If it's dynamic, it
+/// has a title, body, and a set of SSE event listeners who are waiting for
+/// updates to the page. If it's static, it just has a fixed content type and a
+/// byte array of contents to be returned when fetched. `Page`s can be changed
+/// from dynamic to static and vice-versa: when changing from dynamic to static,
+/// the change is instantly reflected in the client web browser; in the other
+/// direction, it requires a manual refresh (because a static page has no
+/// injected javascript to make it update itself).
 #[derive(Debug)]
 pub enum Content {
     Dynamic {
         title: String,
         body: String,
-        updates: hyper_usse::Server,
+        updates: sse::BufferedServer,
     },
     Static {
         content_type: Option<String>,
@@ -15,24 +25,28 @@ pub enum Content {
     }
 }
 
+/// The maximum number of messages to buffer before blocking a send. This is set
+/// to 1024, which means a client can send a burst of up to 1024 "frames" of
+/// HTML before it experiences backpressure.
+const UPDATE_BUFFER_SIZE: usize = 1024;
+
 impl Content {
     /// Make a new empty (dynamic) page
-    pub fn new() -> Content {
+    pub async fn new() -> Content {
         Content::Dynamic {
             title: String::new(),
             body: String::new(),
-            updates: hyper_usse::Server::new(),
+            updates: sse::BufferedServer::new(UPDATE_BUFFER_SIZE).await,
         }
     }
 
     /// Test if this page is empty, where "empty" means that it is dynamic, with
     /// an empty title, empty body, and no subscribers waiting on its page
     /// events: that is, it's identical to `Content::new()`.
-    pub fn is_empty(&self) -> bool {
+    pub async fn is_empty(&mut self) -> bool {
         match self {
-            Content::Dynamic{title, body, updates}
-            if title == "" && body == ""
-                && updates.connections() == 0 => true,
+            Content::Dynamic{title, body, ref mut updates}
+            if title == "" && body == "" => updates.connections().await == 0,
             _ => false,
         }
     }
@@ -40,11 +54,11 @@ impl Content {
     /// Add a client to the dynamic content of a page, if it is dynamic. If it
     /// is static, this has no effect and returns None. Otherwise, returns the
     /// Body stream to give to the new client.
-    pub fn update_stream(&mut self) -> Option<Body> {
+    pub async fn update_stream(&mut self) -> Option<Body> {
         match self {
             Content::Dynamic{updates, ..} => {
                 let (channel, body) = Body::channel();
-                updates.add_client(channel);
+                updates.add_client(channel).await;
                 Some(body)
             },
             Content::Static{..} => None
@@ -59,7 +73,7 @@ impl Content {
         match self {
             Content::Dynamic{updates, ..} => {
                 // Send a heartbeat to pages waiting on <body> updates
-                Some(updates.send_heartbeat().await)
+                Some(updates.send_heartbeat().await.await)
             },
             Content::Static{..} => None,
         }
@@ -71,7 +85,9 @@ impl Content {
         match self {
             Content::Dynamic{updates, ..} => {
                 let event = EventBuilder::new(".").event_type("refresh").build();
-                updates.send_to_clients(event).await;
+                // We're ignoring this future because we don't care what number
+                // of clients there are
+                let _unused = updates.send_to_clients(event).await;
             },
             Content::Static{..} => { },
         }
@@ -115,12 +131,14 @@ impl Content {
                         } else {
                             EventBuilder::new(".").event_type("clear-title")
                         };
-                        updates.send_to_clients(event.build()).await;
+                        // We're ignoring this future because we don't care how
+                        // many clients there are
+                        let _unused = updates.send_to_clients(event.build()).await;
                     }
                     break; // title has been set
                 },
                 Content::Static{..} => {
-                    *self = Content::new();
+                    *self = Content::new().await;
                     // and loop again to actually set the title
                 }
             }
@@ -142,12 +160,14 @@ impl Content {
                         } else {
                             EventBuilder::new(".").event_type("clear-body")
                         };
-                        updates.send_to_clients(event.build()).await;
+                        // We're ignoring this future because we don't care how
+                        // many clients of the page there are
+                        let _unused = updates.send_to_clients(event.build()).await;
                     }
                     break; // body has been set
                 },
                 Content::Static{..} => {
-                    *self = Content::new();
+                    *self = Content::new().await;
                     // and loop again to actually set the body
                 }
             }
