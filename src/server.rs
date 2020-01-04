@@ -22,7 +22,7 @@ use params::{GetParams, PostParams};
 lazy_static! {
     /// The current contents of the server, indexed by path
     pub(crate) static ref PAGES:
-    Mutex<HashMap<String, Arc<Mutex<Page>>>>
+    Mutex<HashMap<String, Arc<Page>>>
         = Mutex::new(HashMap::new());
 }
 
@@ -77,7 +77,7 @@ pub async fn run(socket_addr: SocketAddr) {
 
 /// Get a page from the global table (creating it if it does not yet exist) and
 /// make sure that it receives heartbeats in the future
-async fn get_page(path: &str) -> Arc<Mutex<Page>> {
+async fn get_page(path: &str) -> Arc<Page> {
     // Make sure this path receives heartbeats
     heartbeat::hold_path(path.to_string());
 
@@ -86,7 +86,7 @@ async fn get_page(path: &str) -> Arc<Mutex<Page>> {
     // this path.
     PAGES.lock().await
         .entry(path.to_string())
-        .or_insert_with(|| Arc::new(Mutex::new(Page::new())))
+        .or_insert_with(|| Arc::new(Page::new()))
         .clone()
 }
 
@@ -153,13 +153,12 @@ async fn process_request(
     Ok(match method {
 
         Method::GET | Method::HEAD => {
-            let mut page = page.lock().await;
             let mut body = Body::empty();
             match GetParams::parse(query) {
                 // If client wants event stream of changes to page:
                 Some(GetParams::PageUpdates) => {
                     if method == Method::GET {
-                        body = page.update_stream().unwrap_or_else(Body::empty);
+                        body = page.update_stream().await.unwrap_or_else(Body::empty);
                     }
                     Response::builder()
                         .header("Content-Type", "text/event-stream")
@@ -172,13 +171,13 @@ async fn process_request(
                     if method == Method::GET {
                         let base_url = base_uri.to_string().trim_end_matches('/').to_owned();
                         let this_page_url = base_url.clone() + &path;
-                        body = page.render(&base_url, &this_page_url).into();
+                        body = page.render(&base_url, &this_page_url).await.into();
                     }
                     let mut builder = Response::builder()
                         .header("Cache-Control", "no-cache")
                         .header("Access-Control-Allow-Origin", "*")
                         .header("Content-Disposition", "inline");
-                    if let Some(content_type) = page.content_type() {
+                    if let Some(content_type) = page.content_type().await {
                         // If there's a custom content-type, set it here
                         builder = builder.header("Content-Type", content_type);
                     }
@@ -223,7 +222,6 @@ async fn process_request(
             match PostParams::parse(query) {
                 // Client wants to store a static file of a known Content-Type:
                 Some(PostParams::StaticPage) => {
-                    let mut page = page.lock().await;
                     page.set_static(content_type.map(String::from), body_bytes).await;
                     Response::new(Body::empty())
                 },
@@ -231,7 +229,6 @@ async fn process_request(
                 Some(PostParams::DynamicPage{title}) => {
                     match String::from_utf8(body_bytes) {
                         Ok(body) => {
-                            let mut page = page.lock().await;
                             page.set_title(title).await;
                             page.set_body(body).await;
                             Response::new(Body::empty())
@@ -243,7 +240,7 @@ async fn process_request(
                 // Client wants to subscribe to interface events on this page:
                 Some(PostParams::SubscribeEvents) => {
                     if let Ok(subscription) = serde_json::from_slice(&body_bytes) {
-                        let body = page.lock().await.event_stream(subscription).await;
+                        let body = page.event_stream(subscription).await;
                         Response::builder()
                             .header("Content-Type", "text/event-stream")
                             .header("Cache-Control", "no-cache")
@@ -258,7 +255,7 @@ async fn process_request(
                 Some(PostParams::PageEvent{event, path}) => {
                     if let Ok(event_data) = serde_json::from_slice(&body_bytes) {
                         tokio::spawn(async move {
-                            page.lock().await.send_event(&event, &path, &event_data).await;
+                            page.send_event(&event, &path, &event_data).await;
                         });
                         Response::new(Body::empty())
                     } else {
@@ -276,7 +273,6 @@ async fn process_request(
             if query != "" {
                 return Ok(bad_request("Invalid query string in DELETE."));
             }
-            let mut page = page.lock().await;
             page.set_title("").await;
             page.set_body("").await;
             Response::new(Body::empty())

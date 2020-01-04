@@ -64,10 +64,8 @@ pub async fn heartbeat_loop() {
                 async move {
                     let mut pages = PAGES.lock().await;
                     if let Some((path, page)) = pages.remove_entry(path) {
-                        let mut page_lock = page.lock().await;
-                        page_lock.send_heartbeat().await;
-                        if !page_lock.is_empty() {
-                            drop(page_lock);
+                        page.send_heartbeat().await;
+                        if !page.is_empty().await {
                             pages.insert(path, page);
                         } else {
                             pruned.lock().await.push(path);

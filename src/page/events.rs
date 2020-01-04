@@ -48,9 +48,7 @@ impl Subscribers {
     /// Returns `true` if there are no subscribers to any events in this set of
     /// subscribers, `false` otherwise.
     pub fn is_empty(&self) -> bool {
-        assert!(if self.routes.is_empty() { self.servers.is_empty() } else { true },
-                "Subscribers can't have empty routes with non-empty servers.");
-        self.servers.is_empty()
+        self.routes.is_empty() && self.servers.is_empty()
     }
 
     /// Add a new subscription to this set of subscribers, returning a streaming
