@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use hyper_usse::EventBuilder;
 use std::sync::{Arc, Weak};
-use tokio::sync::Mutex;
 use serde::{Serialize, Deserialize};
 use serde_json::Value;
 use hyper::Body;
@@ -34,14 +33,14 @@ const EVENT_BUFFER_SIZE: usize = 10_000;
 
 #[derive(Debug)]
 pub struct Subscribers {
-    servers: Vec<Arc<Mutex<sse::BufferedServer>>>,
+    servers: Vec<Arc<sse::BufferedServer>>,
     routes: HashMap<AbsolutePath, HashMap<String, Vec<Sink>>>,
 }
 
 #[derive(Debug, Clone)]
 struct Sink {
     return_paths: HashSet<Path>,
-    server: Weak<Mutex<sse::BufferedServer>>,
+    server: Weak<sse::BufferedServer>,
 }
 
 impl Subscribers {
@@ -75,10 +74,10 @@ impl Subscribers {
         // Create a new single-client SSE server (new clients will never be
         // added after this, because each event subscription is potentially
         // unique).
-        let mut server = sse::BufferedServer::new(EVENT_BUFFER_SIZE).await;
+        let server = sse::BufferedServer::new(EVENT_BUFFER_SIZE).await;
         let (sender, body) = Body::channel();
         server.add_client(sender).await;
-        let server = Arc::new(Mutex::new(server));
+        let server = Arc::new(server);
         // Add a reference to the server, with the appropriate property filter,
         // to each place corresponding to its desired subscription.
         for (path, events) in subscription.0 {
@@ -127,7 +126,6 @@ impl Subscribers {
                     // Make a future for sending the message to the subscriber
                     async move {
                         if let Some(server) = sink.server.upgrade() {
-                            let mut server = server.lock().await.clone();
                             let remaining =
                                 server.send_to_clients(message).await.await;
                             assert!(remaining <= 1, "Subscriber SSE exceeds 1 client");
@@ -169,7 +167,6 @@ impl Subscribers {
     pub async fn send_heartbeat<'a>(&'a mut self) -> Option<AggregateSubscription<'a>> {
         let mut sent = future::join_all(self.servers.iter_mut().map(|server| {
             async move {
-                let mut server = server.lock().await.clone();
                 let remaining = server.send_heartbeat().await.await;
                 assert!(remaining <= 1, "Subscriber SSE exceeds 1 client");
                 1 == remaining

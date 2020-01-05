@@ -1,13 +1,13 @@
 use hyper_usse;
 use bytes::Bytes;
 use futures::Future;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{Mutex, mpsc, oneshot};
 
 /// An SSE server implementing buffering, so "bursty" events can be sent without
 /// lagging from the sender.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct BufferedServer {
-    commands: mpsc::Sender<Command>,
+    commands: Mutex<mpsc::Sender<Command>>,
 }
 
 pub enum Command {
@@ -41,37 +41,42 @@ impl BufferedServer {
                 }
             }
         });
-        BufferedServer{commands}
+        BufferedServer{commands: Mutex::new(commands)}
     }
 
-    pub async fn add_client(&mut self, client: hyper::body::Sender) {
-        self.commands.send(Command::AddClient(client)).await.unwrap_or(())
+    pub async fn add_client(&self, client: hyper::body::Sender) {
+        let mut commands = self.commands.lock().await.clone();
+        commands.send(Command::AddClient(client)).await.unwrap_or(())
     }
 
-    pub async fn send_to_clients<B: Into<Bytes>>(&mut self, text: B) -> impl Future<Output = usize> {
+    pub async fn send_to_clients<B: Into<Bytes>>(&self, text: B) -> impl Future<Output = usize> {
         let (sender, receiver) = oneshot::channel();
-        self.commands.send(Command::SendToClients(text.into(), sender)).await.unwrap_or(());
+        let mut commands = self.commands.lock().await.clone();
+        commands.send(Command::SendToClients(text.into(), sender)).await.unwrap_or(());
         async { receiver.await.expect("oneshot::Sender dropped before sending \
                                        response from BufferedServer, which \
                                        should be impossible") }
     }
 
-    pub async fn send_heartbeat(&mut self) -> impl Future<Output = usize> {
+    pub async fn send_heartbeat(&self) -> impl Future<Output = usize> {
         let (sender, receiver) = oneshot::channel();
-        self.commands.send(Command::SendHeartbeat(sender)).await.unwrap_or(());
+        let mut commands = self.commands.lock().await.clone();
+        commands.send(Command::SendHeartbeat(sender)).await.unwrap_or(());
         async { receiver.await.expect("oneshot::Sender dropped before sending \
                                        response from BufferedServer, which \
                                        should be impossible") }
     }
 
     #[allow(unused)]
-    pub async fn disconnect_all(&mut self) {
-        self.commands.send(Command::DisconnectAll).await.unwrap_or(())
+    pub async fn disconnect_all(&self) {
+        let mut commands = self.commands.lock().await.clone();
+        commands.send(Command::DisconnectAll).await.unwrap_or(())
     }
 
-    pub async fn connections(&mut self) -> usize {
+    pub async fn connections(&self) -> usize {
         let (sender, receiver) = oneshot::channel();
-        self.commands.send(Command::Connections(sender)).await.unwrap_or(());
+        let mut commands = self.commands.lock().await.clone();
+        commands.send(Command::Connections(sender)).await.unwrap_or(());
         receiver.await.expect("oneshot::Sender dropped before sending \
                                response from BufferedServer, which \
                                should be impossible")

@@ -6,7 +6,7 @@
         <script src="{base_url}/.myxine/assets/diffhtml.min.js"></script>
         <script type="module">
          import {{ activate }} from "{base_url}/.myxine/assets/dynamic-page.js";
-         activate('{this_url}', '{subscription}', diff.innerHTML, {debug});
+         activate('{base_url}', '{this_url}', '{subscription}', diff.innerHTML, {debug});
         </script>
     </head>
     <body style="margin: 0px; padding: 0px">{body}</body>

@@ -1,4 +1,4 @@
-export function activate(thisUrl, initialSubscription, innerHTML, debugMode) {
+export function activate(baseUrl, thisUrl, initialSubscription, innerHTML, debugMode) {
     // The initial subscription at page load time
     let subscription = JSON.parse(initialSubscription);
     // The new body, cached before it's put in place
@@ -37,7 +37,7 @@ export function activate(thisUrl, initialSubscription, innerHTML, debugMode) {
     }
     // Actually send an event back to the server
     // This uses a web worker to avoid doing the sending work in the main thread
-    let sendEventWorker = new Worker('send-event.js');
+    let sendEventWorker = new Worker(baseUrl + '/.myxine/assets/send-event.js');
     function sendEvent(targetPath, eventType, returnData) {
         sendEventWorker.postMessage({
             thisUrl: thisUrl,
