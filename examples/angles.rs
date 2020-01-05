@@ -167,6 +167,8 @@ async fn main() {
 
     let draw_body = |mouse: &Option<(u64, u64)>, window: &Option<(u64, u64)>| -> String {
         let mut angle;
+        let saturation;
+        let lightness;
         if let (Some((x, y)), Some((w, h))) = (mouse, window) {
             let x = *x as f64;
             let y = *y as f64;
@@ -174,18 +176,29 @@ async fn main() {
             let h = *h as f64;
             angle = (y - h / 2_f64).atan2(x - w / 2_f64).to_degrees() + 90.0;
             if angle < 0.0 { angle = angle + 360.0 }
+            let ratio_from_edge = 1.0 -
+                ((y - h / 2_f64).abs() + (x - w / 2_f64).abs())
+                / (h / 2_f64 + w / 2_f64);
+            saturation = 100.0 * ratio_from_edge;
+            lightness = 100.0 - 50.0 * ratio_from_edge;
         } else {
             angle = 0_f64;
+            saturation = 100_f64;
+            lightness = 50.0;
         }
         format!("<div id=\"container\" style=\"overflow: hidden; margin: 0px; \
-                 padding: 0px; height: 100vh; background: hsl({angle}, 100%, 50%); \
+                 padding: 0px; height: 100vh; background:                     \
+                 hsl({angle}, {saturation}%, {lightness}%);                   \
                  width: 100vw; text-align: center; position: relative;\">     \
                  <span style=\"position: absolute; top: 50%; transform:       \
                  translate(-50%, -50%) rotate({angle}deg); font-family:       \
                  Helvetica Neue; font-weight: 200; font-size: 250pt; color:   \
                  white; background: rgba(0, 0, 0, 0.4); border-radius: 300pt; \
                  border: none; padding: 100pt; width: 550pt; text-shadow:     \
-                 0 0 25pt black\">{angle}°</span></div>", angle = angle as i64)
+                 0 0 25pt black\">{angle}°</span></div>",
+                angle = angle as i64,
+                saturation = saturation,
+                lightness = lightness)
     };
 
     if let Ok(response) =
