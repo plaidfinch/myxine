@@ -127,8 +127,9 @@ impl Subscribers {
                     // Make a future for sending the message to the subscriber
                     async move {
                         if let Some(server) = sink.server.upgrade() {
-                            let remaining = server.lock().await
-                                .send_to_clients(message).await.await;
+                            let mut server = server.lock().await.clone();
+                            let remaining =
+                                server.send_to_clients(message).await.await;
                             assert!(remaining <= 1, "Subscriber SSE exceeds 1 client");
                             1 == remaining
                         } else {
@@ -168,7 +169,8 @@ impl Subscribers {
     pub async fn send_heartbeat<'a>(&'a mut self) -> Option<AggregateSubscription<'a>> {
         let mut sent = future::join_all(self.servers.iter_mut().map(|server| {
             async move {
-                let remaining = server.lock().await.send_heartbeat().await.await;
+                let mut server = server.lock().await.clone();
+                let remaining = server.send_heartbeat().await.await;
                 assert!(remaining <= 1, "Subscriber SSE exceeds 1 client");
                 1 == remaining
             }
