@@ -66,19 +66,19 @@ class PageEvent:
     where the data is a dictionary from strings to values, representing the
     fields requested by the subscription.
     """
-    event : str
-    id : str
+    __event : str
+    __id : str
     __mapping : Dict[str, Any]
 
     def __init__(self, wrapped : Event) -> None:
         if wrapped.event is not None:
-            self.event = wrapped.event
+            self.__event = wrapped.event
         else:
-            self.event = ''
+            self.__event = ''
         if wrapped.id is not None:
-            self.id = wrapped.id
+            self.__id = wrapped.id
         else:
-            self.id = ''
+            self.__id = ''
         if wrapped.data is not None:
             self.mapping = json.loads(wrapped.data)
         else:
@@ -86,6 +86,14 @@ class PageEvent:
 
     def __getitem__(self, key : str) -> Optional[Any]:
         return self.mapping.get(key)
+
+    def event(self) -> str:
+        """Get the event type for this page event."""
+        return self.__event
+
+    def id(self) -> str:
+        """Get the target id for this page event."""
+        return self.__id
 
 def page_url(path : str, port : int = MYXINE_DEFAULT_PORT) -> str:
     """Normalize a port & path to give the localhost url for that location."""
