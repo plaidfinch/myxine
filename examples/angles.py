@@ -6,7 +6,7 @@ class State:
     # The dimensions of the browser window
     (w, h) = (1, 1)
     # The location of the cursor relative to the browser window
-    (x, y) = (0, 0)
+    (x, y) = (0.5, 0.5 - 0.000001)
 
     def update(self, event):
         w = event['window.innerWidth']
