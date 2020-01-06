@@ -1,4 +1,4 @@
-export function activate(baseUrl, thisUrl, initialSubscription, innerHTML, debugMode) {
+export function activate(initialSubscription, innerHTML, debugMode) {
     // The initial subscription at page load time
     let subscription = JSON.parse(initialSubscription);
     // The new body, cached before it's put in place
@@ -37,10 +37,12 @@ export function activate(baseUrl, thisUrl, initialSubscription, innerHTML, debug
     }
     // Actually send an event back to the server
     // This uses a web worker to avoid doing the sending work in the main thread
-    let sendEventWorker = new Worker(baseUrl + '/.myxine/assets/send-event.js');
+    let sendEventWorker =
+        new Worker('http://' + window.location.host + '/.myxine/assets/send-event.js');
+    // Tell the worker where it'll be sending its messages...
+    sendEventWorker.postMessage({thisUrl: window.location.href});
     function sendEvent(targetPath, eventType, returnData) {
         sendEventWorker.postMessage({
-            thisUrl: thisUrl,
             targetPath: targetPath,
             eventType: eventType,
             returnData: returnData,
@@ -124,7 +126,7 @@ export function activate(baseUrl, thisUrl, initialSubscription, innerHTML, debug
         location.reload();
     }
     // Actually set up SSE...
-    let sse = new EventSource(thisUrl + "?updates");
+    let sse = new EventSource(window.location.href + "?updates");
     sse.addEventListener("body", setBody);
     sse.addEventListener("clear-body", clearBody);
     sse.addEventListener("title", setTitle);
