@@ -105,6 +105,6 @@ def main():
 
     # You can kill the program with a keyboard interrupt
     except KeyboardInterrupt: pass
-    except Exception as e: print(e)
+    except Exception as e: print('Exception: ', e)
 
 if __name__ == '__main__': main()

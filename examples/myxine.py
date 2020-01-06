@@ -84,7 +84,7 @@ class PageEvent:
             self.mapping = {}
 
     def __getitem__(self, key : str) -> Optional[Any]:
-        return self.mapping[key]
+        return self.mapping.get(key)
 
 def page_url(path : str, port : int = MYXINE_DEFAULT_PORT) -> str:
     """Normalize a port & path to give the localhost url for that location."""
