@@ -25,10 +25,16 @@ pub enum Content {
     }
 }
 
-/// The maximum number of messages to buffer before blocking a send. This is set
-/// to 1024, which means a client can send a burst of up to 1024 "frames" of
-/// HTML before it experiences backpressure.
-const UPDATE_BUFFER_SIZE: usize = 1024;
+/// The maximum number of messages to buffer before blocking a send. This means
+/// a client can send a burst of up to this many "frames" of HTML before it
+/// experiences backpressure.
+const UPDATE_BUFFER_SIZE: usize = 1;
+// TODO: Should this be client-configurable? Larger values are good for "bursty"
+// workloads where many frames will be sent, followed by relative sparsity, but
+// smaller values lead to smoother movement by more consistently rate-limiting
+// the client's frames dynamically based on the speed of the browser's rending
+// engine. Right now this is set to optimize for browser smoothness rather than
+// bursty throughput from the client.
 
 impl Content {
     /// Make a new empty (dynamic) page
