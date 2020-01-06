@@ -17,25 +17,17 @@ def parse_event_stream(lines : Iterator[str]) -> Iterator[Event]:
     text/event-stream format, as defined in the HTML living standard section
     on server-sent events:
     https://html.spec.whatwg.org/multipage/server-sent-events.html#parsing-an-event-stream"""
-    within_event = False
     event = Event()
     for line in lines:
-        if line == '' and within_event:
+        if line == '':
             # Dispatch the event when we hit an empty line
             yield event
             # Reset and loop
-            within_event = False
             event = Event()
-        elif line.startswith(':'):
-            # This is a comment line
-            pass
         else:
-            # We are now processing an event
-            within_event = True
-
-            # Pre-process the line to extract the field name and value
-            try:
-                field, value = line.split(':', maxsplit=1)
+            # Pre-process the line to extract the field name and value and trim
+            # the left-most space (if any) from the value
+            try: field, value = line.split(':', maxsplit=1)
             except ValueError:
                 field = line
                 value = ''
@@ -50,11 +42,9 @@ def parse_event_stream(lines : Iterator[str]) -> Iterator[Event]:
             elif field == 'data':
                 if event.data is None:
                     event.data = value
-                else:
-                    event.data += value + '\n'
+                else: event.data += value + '\n'
             elif field == 'retry':
-                try:
-                    event.retry = int(value)
+                try: event.retry = int(value)
                 except ValueError: pass
 
 # The default port on which myxine operates; can be overridden in the below
@@ -73,16 +63,13 @@ class PageEvent:
     def __init__(self, wrapped : Event) -> None:
         if wrapped.event is not None:
             self.__event = wrapped.event
-        else:
-            self.__event = ''
+        else: self.__event = ''
         if wrapped.id is not None:
             self.__id = wrapped.id
-        else:
-            self.__id = ''
+        else: self.__id = ''
         if wrapped.data is not None:
             self.mapping = json.loads(wrapped.data)
-        else:
-            self.mapping = {}
+        else: self.mapping = {}
 
     def __getitem__(self, key : str) -> Optional[Any]:
         return self.mapping.get(key)
