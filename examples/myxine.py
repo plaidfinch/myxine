@@ -1,6 +1,7 @@
 from typing import Optional, Iterator, Dict, List, Any
 from dataclasses import *
 import requests
+from requests import RequestException
 import json
 
 @dataclass
@@ -97,21 +98,30 @@ def subscribe(path : str,
     """Subscribe to a stream of page events from a myxine server, returning an
     iterator over the events returned by the stream as they become available.
     """
-    url = page_url(path, port) + '?subscribe'
-    r = requests.post(url, stream=True, json=subscription)
-    if r.encoding is None: r.encoding = 'utf-8'
-    for event in parse_event_stream(r.iter_lines(decode_unicode=True)):
-        yield PageEvent(event)
+    try:
+        url = page_url(path, port) + '?subscribe'
+        r = requests.post(url, stream=True, json=subscription)
+        if r.encoding is None: r.encoding = 'utf-8'
+        for event in parse_event_stream(r.iter_lines(decode_unicode=True)):
+            yield PageEvent(event)
+    except RequestException as e:
+        raise ValueError("Connection issue with myxine server (is it running?):", e)
 
 def update(path : str,
            body : str,
-           title : str = '',
+           title : Optional[str] = None,
            port : int = MYXINE_DEFAULT_PORT) -> None:
     """Set the contents of the page at the given path to a provided body and
     title. If body or title is not provided, clears those elements of the page.
     """
-    url = page_url(path, port)
-    r = requests.post(url, data=body.encode(), params={'title': title})
+    try:
+        url = page_url(path, port)
+        params : Dict[str, str]
+        if title is None: params = {}
+        else: params = {'title': title}
+        r = requests.post(url, data=body.encode(), params=params)
+    except RequestException as e:
+        raise ValueError("Connection issue with myxine server (is it running?):", e)
 
 def static(path : str,
            body : bytes,
@@ -121,5 +131,8 @@ def static(path : str,
     provided, as a bytestring. You must specify a content type, or else the
     browser won't necessarily know how to display this content.
     """
-    url = page_url(path, port) + '?static'
-    requests.post(url, data=body, headers={'Content-Type': content_type})
+    try:
+        url = page_url(path, port) + '?static'
+        requests.post(url, data=body, headers={'Content-Type': content_type})
+    except RequestException as e:
+        raise ValueError("Connection issue with myxine server (is it running?):", e)
