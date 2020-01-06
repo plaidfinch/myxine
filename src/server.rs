@@ -233,6 +233,9 @@ async fn process_request(
                 Some(PostParams::DynamicPage{title}) => {
                     match String::from_utf8(body_bytes) {
                         Ok(body) => {
+                            if cfg!(debug_assertions) {
+                                eprintln!("\n{}", body);
+                            }
                             page.set_title(title).await;
                             page.set_body(body).await;
                             Response::new(Body::empty())
@@ -244,6 +247,9 @@ async fn process_request(
                 // Client wants to subscribe to interface events on this page:
                 Some(PostParams::SubscribeEvents) => {
                     if let Ok(subscription) = serde_json::from_slice(&body_bytes) {
+                        if cfg!(debug_assertions) {
+                            eprintln!("\n{:?}", &subscription);
+                        }
                         let body = page.event_stream(subscription).await;
                         Response::builder()
                             .header("Content-Type", "text/event-stream")
