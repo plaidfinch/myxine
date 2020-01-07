@@ -193,7 +193,7 @@ events](https://developer.mozilla.org/en-US/docs/Web/Events), which I recommend
 as a reference for finding the names and properties of the browser events to
 which you can subscribe.
 
-### Step 2: Get what you want
+### Step 2: Get what you wanted
 
 Now that you have a description of the events you
 want to listen for, send a **POST** request to the desired page path, with the
@@ -233,7 +233,7 @@ For an example of an interactive page using event subscriptions, check out [the
 then run:
 
 ```bash
-$ ./examples/angles.py`
+$ ./examples/angles.py
 ```
 
 Then load up [http://localhost:1123/](http://localhost:1123/) and mouse around!
