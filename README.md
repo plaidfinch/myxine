@@ -20,10 +20,10 @@ content instantly reflects whatever you'd like it to show. You can then [listen
 to events](#interactivity) within that page to quickly prototype a reactive user
 interface, with only a knowledge of HTML and your favorite programming language.
 
-**Q:** Can you show me something cool, then [tell me the rest after](#lets-play)?<br/>
+**Q:** Could you show me something cool, then tell me the details after?<br/>
 **A:** Happily, [let's get started](#show-me-an-example)!
 
-**Q:** I want to know how it works, then see cool stuff afterwards. <br/>
+**Q:** I want to know all about how it works, then can you show me the demo after? <br/>
 **A:** Sure thing, [let's dig in](#lets-play)!
 
 ## Show me an example
@@ -52,10 +52,9 @@ Once it's built and running, run this in another terminal window:
 $ ./examples/angles.py
 ```
 
-Then open up [localhost:1123/](localhost:1123/) in your web browser, and mouse
-around! If you like, see if you can figure out what's going on by reading [the
-Python source for this example](/examples/angles.py), or read on to learn more
-now...
+Then open up [http://localhost:1123/] in your web browser, and mouse around! If
+you like, see if you can figure out what's going on by reading [the Python
+source for this example](/examples/angles.py), or read on to learn more now...
 
 ## Getting started
 
@@ -67,7 +66,9 @@ $ cargo install
 
 ### Running
 
-Myxine is meant to run in the background as a server process. Just run:
+Myxine is meant to run in the background. It might live longer than any
+individual program that uses it, and it's meant to be a service many programs
+might use at the same time. To get started, run:
 
 ```bash
 $ myxine
@@ -78,7 +79,7 @@ $ myxine
 Myxine speaks to the world through HTTP requests and responses. If you can make
 a web request to `localhost` from your program, you can use `myxine`.
 
-Open your browser to `localhost:1123`, then watch what happens when you run this
+Open your browser to [http://localhost:1123/], then watch what happens when you run this
 command in your terminal:
 
 ```bash
@@ -92,46 +93,48 @@ What's happening here?
    `localhost:1123/some/arbitrary/path`: you'll see a web page with the HTML
    fragment you just posted set as the contents of its `<body>`.
 3. When you **POST** some more HTML to that same path, the changes will be
-   _instantly_ updated on the web page before your eyes!
+   instantly updated on the web page before your eyes!
 
-You can set the page title using the `?title` query parameter, like this:
+Some more things you can do:
 
-```bash
-$ curl "localhost:1123/?title=Hello%20Atlantic%20Ocean!" \
-       -d "<h1>What a fine day it is!</h1>"
-```
+- **Set the page title:** use the `?title` query parameter, like this:
 
-Titles will be URL-decoded, so you can use, e.g. `%20` to put a space in your title.
+    ```bash
+    $ curl "localhost:1123/?title=Hello%20Atlantic%20Ocean!" \
+          -d "<h1>What a fine day it is!</h1>"
+    ```
 
-**Static content:** You can store other kinds of data with `myxine` (such as
-assets you want to link to). Just append to your request path the query
-parameter `?static`, and `myxine` will interpret your data as raw bytes, and
-forego injecting them into a reactive page. For best results, set the
-`Content-Type` header of your request so `myxine` knows what kind of data to
-tell your browser it's receiving.
+    Titles will be URL-decoded, so you can use, e.g. `%20` to put a space in your title.
 
-To publish a static piece of JSON data with `curl`, you might say:
+- **Store static content:** You can store other kinds of data with `myxine`
+  (such as assets you want to link to). Just append to your request path the
+  query parameter `?static`, and `myxine` will interpret your data as raw bytes,
+  and forego injecting them into a reactive page. For best results, set the
+  `Content-Type` header of your request so `myxine` knows what kind of data to
+  tell your browser it's receiving.
 
-```bash
-$ curl -H "Content-Type: application/json" \
-       localhost:1123/swimming.json?static \
-       -d '{ "splish": "splash" }'
-```
+  To publish a static piece of JSON data with `curl`, you might say:
 
-You can still update the content with further `POST` requests, but a web browser
-won't see those changes until you reload the page.
+  ```bash
+  $ curl -H "Content-Type: application/json" \
+        localhost:1123/swimming.json?static \
+        -d '{ "splish": "splash" }'
+  ```
 
-**Binary content:** A common gotcha is trying to upload non-text content but
-forgetting to send it in binary mode—this will corrupt your data in
-transmission. To make sure non-text things get transmitted okay, just make sure
-you send the request in binary mode. For example, to upload an image `ocean.png`
-with `curl`, you could say:
+  You can still update the content with further `POST` requests, but a web browser
+  won't see those changes until you reload the page.
 
-```bash
-$ curl -H "Content-Type: image/png"      \
-       "localhost:1123/ocean.png?static" \
-       --data-binary @"ocean.png"
-```
+- **Store binary files:** A common gotcha is trying to upload non-text content
+  but forgetting to send it in binary mode—this will corrupt your data in
+  transmission. To make sure non-text things get transmitted okay, just make
+  sure you send the request in binary mode. For example, to upload an image
+  `ocean.png` with `curl`, you could say:
+
+  ```bash
+  $ curl -H "Content-Type: image/png"      \
+        "localhost:1123/ocean.png?static" \
+        --data-binary @"ocean.png"
+  ```
 
 ## Interactivity
 
@@ -207,7 +210,7 @@ you're still listening to the stream—you can ignore these.
 **Step 3: Interact!** For a simple example of an interactive page using event
 subscriptions, look at [the `angles` example in Python](/examples/angles.py).
 Just make sure `myxine` is running it, and run `./angles.py` in your terminal...
-then go mouse around at [`localhost:1123/`](localhost:1123/).
+then go mouse around at [http://localhost:1123/].
 
 If your language doesn't implement a parser for this format, check out [this
 17-line Python implementation](/examples/myxine.py#L14-L36) as a reference. Feel
