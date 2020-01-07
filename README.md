@@ -14,8 +14,8 @@
 
 ## TL;DR:
 
-Write a function in any programming language from some data to a fragment of
-HTML, and `myxine` gives your program a dynamic webpage whose content [instantly
+If you write a function in *any programming language* that makes some HTML,
+`myxine` can give you a dynamic webpage whose content [instantly
 reflects](#lets-play) whatever you'd like it to show. You can then [listen to
 events](#interactivity) within that page to quickly prototype a reactive user
 interface—with only a knowledge of HTML and your favorite language.
