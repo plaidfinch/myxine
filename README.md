@@ -54,9 +54,9 @@ $ ./examples/angles.py
 ```
 
 Then open up [http://localhost:1123/](http://localhost:1123/) in your web
-browser, and mouse around! If you like, see if you can figure out what's going
-on by reading [the Python source for this example](/examples/angles.py), or read
-on to learn more now...
+browser, and mouse around! See if you can figure out what's going on by reading
+[the Python source for this example](/examples/angles.py), or read on for the
+full story...
 
 ## Getting started
 
