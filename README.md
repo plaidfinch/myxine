@@ -21,17 +21,18 @@ to events](#interactivity) within that page to quickly prototype a reactive user
 interface, with only a knowledge of HTML and your favorite programming language.
 
 **Q:** Could you show me something cool, then tell me the details after?<br/>
-**A:** Happily, [let's get started](#show-me-an-example)!
+**A:** Happily, [let's get started](#show-me)!
 
 **Q:** I want to know all about how it works, then can you show me the demo after? <br/>
 **A:** Sure thing, [let's dig in](#lets-play)!
 
-## Show me an example
+## Show me!
 
-First, make sure you have [Python 3]() and the
+First, make sure you have [Python 3](https://www.python.org/) and the
 [`requests`](https://2.python-requests.org/en/master/) library installed. Myxine
 doesn't depend on them, but we'll need them to run this example. If you have
-Python 3 on your system, you can install `requests` with:
+Python 3 (and therefore hopefully [`pip3`](https://pypi.org/project/pip/)) on
+your system, you can install `requests` with:
 
 ```bash
 $ pip3 install requests
