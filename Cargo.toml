@@ -1,6 +1,9 @@
 [package]
 name = "myxine"
 version = "0.1.0"
+description = "Get a GUI fast in any language under the sea"
+keywords = ["GUI", "web", "interface", "scripting", "tool"]
+categories = ["command-line-utilities", "graphics", "gui", "visualization", "web-programming"]
 authors = ["Kenny Foner <kwf@very.science>"]
 edition = "2018"
 homepage = "https://github.com/GaloisInc/myxine"
