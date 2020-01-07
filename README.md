@@ -14,11 +14,11 @@
 
 ## TL;DR:
 
-If you can write a function (in any language) from some internal data to a
-fragment of HTML, `myxine` will give your program a dynamic webpage whose
-content [instantly reflects](#lets-play) whatever you'd like it to show. You can
-then [listen to events](#interactivity) within that page to quickly prototype a
-reactive user interface, with only a knowledge of HTML and your favorite
+If you write a function in *any programming language* from some data to a
+fragment of HTML, `myxine` can give your program a dynamic webpage whose content
+[instantly reflects](#lets-play) whatever you'd like it to show. You can then
+[listen to events](#interactivity) within that page to quickly prototype a
+reactive user interface—with only a knowledge of HTML and your favorite
 programming language.
 
 **Q:** Could you show me something cool, then tell me the details after?<br/>
