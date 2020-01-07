@@ -43,7 +43,7 @@ program, you can use `myxine`. Open your browser to `localhost:1123`, then watch
 what happens when you run this command in your terminal:
 
 ```bash
-$ curl localhost:1123/swimming.html -d "<h1>Splish splash!</h1>"
+$ curl "localhost:1123/swimming.html" -d "<h1>Splish splash!</h1>"
 ```
 
 What's happening here?
@@ -61,7 +61,7 @@ You can also set the title of the page! Just use the `?title` query parameter,
 like this:
 
 ```bash
-$ curl localhost:1123/?title=Hello%20Atlantic%20Ocean! \
+$ curl "localhost:1123/?title=Hello%20Atlantic%20Ocean!" \
        -d "<h1>What a fine day it is!</h1>"
 ```
 
@@ -93,7 +93,7 @@ won't see those changes until someone reloads the page.
 A common gotcha is trying to upload non-text static content (like an image) but
 forgetting to send it in binary mode. This will corrupt your content in
 transmission. To fix, just make sure you send the request in binary mode. For
-example, with `curl`, we would say:
+example, to upload an image `ocean.png` with `curl`, we would say:
 
 ```bash
 $ curl -H "Content-Type: image/png"      \
@@ -116,7 +116,7 @@ should be a doubly-nested dictionary like this:
     "click": [".x", ".y"]
   },
   "window": {
-    "keydown": [".key"]
+    "keydown": [".key"],
     "keyup": [".key"]
   },
   "document.body": {
@@ -140,7 +140,8 @@ you can subscribe.
 
 **Step 2:** Now that you have a description of the events you want to listen
 for, send a **POST** request to the desired page path, with the subscription as
-the body of the request and `?subscribe` as the query string:
+the body of the request and `?subscribe` as the query string. With `curl`, this
+looks like:
 
 ```bash
 $ curl localhost:1123/some/path?subscribe -d '{ "window": "click": [".x", ".y"] }'
@@ -164,15 +165,16 @@ format](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Usin
 a simple format for streams of named events with attached data. In `myxine`'s
 case, every event will have an `id`, an `event`, and some attached `data`
 formatted as a JSON dictionary mapping result fields you asked for to the value
-they had at the time the event occurred in the page.[^1] Occasionally, the
-stream will contain an empty "heartbeat" message `:`, which is used to check
-that you're still listening to the stream -- you can ignore these.
+they had at the time the event occurred in the page. Occasionally, the stream
+will contain an empty "heartbeat" message `:`, which is used to check that
+you're still listening to the stream&emdash;you can ignore these.
 
-[^1]: If your language doesn't implement a parser for this format, the
-      documentation linked above should be enough to get you started. For more
-      technical details, see [the W3C Recommendation for Server-Sent
-      Events](https://www.w3.org/TR/eventsource/) and look at the sections for
-      [parsing](https://www.w3.org/TR/eventsource/#parsing-an-event-stream) and
-      [interpretation](https://www.w3.org/TR/eventsource/#event-stream-interpretation).
-      You can ignore everything about what to do "as a user-agent" because you
-      are not a user-agent :)
+If your language doesn't implement a parser for this format, the documentation
+linked above can get you started. You can also use [the Python
+implementation](/examples/myxine.py) as a reference. For more technical details,
+see [the W3C Recommendation for Server-Sent
+Events](https://www.w3.org/TR/eventsource/) and look at the sections for
+[parsing](https://www.w3.org/TR/eventsource/#parsing-an-event-stream) and
+[interpretation](https://www.w3.org/TR/eventsource/#event-stream-interpretation).
+You can ignore everything about what to do "as a user-agent" because you are not
+a user-agent :)
