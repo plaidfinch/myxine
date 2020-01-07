@@ -44,7 +44,7 @@ $ pip3 install requests
 Now, in one terminal window, run:
 
 ```bash
-$ myxine
+$ cargo run --release
 ```
 
 And in another window, run:
@@ -68,10 +68,11 @@ Rust](https://www.rust-lang.org/learn/get-started). Once you have `cargo`
 installed, run:
 
 ```bash
-$ cargo install --path .
+$ cargo build --release
 ```
 
-(We're not yet on [crates.io](https://crates.io) but will be soon!)
+We're not yet on [crates.io](https://crates.io) but will be soon! Once we are,
+you'll be able to install with `cargo install myxine`.
 
 ### Running
 
@@ -80,7 +81,7 @@ individual program that uses it, and it's meant to be a service many programs
 might use at the same time. To get started, run:
 
 ```bash
-$ myxine
+$ cargo run --release
 ```
 
 ### Let's play!
