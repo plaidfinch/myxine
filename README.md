@@ -107,9 +107,9 @@ Some more things you can do:
     Titles will be URL-decoded, so you can use, e.g. `%20` to put a space in your title.
 
 - **Store static content:** You can store other kinds of data with `myxine`
-  (such as assets you want to link to). Just append to your request path the
-  query parameter `?static`, and `myxine` will interpret your data as raw bytes,
-  and forego injecting them into a reactive page. For best results, set the
+  (such as assets you want to link to). If you append to your request path the
+  query parameter `?static`, `myxine` will interpret your data as raw bytes, and
+  forego injecting them into an interactive page. For best results, set the
   `Content-Type` header of your request so `myxine` knows what kind of data to
   tell your browser it's receiving.
 
@@ -126,9 +126,9 @@ Some more things you can do:
 
 - **Store binary files:** A common gotcha is trying to upload non-text content
   but forgetting to send it in binary mode—this will corrupt your data in
-  transmission. To make sure non-text things get transmitted okay, just make
-  sure you send the request in binary mode. For example, to upload an image
-  `ocean.png` with `curl`, you could say:
+  transmission. To make sure non-text things get transmitted okay, make sure you
+  send the request in binary mode. For example, to upload an image `ocean.png`
+  with `curl`, you could say:
 
   ```bash
   $ curl -H "Content-Type: image/png"      \
@@ -182,7 +182,7 @@ subscription as the body of the request and `?subscribe` as the query string.
 With `curl`, this looks like:
 
 ```bash
-$ curl localhost:1123/some/path?subscribe -d '{ "window": "click": [".x", ".y"] }'
+$ curl "localhost:1123/some/path?subscribe" -d '{ "window": "click": [".x", ".y"] }'
 id: window
 event: click
 data: {".x":638,".y":757}
@@ -204,14 +204,18 @@ a line-based text format for streams of events with attached data. In `myxine`'s
 case, every event will have an `id`, an `event`, and some attached `data`
 formatted as a JSON dictionary mapping result fields you asked for to the value
 they had at the time the event occurred in the page. Occasionally, the stream
-will also contain an empty "heartbeat" message `:` which is used to check that
-you're still listening to the stream—you can ignore these.
+will also contain an empty "heartbeat" message `:` which `myxine` uses to check
+that you're still listening—you can ignore these.
 
-**Step 3: Interact!** For a simple example of an interactive page using event
+**Step 3: Interact!** For an example of an interactive page using event
 subscriptions, look at [the `angles` example in Python](/examples/angles.py).
-Just make sure `myxine` is running it, and run `./examples/angles.py` in your
-terminal... then go mouse around at
-[http://localhost:1123/](http://localhost:1123/).
+Make sure `myxine` is running, then and run:
+
+```bash
+$ ./examples/angles.py`
+```
+
+Then check out [http://localhost:1123/](http://localhost:1123/) and mouse around!
 
 If your language doesn't implement a parser for this format, check out [this
 17-line Python implementation](/examples/myxine.py#L14-L36) as a reference. Feel
