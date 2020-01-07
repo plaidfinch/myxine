@@ -142,9 +142,11 @@ Some more things you can do:
 Interfaces are meant to be *interactive*: `myxine` lets you listen to events
 happening in the page without writing a lick of JavaScript.
 
-**Step 1: Say what you want:** write down a *subscription* consisting of some
-[JSON](https://www.json.org/) specifying which events you care about. The format
-should be a doubly-nested dictionary like this:
+### Step 1: Say what you want
+
+Write down a *subscription* consisting of some [JSON](https://www.json.org/)
+specifying which events you care about. The format should be a doubly-nested
+dictionary like this:
 
 ```json
 {
@@ -177,7 +179,9 @@ events](https://developer.mozilla.org/en-US/docs/Web/Events), which I recommend
 as a reference for finding the names and properties of the browser events to
 which you can subscribe.
 
-**Step 2: Get what you want:** Now that you have a description of the events you
+### Step 2: Get what you want
+
+Now that you have a description of the events you
 want to listen for, send a **POST** request to the desired page path, with the
 subscription as the body of the request and `?subscribe` as the query string.
 With `curl`, this looks like:
@@ -208,17 +212,19 @@ they had at the time the event occurred in the page. Occasionally, the stream
 will also contain an empty "heartbeat" message `:` which `myxine` uses to check
 that you're still listening—you can ignore these.
 
-**Step 3: Interact!** For an example of an interactive page using event
-subscriptions, look at [the `angles` example in Python](/examples/angles.py).
-Make sure `myxine` is running, then and run:
+### Step 3: Interact!
+
+For an example of an interactive page using event subscriptions, check out [the
+`angles` example in Python](/examples/angles.py). Make sure `myxine` is running,
+then and run:
 
 ```bash
 $ ./examples/angles.py`
 ```
 
-Then check out [http://localhost:1123/](http://localhost:1123/) and mouse around!
+Then load up [http://localhost:1123/](http://localhost:1123/) and mouse around!
 
-If your language doesn't implement a parser for this format, check out [this
+If your language doesn't implement a parser for this format, check out [the
 17-line Python implementation](/examples/myxine.py#L14-L36) as a reference. Feel
 free to submit a pull request with an implementation in your language, or to
 publish it yourself somewhere! For the technical details I used when writing
