@@ -44,17 +44,17 @@ $ cargo run --release
 ```
 
 It may take a bit to build, so you could [read on now](#lets-play), or you could
-get a cup of tea.
-
-Once it's built and running, run this in another terminal window:
+get a cup of tea. Once it's built and running, run this in another terminal
+window:
 
 ```bash
 $ ./examples/angles.py
 ```
 
-Then open up [http://localhost:1123/] in your web browser, and mouse around! If
-you like, see if you can figure out what's going on by reading [the Python
-source for this example](/examples/angles.py), or read on to learn more now...
+Then open up [http://localhost:1123/](http://localhost:1123/) in your web
+browser, and mouse around! If you like, see if you can figure out what's going
+on by reading [the Python source for this example](/examples/angles.py), or read
+on to learn more now...
 
 ## Getting started
 
@@ -79,14 +79,14 @@ $ myxine
 Myxine speaks to the world through HTTP requests and responses. If you can make
 a web request to `localhost` from your program, you can use `myxine`.
 
-Open your browser to [http://localhost:1123/], then watch what happens when you run this
-command in your terminal:
+Open your browser to [http://localhost:1123/](http://localhost:1123/), then
+watch what happens when you run this command in your terminal:
 
 ```bash
 $ curl "localhost:1123/swimming.html" -d "<h1>Splish splash!</h1>"
 ```
 
-What's happening here?
+**What's going on:**
 
 1. If you **POST** some HTML to `localhost:1123/some/arbitrary/path`, and then
 2. **GET** (i.e. navigate with your web browser) from
@@ -101,7 +101,7 @@ Some more things you can do:
 
     ```bash
     $ curl "localhost:1123/?title=Hello%20Atlantic%20Ocean!" \
-          -d "<h1>What a fine day it is!</h1>"
+           -d "<h1>What a fine day it is!</h1>"
     ```
 
     Titles will be URL-decoded, so you can use, e.g. `%20` to put a space in your title.
@@ -117,8 +117,8 @@ Some more things you can do:
 
   ```bash
   $ curl -H "Content-Type: application/json" \
-        localhost:1123/swimming.json?static \
-        -d '{ "splish": "splash" }'
+         localhost:1123/swimming.json?static \
+         -d '{ "splish": "splash" }'
   ```
 
   You can still update the content with further `POST` requests, but a web browser
@@ -132,8 +132,8 @@ Some more things you can do:
 
   ```bash
   $ curl -H "Content-Type: image/png"      \
-        "localhost:1123/ocean.png?static" \
-        --data-binary @"ocean.png"
+         "localhost:1123/ocean.png?static" \
+         --data-binary @"ocean.png"
   ```
 
 ## Interactivity
@@ -209,8 +209,9 @@ you're still listening to the stream—you can ignore these.
 
 **Step 3: Interact!** For a simple example of an interactive page using event
 subscriptions, look at [the `angles` example in Python](/examples/angles.py).
-Just make sure `myxine` is running it, and run `./angles.py` in your terminal...
-then go mouse around at [http://localhost:1123/].
+Just make sure `myxine` is running it, and run `./examples/angles.py` in your
+terminal... then go mouse around at
+[http://localhost:1123/](http://localhost:1123/).
 
 If your language doesn't implement a parser for this format, check out [this
 17-line Python implementation](/examples/myxine.py#L14-L36) as a reference. Feel
