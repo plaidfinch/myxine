@@ -24,7 +24,7 @@ interface—with only a knowledge of HTML and your favorite language.
 **A:** Happily, [let's get started](#show-me)!
 
 **Q:** I want to know all about how it works, then can you show me the demo after? <br/>
-**A:** Sure thing, [let's dig in](#lets-play)!
+**A:** Sure thing, [let's dig in](#getting-started)!
 
 ## Show me!
 
