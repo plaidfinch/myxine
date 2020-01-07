@@ -222,7 +222,7 @@ that you're still listening—you can ignore these.
 
 For an example of an interactive page using event subscriptions, check out [the
 `angles` example in Python](/examples/angles.py). Make sure `myxine` is running,
-then and run:
+then run:
 
 ```bash
 $ ./examples/angles.py`
