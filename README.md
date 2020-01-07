@@ -169,10 +169,11 @@ they had at the time the event occurred in the page. Occasionally, the stream
 will contain an empty "heartbeat" message `:`, which is used to check that
 you're still listening to the stream&emdash;you can ignore these.
 
-If your language doesn't implement a parser for this format, the documentation
-linked above can get you started. You can also use [the Python
-implementation](/examples/myxine.py) as a reference. For more technical details,
-see [the W3C Recommendation for Server-Sent
+If your language doesn't implement a parser for this format, feel free to use
+[the 17-line Python implementation](/examples/myxine.py#L14-L36) as a reference.
+And please feel free to submit a pull request with your language's
+implementation, or to publish it yourself! For the full technical details I used
+when writing this parser, see [the W3C Recommendation for Server-Sent
 Events](https://www.w3.org/TR/eventsource/) and look at the sections for
 [parsing](https://www.w3.org/TR/eventsource/#parsing-an-event-stream) and
 [interpretation](https://www.w3.org/TR/eventsource/#event-stream-interpretation).
