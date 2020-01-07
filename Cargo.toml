@@ -1,8 +1,12 @@
 [package]
 name = "myxine"
 version = "0.1.0"
-authors = ["Kenny Foner <kwf@galois.com>"]
+authors = ["Kenny Foner <kwf@very.science>"]
 edition = "2018"
+homepage = "https://github.com/GaloisInc/myxine"
+readme = "README.md"
+license = "MIT"
+maintenance = { status = "actively-developed" }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
