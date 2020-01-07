@@ -68,8 +68,10 @@ Rust](https://www.rust-lang.org/learn/get-started). Once you have `cargo`
 installed, run:
 
 ```bash
-$ cargo install
+$ cargo install --path .
 ```
+
+(We're not yet on [crates.io](https://crates.io) but will be soon!)
 
 ### Running
 
