@@ -91,7 +91,7 @@ impl TryFrom<String> for Path {
 impl TryFrom<String> for AbsolutePath {
     type Error = String;
     fn try_from(string: String) -> Result<AbsolutePath, String> {
-        Ok(if string.len() == 0 {
+        Ok(if string.is_empty() {
             AbsolutePath::Absolute(Vec::new())
         } else if let (".", _) = string.split_at(1) {
             return Err(format!("Invalid absolute path: {}", string))
@@ -101,7 +101,7 @@ impl TryFrom<String> for AbsolutePath {
             let segments: Vec<String> =
                 string.split('.').map(String::from).collect();
             for s in &segments {
-                if s.len() == 0 {
+                if s.is_empty() {
                     return Err(format!("Invalid absolute path: {}", string))
                 }
             }
@@ -117,7 +117,7 @@ impl TryFrom<String> for RelativePath {
             let segments: Vec<String> =
                 path.split('.').map(String::from).collect();
             for s in &segments {
-                if s.len() == 0 {
+                if s.is_empty() {
                     return Err(format!("Invalid relative path: {}", string))
                 }
             }

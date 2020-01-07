@@ -43,6 +43,7 @@ macro_rules! unwrap_or_abort {
 }
 
 /// Run the main server loop alongside the heartbeat to all SSE clients
+#[allow(clippy::unnecessary_mut_passed)]
 pub async fn run(socket_addr: SocketAddr) {
     // Bind the server to this socket address
     let listener   = unwrap_or_abort!(TcpListener::bind(socket_addr));

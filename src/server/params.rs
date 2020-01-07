@@ -49,7 +49,7 @@ impl PostParams {
                 if let Some(id) = param_as_str("id", &params)? {
                     if constrained_to_keys(&params, &["event", "id"])
                         && event != "" && id != "" {
-                            if let Ok(path) = AbsolutePath::try_from("#".to_string() + &id) {
+                            if let Ok(path) = AbsolutePath::try_from("#".to_string() + id) {
                                 return Some(PostParams::PageEvent{event, path});
                             }
                         }
@@ -65,7 +65,7 @@ impl PostParams {
             let title = param_as_str("title", &params)?.unwrap_or("").to_string();
             return Some(PostParams::DynamicPage{title})
         }
-        return None;
+        None
     }
 }
 
@@ -83,6 +83,7 @@ fn param_as_bool<'a, 'b: 'a>(param: &'b str, params: &'a HashMap<&'a str, Vec<Co
 /// Parse a given parameter as a string, where its presence without a mapping
 /// (or its absence entirely) is interpreted as the empty string. If it is
 /// mapped to multiple values, retrun `None`.
+#[allow(clippy::option_option)]
 fn param_as_str<'a, 'b: 'a>(param: &'b str, params: &'a HashMap<&'a str, Vec<Cow<'a, str>>>) -> Option<Option<&'a str>> {
     match params.get(param).map(Vec::as_slice) {
         Some([string]) => Some(Some(string.as_ref())),

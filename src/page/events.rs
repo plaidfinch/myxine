@@ -60,10 +60,10 @@ impl Subscribers {
 
     /// Add a new subscription to this set of subscribers, returning a streaming
     /// body to be sent to the subscribing client.
-    pub async fn add_subscriber<'a>(
-        &'a mut self,
+    pub async fn add_subscriber(
+        &mut self,
         subscription: Subscription,
-    ) -> (Option<AggregateSubscription<'a>>, Body) {
+    ) -> (Option<AggregateSubscription<'_>>, Body) {
         // If the subscription is empty, don't bother doing anything else and
         // return an empty body so the subscriber won't wait at all. This
         // ensures the invariant that subscribing servers always refer to at
@@ -82,10 +82,10 @@ impl Subscribers {
         // to each place corresponding to its desired subscription.
         for (path, events) in subscription.0 {
             let existing_events =
-                self.routes.entry(path.into()).or_insert_with(|| HashMap::new());
+                self.routes.entry(path).or_insert_with(HashMap::new);
             for (event, return_paths) in events {
                 let existing_sinks =
-                    existing_events.entry(event).or_insert_with(|| Vec::new());
+                    existing_events.entry(event).or_insert_with(Vec::new);
                 existing_sinks.push(Sink{server: Arc::downgrade(&server), return_paths});
             }
         }
@@ -164,7 +164,7 @@ impl Subscribers {
     /// Send a heartbeat message to all subscribers, returning a new
     /// Subscription representing the union of all subscriptions, if there have
     /// been any noticed changes, or `None` if every client is still connected.
-    pub async fn send_heartbeat<'a>(&'a mut self) -> Option<AggregateSubscription<'a>> {
+    pub async fn send_heartbeat(&mut self) -> Option<AggregateSubscription<'_>> {
         let mut sent = future::join_all(self.servers.iter_mut().map(|server| {
             async move {
                 let remaining = server.send_heartbeat().await.await;
@@ -183,7 +183,7 @@ impl Subscribers {
             events.retain(|_, sinks| {
                 let previous_len = sinks.len();
                 sinks.retain(|Sink{server, ..}| {
-                    if !server.upgrade().is_some() {
+                    if server.upgrade().is_none() {
                         subscription_changed = true;
                         false // prune this route
                     } else {
@@ -204,7 +204,7 @@ impl Subscribers {
     }
 
     /// Calculate the union of all subscriptions currently active
-    pub fn total_subscription<'a>(&'a self) -> AggregateSubscription<'a> {
+    pub fn total_subscription(&self) -> AggregateSubscription<'_> {
         let subscription =
             self.routes.iter().map(|(id, events)| {
                 (id,
