@@ -2,7 +2,7 @@
 
 <table style="border: 0">
 <tr style="border: 0">
-  <td width="425px" style="border: 0">
+  <td width="40%" style="border: 0">
     <img src="/images/myxine_glutinosa.png" target="_blank" width="425px" alt="woodcut sketch of myxine glutinosa, the hagfish">
   </td>
   <td style="border: 0">
