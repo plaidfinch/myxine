@@ -28,7 +28,7 @@ class State:
         saturation = 100 * ratio_from_edge
         lightness = 100 - 50 * ratio_from_edge
 
-        container_style = """
+        container_style = f'''
         overflow: hidden;
         margin: 0px;
         padding: 0px;
@@ -37,10 +37,8 @@ class State:
         background: hsl({angle}, {saturation}%, {lightness}%);
         text-align: center;
         position: relative;
-        """.format(angle = angle,
-                   saturation = saturation,
-                   lightness = lightness)
-        span_style = """
+        '''
+        span_style = f'''
         position: absolute;
         top: 50%;
         transform: translate(-50%, -50%) rotate({angle}deg);
@@ -54,15 +52,14 @@ class State:
         padding: 100pt;
         width: 550pt;
         text-shadow: 0 0 25pt black;
-        """.format(angle = angle)
-        html = "                                           \
-        <div id=\"container\" style=\"{container_style}\"> \
-            <span style=\"{span_style}\">                  \
-                {angle}°                                   \
-            </span>                                        \
-        </div>".format(container_style = container_style,
-                       span_style = span_style,
-                       angle = angle)
+        '''
+
+        html = f'''
+        <div id="container" style="{container_style}">
+            <span style="{span_style}">
+                {angle}°
+            </span>
+        </div>'''
         return html
 
 # A description of the events we wish to monitor
