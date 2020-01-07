@@ -167,7 +167,7 @@ case, every event will have an `id`, an `event`, and some attached `data`
 formatted as a JSON dictionary mapping result fields you asked for to the value
 they had at the time the event occurred in the page. Occasionally, the stream
 will contain an empty "heartbeat" message `:`, which is used to check that
-you're still listening to the stream&emdash;you can ignore these.
+you're still listening to the stream—you can ignore these.
 
 If your language doesn't implement a parser for this format, feel free to use
 [the 17-line Python implementation](/examples/myxine.py#L14-L36) as a reference.
