@@ -53,7 +53,6 @@ class State:
         width: 550pt;
         text-shadow: 0 0 25pt black;
         '''
-
         html = f'''
         <div id="container" style="{container_style}">
             <span style="{span_style}">
