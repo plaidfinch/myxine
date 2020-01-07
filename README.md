@@ -29,7 +29,9 @@ programming language.
 
 ## Show me!
 
-First, make sure you have [Python 3](https://www.python.org/) and the
+First, [install `myxine`](#installation), then come back here :)
+
+Second, make sure you have [Python 3](https://www.python.org/) and the
 [`requests`](https://2.python-requests.org/en/master/) library installed. Myxine
 doesn't depend on them, but we'll need them to run this example. If you have
 Python 3 (and therefore hopefully [`pip3`](https://pypi.org/project/pip/)) on
@@ -37,12 +39,6 @@ your system, you can install `requests` with:
 
 ```bash
 $ pip3 install requests
-```
-
-Then, build and then run `myxine`:
-
-```bash
-$ cargo run --release
 ```
 
 It may take a bit to build, so you could [read on now](#lets-play), or you could
@@ -61,6 +57,11 @@ on to learn more now...
 ## Getting started
 
 ### Installation
+
+You will need a recent version of the Rust programming langauge and its build
+tool, `cargo`. If you don't have that, [here's the quick-start for installing
+Rust](https://www.rust-lang.org/learn/get-started). Once you have `cargo`
+installed, run:
 
 ```bash
 $ cargo install
