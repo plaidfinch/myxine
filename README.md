@@ -15,10 +15,11 @@
 ## TL;DR:
 
 If you can write a function (in any language) from some internal data to a
-fragment of HTML, `myxine` will give your program a **dynamic webpage** whose
-content instantly reflects whatever you'd like it to show. You can then [listen
-to events](#interactivity) within that page to quickly prototype a reactive user
-interface, with only a knowledge of HTML and your favorite programming language.
+fragment of HTML, `myxine` will give your program a dynamic webpage whose
+content [instantly reflects](#lets-play) whatever you'd like it to show. You can
+then [listen to events](#interactivity) within that page to quickly prototype a
+reactive user interface, with only a knowledge of HTML and your favorite
+programming language.
 
 **Q:** Could you show me something cool, then tell me the details after?<br/>
 **A:** Happily, [let's get started](#show-me)!
@@ -84,7 +85,10 @@ Open your browser to [http://localhost:1123/](http://localhost:1123/), then
 watch what happens when you run this command in your terminal:
 
 ```bash
-$ curl "localhost:1123/swimming.html" -d "<h1>Splish splash!</h1>"
+$ curl 'localhost:1123/' \
+       -d '<h1 style="color: blue; padding: 20pt; font-family: Helvetica">
+             Splish splash!
+           </h1>'
 ```
 
 **What's going on:**
@@ -101,8 +105,10 @@ Some more things you can do:
 - **Set the page title:** use the `?title` query parameter, like this:
 
     ```bash
-    $ curl "localhost:1123/?title=Hello%20Atlantic%20Ocean!" \
-           -d "<h1>What a fine day it is!</h1>"
+    $ curl 'localhost:1123/?title=Hello%20Atlantic%20Ocean!' \
+           -d '<h1 style="color: blue; padding: 20pt; font-family: Helvetica">
+                  What a fine day it is!
+               </h1>'
     ```
 
     Titles will be URL-decoded, so you can use, e.g. `%20` to put a space in your title.
@@ -117,8 +123,8 @@ Some more things you can do:
   To publish a static piece of JSON data with `curl`, you might say:
 
   ```bash
-  $ curl -H "Content-Type: application/json" \
-         localhost:1123/swimming.json?static \
+  $ curl -H "Content-Type: application/json"   \
+         'localhost:1123/swimming.json?static' \
          -d '{ "splish": "splash" }'
   ```
 
@@ -133,7 +139,7 @@ Some more things you can do:
 
   ```bash
   $ curl -H "Content-Type: image/png"      \
-         "localhost:1123/ocean.png?static" \
+         'localhost:1123/ocean.png?static' \
          --data-binary @"ocean.png"
   ```
 
@@ -187,7 +193,7 @@ subscription as the body of the request and `?subscribe` as the query string.
 With `curl`, this looks like:
 
 ```bash
-$ curl "localhost:1123/some/path?subscribe" -d '{ "window": "click": [".x", ".y"] }'
+$ curl 'localhost:1123/some/path?subscribe' -d '{ "window": "click": [".x", ".y"] }'
 id: window
 event: click
 data: {".x":638,".y":757}
