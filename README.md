@@ -29,7 +29,8 @@ programming language.
 
 ## Show me!
 
-First, [install `myxine`](#installation), then come back here :)
+First, [install `myxine`](#installation), get a cup of tea while it builds, and
+then come back here :)
 
 Second, make sure you have [Python 3](https://www.python.org/) and the
 [`requests`](https://2.python-requests.org/en/master/) library installed. Myxine
@@ -41,9 +42,13 @@ your system, you can install `requests` with:
 $ pip3 install requests
 ```
 
-It may take a bit to build, so you could [read on now](#lets-play), or you could
-get a cup of tea. Once it's built and running, run this in another terminal
-window:
+Now, in one terminal window, run:
+
+```bash
+$ myxine
+```
+
+And in another window, run:
 
 ```bash
 $ ./examples/angles.py
