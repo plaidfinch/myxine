@@ -265,7 +265,7 @@ HTTP/1.1 200 OK
  .
  .
  .
-content-location: /some/path/?resubscribe=13659ef1d37f45b49b30a78a2d043af2
+Content-Location: /some/path/?resubscribe=13659ef1d37f45b49b30a78a2d043af2
  .
  .
  .
