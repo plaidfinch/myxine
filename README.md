@@ -226,6 +226,16 @@ they had at the time the event occurred in the page. Occasionally, the stream
 will also contain an empty "heartbeat" message `:` which `myxine` uses to check
 that you're still listening—you can ignore these.
 
+If your language doesn't implement a parser for this format, check out [the
+17-line Python implementation](/examples/myxine.py#L14-L36) as a reference. For
+the technical details I used when writing this parser, see [the W3C
+Recommendation for Server-Sent Events](https://www.w3.org/TR/eventsource/) and
+look at the sections for
+[parsing](https://www.w3.org/TR/eventsource/#parsing-an-event-stream) and
+[interpretation](https://www.w3.org/TR/eventsource/#event-stream-interpretation).
+You can ignore everything about what to do "as a user-agent" because you are not
+a user-agent :)
+
 ### Step 3: Interact!
 
 For an example of an interactive page using event subscriptions, check out [the
@@ -238,13 +248,47 @@ $ ./examples/angles.py
 
 Then load up [http://localhost:1123/](http://localhost:1123/) and mouse around!
 
-If your language doesn't implement a parser for this format, check out [the
-17-line Python implementation](/examples/myxine.py#L14-L36) as a reference. Feel
-free to submit a pull request with an implementation in your language, or to
-publish it yourself somewhere! For the technical details I used when writing
-this parser, see [the W3C Recommendation for Server-Sent
-Events](https://www.w3.org/TR/eventsource/) and look at the sections for
-[parsing](https://www.w3.org/TR/eventsource/#parsing-an-event-stream) and
-[interpretation](https://www.w3.org/TR/eventsource/#event-stream-interpretation).
-You can ignore everything about what to do "as a user-agent" because you are not
-a user-agent :)
+### (Optional) Step 4: Do it again
+
+Sometimes, the things you care about change. When you want to listen to
+different events on the page, you *could* just stop listening and then
+immediately `?subscribe` again for different events. However, this runs the risk
+of missing any momentary events that happened in the meantime!
+
+Myxine's got your back: every response to a valid subscription request comes
+with a `Content-Location` header that gives a uniquely generated URL that can be
+used for "re-subscribing" to an event stream. For example, here's the response
+we get when subscribing for the first time:
+
+```
+HTTP/1.1 200 OK
+ .
+ .
+ .
+content-location: /some/path/?resubscribe=13659ef1d37f45b49b30a78a2d043af2
+ .
+ .
+ .
+[other headers omitted]
+```
+
+Now, we can *re*-subscribe to different events on the page by doing something
+like:
+
+```
+$ curl 'localhost:1123/some/path?resubscribe=13659ef1d37f45b49b30a78a2d043af2' \
+       -d '{ "window": { "click": [] } }'
+```
+
+At that moment, `myxine` will stop adding new events to the original stream,
+close it, and start adding new (and possibly different) events to the response
+stream from the second request. You might still have a couple events waiting in
+the buffer for the original stream, so don't forget to process them first! But
+then, keep on sailing with the new events in the new stream.
+
+Keep in mind: every time you re-subscribe, the `Content-Location` for
+subscribing again is different, and if you re-use one, you'll get an error
+response. Though it might seem like slightly more bookkeeping to keep track of
+the new `Content-Location` every time, this token-passing scheme means no other
+process can guess (or accidentally cache) your `?resubscribe` URL, and cut your
+event stream out from under you!
