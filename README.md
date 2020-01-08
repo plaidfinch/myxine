@@ -287,8 +287,8 @@ the buffer for the original stream, so don't forget to process them first! But
 then, keep on sailing with the new events in the new stream.
 
 Keep in mind: every time you re-subscribe, the `Content-Location` for
-subscribing again is different, and if you re-use one, you'll get an error
-response. Though it might seem like slightly more bookkeeping to keep track of
-the new `Content-Location` every time, this token-passing scheme means no other
-process can guess (or accidentally cache) your `?resubscribe` URL, and cut your
-event stream out from under you!
+re-re-subscribing is different, and if you use the same one again, you'll get
+an error response instead of a new stream. Though it might seem like slightly
+more bookkeeping to keep track of the new `Content-Location` every time, this
+token-passing scheme means no other process can guess (or accidentally cache)
+your `?resubscribe` URL, so nobody can cut your event stream out from under you!
