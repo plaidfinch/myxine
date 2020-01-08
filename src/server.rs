@@ -137,7 +137,14 @@ async fn process_request(
     // More disassembly
     let Parts{method, uri, headers, ..} = parts;
     let query = uri.query().unwrap_or("");
+
+    // The path should be trimmed so it does not end with slashes. This is to
+    // prevent confusion where /some/path/ contains different content than
+    // /some/path, which is unintuitive if you think of paths as being composed
+    // of hierarchical directories.
     let path = uri.path().to_string();
+    let path_ends_with_slash = path.ends_with('/');
+    let path = path.trim_end_matches('/');
 
     if cfg!(debug_assertions) {
         // Diagnostics about the requests we're receiving
@@ -173,18 +180,25 @@ async fn process_request(
                         .unwrap()
                 },
                 Some(GetParams::FullPage) => {
-                    if method == Method::GET {
-                        let base_url = base_uri.to_string().trim_end_matches('/').to_owned();
-                        let this_page_url = base_url.clone() + &path;
-                        body = page.render(&base_url, &this_page_url).await.into();
-                    }
                     let mut builder = Response::builder()
-                        .header("Cache-Control", "no-cache")
                         .header("Access-Control-Allow-Origin", "*")
                         .header("Content-Disposition", "inline");
                     if let Some(content_type) = page.content_type().await {
                         // If there's a custom content-type, set it here
                         builder = builder.header("Content-Type", content_type);
+                    }
+                    // We want to redirect to paths without slashes at the end
+                    if path_ends_with_slash {
+                        builder = builder.status(StatusCode::MOVED_PERMANENTLY);
+                        builder = builder.header("Location", path);
+                    } else {
+                        // 301 redirects can be cached, but nothing else can
+                        builder = builder.header("Cache-Control", "no-cache");
+                    }
+                    if method == Method::GET {
+                        let base_url = base_uri.to_string().trim_end_matches('/').to_owned();
+                        let this_page_url = base_url.clone() + &path;
+                        body = page.render(&base_url, &this_page_url).await.into();
                     }
                     builder.body(body).unwrap()
                 },
