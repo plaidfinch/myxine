@@ -88,18 +88,14 @@ export function activate(initialSubscription, innerHTML, debugMode) {
             });
         });
     }
-    // When the document is loaded, register all the subscriptions
-    if (document.readyState != 'complete') {
-        window.addEventListener('load', event => {
-            debug("First load of event subscriptions.");
-            updateSubscription();
-        });
-    }
-    // Set the body using DiffHTML
+    // Set the body
     function setBodyTo(string) {
         body = string;
+        // Introduce a yield point so that a burst of updates could mean only
+        // one re-draw of the window
         setTimeout(() => {
             innerHTML(document.body, body);
+            updateSubscription();
         });
     }
     // These are the handlers for SSE events...
@@ -110,7 +106,6 @@ export function activate(initialSubscription, innerHTML, debugMode) {
     }
     function setBody(event) {
         setBodyTo(event.data);
-        updateSubscription();
     }
     function clearBody(event) {
         setBodyTo("");
@@ -133,4 +128,14 @@ export function activate(initialSubscription, innerHTML, debugMode) {
     sse.addEventListener("clear-title", clearTitle);
     sse.addEventListener("refresh", refresh);
     sse.addEventListener("subscribe", subscribe);
+    // Make sure the subscription gets updated once the whole page is loaded
+    if (document.readyState === "loading") {
+        document.addEventListener('readystatechange', () => {
+            if (document.readyState === "interactive") {
+                updateSubscription();
+            }
+        });
+    } else {
+        updateSubscription();
+    }
 }
