@@ -246,18 +246,26 @@ async fn process_request(
                     }
                 },
                 // Client wants to subscribe to interface events on this page:
-                Some(PostParams::SubscribeEvents) => {
+                Some(PostParams::SubscribeEvents{uuid}) => {
                     if let Ok(subscription) = serde_json::from_slice(&body_bytes) {
                         if cfg!(debug_assertions) {
                             eprintln!("\n{:?}", &subscription);
                         }
-                        let body = page.event_stream(subscription).await;
-                        Response::builder()
-                            .header("Content-Type", "text/event-stream")
-                            .header("Cache-Control", "no-cache")
-                            .header("Access-Control-Allow-Origin", "*")
-                            .body(body)
-                            .unwrap()
+                        if let Some((uuid, body)) =
+                            page.event_stream(uuid, subscription).await
+                        {
+                            let content_location =
+                                format!("{}?resubscribe={}", path, uuid.to_simple_ref());
+                            Response::builder()
+                                .header("Content-Type", "text/event-stream")
+                                .header("Cache-Control", "no-cache")
+                                .header("Access-Control-Allow-Origin", "*")
+                                .header("Content-Location", content_location)
+                                .body(body)
+                                .unwrap()
+                        } else {
+                            return Ok(bad_request("Invalid resubscription request: stream does not exist."))
+                        }
                     } else {
                         return Ok(bad_request("Invalid subscription request."));
                     }

@@ -5,6 +5,7 @@ use tokio::sync::Mutex;
 use std::collections::HashMap;
 use futures::join;
 use serde_json::Value;
+use uuid::Uuid;
 
 pub mod sse;
 pub mod events;
@@ -60,19 +61,20 @@ impl Page {
 
     /// Subscribe another page event listener to this page, given a subscription
     /// specification for what events to listen to.
-    pub async fn event_stream(&self, subscription: Subscription) -> Body {
-        match &mut *self.content.lock().await {
-            Content::Static{..} => Body::empty(),
+    pub async fn event_stream(
+        &self, uuid: Option<Uuid>, subscription: Subscription,
+    ) -> Option<(Uuid, Body)> {
+        let mut subscribers = self.subscribers.lock().await;
+        let (total_subscription, new_details) =
+            subscribers.add_subscriber(uuid, subscription).await;
+        let content = &mut *self.content.lock().await;
+        match content {
+            Content::Static{..} => { },
             Content::Dynamic{ref mut updates, ..} => {
-                let mut subscribers = self.subscribers.lock().await;
-                let (total_subscription, body) =
-                    subscribers.add_subscriber(subscription).await;
-                if let Some(total_subscription) = total_subscription {
-                    set_subscriptions(updates, total_subscription).await;
-                }
-                body
+                set_subscriptions(updates, total_subscription).await;
             }
         }
+        new_details
     }
 
     /// Send an event to all subscribers. This should only be called with events
