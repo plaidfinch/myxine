@@ -84,13 +84,13 @@ impl Page {
                             event_type: &str,
                             event_path: &AbsolutePath,
                             event_data: &HashMap<Path, Value>) {
-        let content = &mut *self.content.lock().await;
-        match content {
-            Content::Static{..} => { },
-            Content::Dynamic{ref mut updates, ..} => {
-                if let Some(total_subscription) =
-                    self.subscribers.lock().await
-                    .send_event(event_type, event_path, event_data).await {
+        if let Some(total_subscription) =
+            self.subscribers.lock().await
+            .send_event(event_type, event_path, event_data).await {
+                let content = &mut *self.content.lock().await;
+                match content {
+                    Content::Static{..} => { },
+                    Content::Dynamic{ref mut updates, ..} => {
                         set_subscriptions(updates, total_subscription).await;
                     }
             }
