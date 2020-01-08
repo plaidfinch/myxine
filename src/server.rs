@@ -110,7 +110,7 @@ macro_rules! static_asset {
 
 /// Process requests specific to the special '/.myxine/' path (the only path
 /// which is not useable as a normal endpoint). This is used for ser
-async fn process_special_request(
+fn process_special_request(
     method: Method, path: &str, _query: &str
 ) -> Result<Response<Body>, hyper::Error> {
     Ok(match (method, path) {
@@ -155,7 +155,7 @@ async fn process_request(
 
     // Shortcut to special processing if the path is in our reserved namespace
     if path.starts_with("/.myxine/") {
-        return process_special_request(method, &path[8..], query).await;
+        return process_special_request(method, &path[8..], query);
     }
 
     // Get the page at this path
