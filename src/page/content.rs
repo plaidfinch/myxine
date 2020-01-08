@@ -62,10 +62,24 @@ impl Content {
     /// Body stream to give to the new client.
     pub async fn update_stream(&mut self) -> Option<Body> {
         match self {
-            Content::Dynamic{updates, ..} => {
-                let (channel, body) = Body::channel();
+            Content::Dynamic{updates, title, body} => {
+                let (channel, stream_body) = Body::channel();
+                let title_event = if *title != "" {
+                    EventBuilder::new(&title).event_type("title")
+                } else {
+                    EventBuilder::new(".").event_type("clear-title")
+                }.build();
+                let body_event = if *body != "" {
+                    EventBuilder::new(&body).event_type("body")
+                } else {
+                    EventBuilder::new(".").event_type("clear-body")
+                }.build();
                 updates.add_client(channel).await;
-                Some(body)
+                // We're ignoring these futures because we don't care what
+                // number of clients there are
+                let _unused = updates.send_to_clients(title_event).await;
+                let _unused = updates.send_to_clients(body_event).await;
+                Some(stream_body)
             },
             Content::Static{..} => None
         }
