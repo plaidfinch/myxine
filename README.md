@@ -33,9 +33,10 @@ then come back here :)
 
 Second, make sure you have [Python 3](https://www.python.org/) and the
 [`requests`](https://2.python-requests.org/en/master/) library installed. Myxine
-doesn't depend on them, but we'll need them to run this example. If you have
-Python 3 (and therefore hopefully [`pip3`](https://pypi.org/project/pip/)) on
-your system, you can install `requests` with:
+doesn't itself depend on them, but we'll need them presently because this example
+happens to be written in Python. If you have Python 3 (and therefore hopefully
+[`pip3`](https://pypi.org/project/pip/)) on your system, you can install
+`requests` with:
 
 ```bash
 $ pip3 install requests
