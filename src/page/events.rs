@@ -6,6 +6,7 @@ use serde_json::Value;
 use hyper::Body;
 use futures::future;
 use std::string::ToString;
+use uuid::Uuid;
 
 mod path;
 pub use path::{Path, AbsolutePath, RelativePath};
@@ -33,7 +34,7 @@ const EVENT_BUFFER_SIZE: usize = 10_000;
 
 #[derive(Debug)]
 pub struct Subscribers {
-    servers: Vec<Arc<sse::BufferedServer>>,
+    servers: HashMap<Uuid, Arc<sse::BufferedServer>>,
     routes: HashMap<AbsolutePath, HashMap<String, Vec<Sink>>>,
 }
 
@@ -48,7 +49,7 @@ impl Subscribers {
     pub fn new() -> Subscribers {
         Subscribers {
             routes: HashMap::new(),
-            servers: Vec::new(),
+            servers: HashMap::new(),
         }
     }
 
@@ -62,18 +63,29 @@ impl Subscribers {
     /// body to be sent to the subscribing client.
     pub async fn add_subscriber(
         &mut self,
+        old_uuid: Option<Uuid>,
         subscription: Subscription,
-    ) -> (Option<AggregateSubscription<'_>>, Body) {
-        // If the subscription is empty, don't bother doing anything else and
-        // return an empty body so the subscriber won't wait at all. This
-        // ensures the invariant that subscribing servers always refer to at
-        // least one event.
-        if subscription.0.is_empty() {
-            return (None, Body::empty())
+    ) -> (AggregateSubscription<'_>, Option<(Uuid, Body)>) {
+        // Either use the given UUID, or make a new one
+        if let Some(old_uuid) = old_uuid {
+            if !self.servers.contains_key(&old_uuid) {
+                // If the user is trying to re-subscribe to a stream that
+                // doesn't exist, that's an error and we should report it as
+                // such. This prevents them from, e.g. hard-coding stream IDs
+                // into programs and leading to subtle bugs where programs steal
+                // each others' streams using ?resubscribe.
+                return (self.total_subscription(), None)
+            } else {
+                // If the old stream *did* exist, we kill it and make a new one
+                // with a new UUID. This linearity makes it so that the user has
+                // to *explicitly* share a new ?resubscribe URI if they really
+                // really really want to have threads stealing from each other.
+                self.servers.remove(&old_uuid);
+            }
         }
-        // Create a new single-client SSE server (new clients will never be
-        // added after this, because each event subscription is potentially
-        // unique).
+        let new_uuid = Uuid::new_v4();
+        // Create a new single-client SSE server (new clients will never be added
+        // after this, because each event subscription is potentially unique).
         let server = sse::BufferedServer::new(EVENT_BUFFER_SIZE).await;
         let (sender, body) = Body::channel();
         server.add_client(sender).await;
@@ -90,9 +102,9 @@ impl Subscribers {
             }
         }
         // Add the server to the top-level list of server references
-        self.servers.push(server);
+        self.servers.insert(new_uuid, server);
         // Return the body, for sending to whoever subscribed
-        (Some(self.total_subscription()), body)
+        (self.total_subscription(), Some((new_uuid, body)))
     }
 
     /// Send an event to all subscribers to that event, giving each subscriber
@@ -165,7 +177,7 @@ impl Subscribers {
     /// Subscription representing the union of all subscriptions, if there have
     /// been any noticed changes, or `None` if every client is still connected.
     pub async fn send_heartbeat(&mut self) -> Option<AggregateSubscription<'_>> {
-        let mut sent = future::join_all(self.servers.iter_mut().map(|server| {
+        let mut sent = future::join_all(self.servers.iter_mut().map(|(_, server)| {
             async move {
                 let remaining = server.send_heartbeat().await.await;
                 assert!(remaining <= 1, "Subscriber SSE exceeds 1 client");
@@ -175,7 +187,7 @@ impl Subscribers {
         // Prune all servers for which heartbeat failed (since there's exactly
         // one Arc for each one of them, the corresponding Weaks within the
         // routes will now return None on upgrade)
-        self.servers.retain(|_| sent.next().unwrap());
+        self.servers.retain(|_, _| sent.next().unwrap());
         // Prune all routes corresponding to the dropped servers
         let mut subscription_changed = false;
         self.routes.retain(|_, events| {
