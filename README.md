@@ -33,9 +33,10 @@ then come back here :)
 
 Second, make sure you have [Python 3](https://www.python.org/) and the
 [`requests`](https://2.python-requests.org/en/master/) library installed. Myxine
-doesn't depend on them, but we'll need them to run this example. If you have
-Python 3 (and therefore hopefully [`pip3`](https://pypi.org/project/pip/)) on
-your system, you can install `requests` with:
+doesn't itself depend on them, but we'll need them presently because this example
+happens to be written in Python. If you have Python 3 (and therefore hopefully
+[`pip3`](https://pypi.org/project/pip/)) on your system, you can install
+`requests` with:
 
 ```bash
 $ pip3 install requests
@@ -265,7 +266,7 @@ HTTP/1.1 200 OK
  .
  .
  .
-content-location: /some/path/?resubscribe=13659ef1d37f45b49b30a78a2d043af2
+Content-Location: /some/path/?resubscribe=13659ef1d37f45b49b30a78a2d043af2
  .
  .
  .
@@ -286,9 +287,9 @@ stream from the second request. You might still have a couple events waiting in
 the buffer for the original stream, so don't forget to process them first! But
 then, keep on sailing with the new events in the new stream.
 
-Keep in mind: every time you re-subscribe, the `Content-Location` for
-subscribing again is different, and if you re-use one, you'll get an error
-response. Though it might seem like slightly more bookkeeping to keep track of
-the new `Content-Location` every time, this token-passing scheme means no other
-process can guess (or accidentally cache) your `?resubscribe` URL, and cut your
-event stream out from under you!
+Keep in mind: every time you re-subscribe, the `Content-Location` you'll receive
+for re-subscribing *again* is different. If you use the same one again, you'll get
+an error response instead of a new stream. Though it might seem like slightly
+more bookkeeping to keep track of the new `Content-Location` every time, this
+token-passing scheme means no other process can guess (or accidentally cache)
+a `?resubscribe` URL, so nobody can cut your event stream out from under you!
