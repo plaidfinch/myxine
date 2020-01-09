@@ -143,8 +143,12 @@ async fn process_request(
     // /some/path, which is unintuitive if you think of paths as being composed
     // of hierarchical directories.
     let path = uri.path().to_string();
-    let path_ends_with_slash = path.ends_with('/');
-    let path = path.trim_end_matches('/');
+    let path_ends_with_slash = path != "/" && path.ends_with('/');
+    let path = if path != "/" {
+        path.trim_end_matches('/')
+    } else {
+        "/"
+    };
 
     if cfg!(debug_assertions) {
         // Diagnostics about the requests we're receiving
