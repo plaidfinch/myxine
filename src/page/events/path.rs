@@ -1,7 +1,7 @@
-use serde::{Serialize, Deserialize};
-use std::hash::Hash;
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
+use std::hash::Hash;
 use std::string::ToString;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -70,10 +70,8 @@ impl Into<String> for RelativePath {
 impl Into<String> for AbsolutePath {
     fn into(self) -> String {
         match self {
-            AbsolutePath::Id(id) =>
-                format!("#{}", id),
-            AbsolutePath::Absolute(segments) =>
-                format!("{}", segments.into_iter().format(".")),
+            AbsolutePath::Id(id) => format!("#{}", id),
+            AbsolutePath::Absolute(segments) => format!("{}", segments.into_iter().format(".")),
         }
     }
 }
@@ -94,15 +92,14 @@ impl TryFrom<String> for AbsolutePath {
         Ok(if string.is_empty() {
             AbsolutePath::Absolute(Vec::new())
         } else if let (".", _) = string.split_at(1) {
-            return Err(format!("Invalid absolute path: {}", string))
+            return Err(format!("Invalid absolute path: {}", string));
         } else if let ("#", id) = string.split_at(1) {
             AbsolutePath::Id(id.to_string())
         } else {
-            let segments: Vec<String> =
-                string.split('.').map(String::from).collect();
+            let segments: Vec<String> = string.split('.').map(String::from).collect();
             for s in &segments {
                 if s.is_empty() {
-                    return Err(format!("Invalid absolute path: {}", string))
+                    return Err(format!("Invalid absolute path: {}", string));
                 }
             }
             AbsolutePath::Absolute(segments)
@@ -114,16 +111,15 @@ impl TryFrom<String> for RelativePath {
     type Error = String;
     fn try_from(string: String) -> Result<RelativePath, String> {
         Ok(if let (".", path) = string.split_at(1) {
-            let segments: Vec<String> =
-                path.split('.').map(String::from).collect();
+            let segments: Vec<String> = path.split('.').map(String::from).collect();
             for s in &segments {
                 if s.is_empty() {
-                    return Err(format!("Invalid relative path: {}", string))
+                    return Err(format!("Invalid relative path: {}", string));
                 }
             }
             RelativePath(segments)
         } else {
-            return Err(format!("Invalid relative path: {}", string))
+            return Err(format!("Invalid relative path: {}", string));
         })
     }
 }

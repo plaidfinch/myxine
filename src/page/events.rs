@@ -1,28 +1,26 @@
-use std::collections::{HashMap, HashSet};
-use hyper_usse::EventBuilder;
-use std::sync::{Arc, Weak};
-use serde::{Serialize, Deserialize};
-use serde_json::Value;
-use hyper::Body;
 use futures::future;
+use hyper::Body;
+use hyper_usse::EventBuilder;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::{HashMap, HashSet};
 use std::string::ToString;
+use std::sync::{Arc, Weak};
 use uuid::Uuid;
 
 mod path;
-pub use path::{Path, AbsolutePath, RelativePath};
 use super::sse;
+pub use path::{AbsolutePath, Path, RelativePath};
 
 // Exterior interface is opaque type `Subscription` which can only be
 // constructed by deserializing it (i.e. from JSON)...
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct Subscription(
-    HashMap<AbsolutePath, HashMap<String, HashSet<Path>>>
-);
+pub struct Subscription(HashMap<AbsolutePath, HashMap<String, HashSet<Path>>>);
 
 #[derive(Debug, Clone, Serialize)]
 pub struct AggregateSubscription<'a>(
-    HashMap<&'a AbsolutePath, HashMap<&'a String, HashSet<&'a Path>>>
+    HashMap<&'a AbsolutePath, HashMap<&'a String, HashSet<&'a Path>>>,
 );
 
 /// The maximum number of messages to buffer before blocking a send. This means
@@ -74,7 +72,7 @@ impl Subscribers {
                 // such. This prevents them from, e.g. hard-coding stream IDs
                 // into programs and leading to subtle bugs where programs steal
                 // each others' streams using ?resubscribe.
-                return (self.total_subscription(), None)
+                return (self.total_subscription(), None);
             } else {
                 // If the old stream *did* exist, we kill it and make a new one
                 // with a new UUID. This linearity makes it so that the user has
@@ -93,12 +91,13 @@ impl Subscribers {
         // Add a reference to the server, with the appropriate property filter,
         // to each place corresponding to its desired subscription.
         for (path, events) in subscription.0 {
-            let existing_events =
-                self.routes.entry(path).or_insert_with(HashMap::new);
+            let existing_events = self.routes.entry(path).or_insert_with(HashMap::new);
             for (event, return_paths) in events {
-                let existing_sinks =
-                    existing_events.entry(event).or_insert_with(Vec::new);
-                existing_sinks.push(Sink{server: Arc::downgrade(&server), return_paths});
+                let existing_sinks = existing_events.entry(event).or_insert_with(Vec::new);
+                existing_sinks.push(Sink {
+                    server: Arc::downgrade(&server),
+                    return_paths,
+                });
             }
         }
         // Add the server to the top-level list of server references
@@ -111,47 +110,54 @@ impl Subscribers {
     /// only those fields of the event which that subscriber cares about. If the
     /// list of subscribers has changed (that is, by client disconnection),
     /// returns the union of all now-current subscriptions.
-    pub async fn send_event<'a>(&'a mut self,
-                                event_type: &str,
-                                event_path: &AbsolutePath,
-                                event_data: &HashMap<Path, Value>
+    pub async fn send_event<'a>(
+        &'a mut self,
+        event_type: &str,
+        event_path: &AbsolutePath,
+        event_data: &HashMap<Path, Value>,
     ) -> Option<AggregateSubscription<'a>> {
         let mut subscription_changed = false;
-        if let Some(sinks) =
-            self.routes.get_mut(event_path).and_then(|m| m.get_mut(event_type)) {
-                let mut sent = future::join_all(sinks.iter_mut().map(|sink| {
-                    // Filter the fields of the event to those expected by this
-                    // particular subscriber
-                    let filtered: HashMap<&Path, &Value> =
-                        sink.return_paths.iter().filter_map(|path| {
-                            event_data.get(path).map(|value| (path, value))
-                        }).collect();
-                    // Serialize the fields to JSON
-                    let data = serde_json::to_string(&filtered)
-                        .expect("Serializing fields to a string shouldn't fail");
-                    // Build a text/event-stream message to send to subscriber
-                    let message =
-                        EventBuilder::new(&data)
-                        .id(&event_path.to_string())
-                        .event_type(event_type)
-                        .build();
-                    // Make a future for sending the message to the subscriber
-                    async move {
-                        if let Some(server) = sink.server.upgrade() {
-                            let remaining =
-                                server.send_to_clients(message).await.await;
-                            assert!(remaining <= 1, "Subscriber SSE exceeds 1 client");
-                            1 == remaining
-                        } else {
-                            false
-                        }
+        if let Some(sinks) = self
+            .routes
+            .get_mut(event_path)
+            .and_then(|m| m.get_mut(event_type))
+        {
+            let mut sent = future::join_all(sinks.iter_mut().map(|sink| {
+                // Filter the fields of the event to those expected by this
+                // particular subscriber
+                let filtered: HashMap<&Path, &Value> = sink
+                    .return_paths
+                    .iter()
+                    .filter_map(|path| event_data.get(path).map(|value| (path, value)))
+                    .collect();
+                // Serialize the fields to JSON
+                let data = serde_json::to_string(&filtered)
+                    .expect("Serializing fields to a string shouldn't fail");
+                // Build a text/event-stream message to send to subscriber
+                let message = EventBuilder::new(&data)
+                    .id(&event_path.to_string())
+                    .event_type(event_type)
+                    .build();
+                // Make a future for sending the message to the subscriber
+                async move {
+                    if let Some(server) = sink.server.upgrade() {
+                        let remaining = server.send_to_clients(message).await.await;
+                        assert!(remaining <= 1, "Subscriber SSE exceeds 1 client");
+                        1 == remaining
+                    } else {
+                        false
                     }
-                })).await.into_iter();
-                // Remove all sinks that failed to send (client disconnected)
-                let previous_len = sinks.len();
-                sinks.retain(|_| sent.next().unwrap());
-                if sinks.len() != previous_len { subscription_changed = true }
+                }
+            }))
+            .await
+            .into_iter();
+            // Remove all sinks that failed to send (client disconnected)
+            let previous_len = sinks.len();
+            sinks.retain(|_| sent.next().unwrap());
+            if sinks.len() != previous_len {
+                subscription_changed = true
             }
+        }
         // Prune the routes to remove empty hashmaps
         if let Some(events) = self.routes.get_mut(event_path) {
             if let Some(sinks) = events.get_mut(event_type) {
@@ -177,13 +183,13 @@ impl Subscribers {
     /// Subscription representing the union of all subscriptions, if there have
     /// been any noticed changes, or `None` if every client is still connected.
     pub async fn send_heartbeat(&mut self) -> Option<AggregateSubscription<'_>> {
-        let mut sent = future::join_all(self.servers.iter_mut().map(|(_, server)| {
-            async move {
-                let remaining = server.send_heartbeat().await.await;
-                assert!(remaining <= 1, "Subscriber SSE exceeds 1 client");
-                1 == remaining
-            }
-        })).await.into_iter();
+        let mut sent = future::join_all(self.servers.iter_mut().map(|(_, server)| async move {
+            let remaining = server.send_heartbeat().await.await;
+            assert!(remaining <= 1, "Subscriber SSE exceeds 1 client");
+            1 == remaining
+        }))
+        .await
+        .into_iter();
         // Prune all servers for which heartbeat failed (since there's exactly
         // one Arc for each one of them, the corresponding Weaks within the
         // routes will now return None on upgrade)
@@ -194,7 +200,7 @@ impl Subscribers {
             let previous_len = events.len();
             events.retain(|_, sinks| {
                 let previous_len = sinks.len();
-                sinks.retain(|Sink{server, ..}| {
+                sinks.retain(|Sink { server, .. }| {
                     if server.upgrade().is_none() {
                         subscription_changed = true;
                         false // prune this route
@@ -217,19 +223,32 @@ impl Subscribers {
 
     /// Calculate the union of all subscriptions currently active
     pub fn total_subscription(&self) -> AggregateSubscription<'_> {
-        let subscription =
-            self.routes.iter().map(|(id, events)| {
-                (id,
-                 events.iter().map(|(event_type, sinks)| {
-                     (event_type,
-                      sinks.iter().fold(HashSet::new(), |all, Sink{return_paths, ..}| {
-                          return_paths.iter().fold(all, |mut all, return_path| {
-                              all.insert(return_path);
-                              all
-                          })
-                      }))
-                 }).collect())
-            }).collect();
+        let subscription = self
+            .routes
+            .iter()
+            .map(|(id, events)| {
+                (
+                    id,
+                    events
+                        .iter()
+                        .map(|(event_type, sinks)| {
+                            (
+                                event_type,
+                                sinks.iter().fold(
+                                    HashSet::new(),
+                                    |all, Sink { return_paths, .. }| {
+                                        return_paths.iter().fold(all, |mut all, return_path| {
+                                            all.insert(return_path);
+                                            all
+                                        })
+                                    },
+                                ),
+                            )
+                        })
+                        .collect(),
+                )
+            })
+            .collect();
         AggregateSubscription(subscription)
     }
 }

@@ -1,7 +1,7 @@
 use structopt::StructOpt;
 
-mod server;
 mod page;
+mod server;
 
 #[derive(Debug, StructOpt)]
 struct Options {

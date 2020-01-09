@@ -1,18 +1,18 @@
+use futures::join;
 use hyper::Body;
 use hyper_usse::EventBuilder;
+use serde_json::Value;
+use std::collections::HashMap;
 use std::io::Write;
 use tokio::sync::Mutex;
-use std::collections::HashMap;
-use futures::join;
-use serde_json::Value;
 use uuid::Uuid;
 
-pub mod sse;
-pub mod events;
 mod content;
+pub mod events;
+pub mod sse;
 
-use events::{Subscribers, Subscription, AggregateSubscription, AbsolutePath, Path};
 use content::Content;
+use events::{AbsolutePath, AggregateSubscription, Path, Subscribers, Subscription};
 
 /// A `Page` pairs some page `Content` (either dynamic or static) with a set of
 /// `Subscribers` to the events on the page.
@@ -37,40 +37,43 @@ impl Page {
     /// Render a whole page as HTML (for first page load).
     pub async fn render(&self, base_url: &str, _this_url: &str) -> Vec<u8> {
         match &*self.content.lock().await {
-            Content::Dynamic{title, body, ..} => {
+            Content::Dynamic { title, body, .. } => {
                 let subscribers = self.subscribers.lock().await;
                 let aggregate_subscription = subscribers.total_subscription();
-                let subscription =
-                    serde_json::to_string(&aggregate_subscription).unwrap();
+                let subscription = serde_json::to_string(&aggregate_subscription).unwrap();
                 let mut bytes = Vec::with_capacity(TEMPLATE_SIZE);
-                write!(&mut bytes,
-                       include_str!("page/dynamic.html"),
-                       base_url = base_url,
-                       subscription = subscription,
-                       debug = cfg!(debug_assertions),
-                       title = title,
-                       body = body)
-                    .expect("Internal error: write!() failed on a Vec<u8>");
+                write!(
+                    &mut bytes,
+                    include_str!("page/dynamic.html"),
+                    base_url = base_url,
+                    subscription = subscription,
+                    debug = cfg!(debug_assertions),
+                    title = title,
+                    body = body
+                )
+                .expect("Internal error: write!() failed on a Vec<u8>");
                 bytes
-            },
-            Content::Static{raw_contents, ..} => {
-                raw_contents.clone()
-            },
+            }
+            Content::Static { raw_contents, .. } => raw_contents.clone(),
         }
     }
 
     /// Subscribe another page event listener to this page, given a subscription
     /// specification for what events to listen to.
     pub async fn event_stream(
-        &self, uuid: Option<Uuid>, subscription: Subscription,
+        &self,
+        uuid: Option<Uuid>,
+        subscription: Subscription,
     ) -> Option<(Uuid, Body)> {
         let mut subscribers = self.subscribers.lock().await;
         let (total_subscription, new_details) =
             subscribers.add_subscriber(uuid, subscription).await;
         let content = &mut *self.content.lock().await;
         match content {
-            Content::Static{..} => { },
-            Content::Dynamic{ref mut updates, ..} => {
+            Content::Static { .. } => {}
+            Content::Dynamic {
+                ref mut updates, ..
+            } => {
                 set_subscriptions(updates, total_subscription).await;
             }
         }
@@ -80,19 +83,27 @@ impl Page {
     /// Send an event to all subscribers. This should only be called with events
     /// that have come from the corresponding page itself, or confusion will
     /// result!
-    pub async fn send_event(&self,
-                            event_type: &str,
-                            event_path: &AbsolutePath,
-                            event_data: &HashMap<Path, Value>) {
-        if let Some(total_subscription) =
-            self.subscribers.lock().await
-            .send_event(event_type, event_path, event_data).await {
-                let content = &mut *self.content.lock().await;
-                match content {
-                    Content::Static{..} => { },
-                    Content::Dynamic{ref mut updates, ..} => {
-                        set_subscriptions(updates, total_subscription).await;
-                    }
+    pub async fn send_event(
+        &self,
+        event_type: &str,
+        event_path: &AbsolutePath,
+        event_data: &HashMap<Path, Value>,
+    ) {
+        if let Some(total_subscription) = self
+            .subscribers
+            .lock()
+            .await
+            .send_event(event_type, event_path, event_data)
+            .await
+        {
+            let content = &mut *self.content.lock().await;
+            match content {
+                Content::Static { .. } => {}
+                Content::Dynamic {
+                    ref mut updates, ..
+                } => {
+                    set_subscriptions(updates, total_subscription).await;
+                }
             }
         }
     }
@@ -104,20 +115,18 @@ impl Page {
     pub async fn send_heartbeat(&self) -> Option<usize> {
         let mut subscribers = self.subscribers.lock().await;
         let mut content = self.content.lock().await;
-        let subscriber_heartbeat = async {
-            subscribers.send_heartbeat().await
-        };
-        let content_heartbeat = async {
-            content.send_heartbeat().await
-        };
+        let subscriber_heartbeat = async { subscribers.send_heartbeat().await };
+        let content_heartbeat = async { content.send_heartbeat().await };
         let (new_subscription, update_client_count) =
             join!(subscriber_heartbeat, content_heartbeat);
         if let Some(total_subscription) = new_subscription {
             match *content {
-                Content::Dynamic{ref mut updates, ..} => {
+                Content::Dynamic {
+                    ref mut updates, ..
+                } => {
                     set_subscriptions(updates, total_subscription).await;
-                },
-                Content::Static{..} => { },
+                }
+                Content::Static { .. } => {}
             }
         }
         update_client_count
@@ -127,9 +136,10 @@ impl Page {
     /// an empty title, empty body, and no subscribers waiting on its page
     /// events: that is, it's identical to `Page::new()`.
     pub async fn is_empty(&self) -> bool {
-        let (content_empty, subscribers_empty) =
-            join!(async { self.content.lock().await.is_empty().await },
-                  async { self.subscribers.lock().await.is_empty() });
+        let (content_empty, subscribers_empty) = join!(
+            async { self.content.lock().await.is_empty().await },
+            async { self.subscribers.lock().await.is_empty() }
+        );
         content_empty && subscribers_empty
     }
 
@@ -144,10 +154,12 @@ impl Page {
     /// self-refreshing functionality. All clients will be told to refresh their
     /// page to load the new static content (which will not be able to update
     /// itself until a client refreshes their page again).
-    pub async fn set_static(&self,
-                            content_type: Option<String>,
-                            raw_contents: impl Into<Vec<u8>>) {
-        self.content.lock().await.set_static(content_type, raw_contents).await
+    pub async fn set_static(&self, content_type: Option<String>, raw_contents: impl Into<Vec<u8>>) {
+        self.content
+            .lock()
+            .await
+            .set_static(content_type, raw_contents)
+            .await
     }
 
     /// Get the content type of a page, or return `None` if none has been set
@@ -178,8 +190,10 @@ impl Page {
 /// sending an event, or sending a heartbeat! It will cause unexpected loss
 /// of messages if you arbitrarily set the subscriptions of a page outside
 /// of these contexts.
-async fn set_subscriptions<'a>(server: &'a mut sse::BufferedServer,
-                               subscription: AggregateSubscription<'a>) {
+async fn set_subscriptions<'a>(
+    server: &'a mut sse::BufferedServer,
+    subscription: AggregateSubscription<'a>,
+) {
     let data = serde_json::to_string(&subscription)
         .expect("Serializing subscriptions to JSON shouldn't fail");
     let event = EventBuilder::new(&data).event_type("subscribe");

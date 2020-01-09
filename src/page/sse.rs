@@ -1,7 +1,7 @@
-use hyper_usse;
 use bytes::Bytes;
 use futures::Future;
-use tokio::sync::{Mutex, mpsc, oneshot};
+use hyper_usse;
+use tokio::sync::{mpsc, oneshot, Mutex};
 
 /// An SSE server implementing buffering, so "bursty" events can be sent without
 /// lagging from the sender.
@@ -27,44 +27,61 @@ impl BufferedServer {
                 match command {
                     Command::SendHeartbeat(ret) => {
                         ret.send(server.send_heartbeat().await).unwrap_or(());
-                    },
+                    }
                     Command::SendToClients(bytes, ret) => {
                         ret.send(server.send_to_clients(bytes).await).unwrap_or(());
-                    },
+                    }
                     Command::Connections(ret) => {
                         ret.send(server.connections()).unwrap_or(());
-                    },
-                    Command::AddClient(sender) =>
-                        server.add_client(sender),
-                    Command::DisconnectAll =>
-                        server.disconnect_all(),
+                    }
+                    Command::AddClient(sender) => server.add_client(sender),
+                    Command::DisconnectAll => server.disconnect_all(),
                 }
             }
         });
-        BufferedServer{commands: Mutex::new(commands)}
+        BufferedServer {
+            commands: Mutex::new(commands),
+        }
     }
 
     pub async fn add_client(&self, client: hyper::body::Sender) {
         let mut commands = self.commands.lock().await.clone();
-        commands.send(Command::AddClient(client)).await.unwrap_or(())
+        commands
+            .send(Command::AddClient(client))
+            .await
+            .unwrap_or(())
     }
 
     pub async fn send_to_clients<B: Into<Bytes>>(&self, text: B) -> impl Future<Output = usize> {
         let (sender, receiver) = oneshot::channel();
         let mut commands = self.commands.lock().await.clone();
-        commands.send(Command::SendToClients(text.into(), sender)).await.unwrap_or(());
-        async { receiver.await.expect("oneshot::Sender dropped before sending \
+        commands
+            .send(Command::SendToClients(text.into(), sender))
+            .await
+            .unwrap_or(());
+        async {
+            receiver.await.expect(
+                "oneshot::Sender dropped before sending \
                                        response from BufferedServer, which \
-                                       should be impossible") }
+                                       should be impossible",
+            )
+        }
     }
 
     pub async fn send_heartbeat(&self) -> impl Future<Output = usize> {
         let (sender, receiver) = oneshot::channel();
         let mut commands = self.commands.lock().await.clone();
-        commands.send(Command::SendHeartbeat(sender)).await.unwrap_or(());
-        async { receiver.await.expect("oneshot::Sender dropped before sending \
+        commands
+            .send(Command::SendHeartbeat(sender))
+            .await
+            .unwrap_or(());
+        async {
+            receiver.await.expect(
+                "oneshot::Sender dropped before sending \
                                        response from BufferedServer, which \
-                                       should be impossible") }
+                                       should be impossible",
+            )
+        }
     }
 
     #[allow(unused)]
@@ -76,9 +93,14 @@ impl BufferedServer {
     pub async fn connections(&self) -> usize {
         let (sender, receiver) = oneshot::channel();
         let mut commands = self.commands.lock().await.clone();
-        commands.send(Command::Connections(sender)).await.unwrap_or(());
-        receiver.await.expect("oneshot::Sender dropped before sending \
+        commands
+            .send(Command::Connections(sender))
+            .await
+            .unwrap_or(());
+        receiver.await.expect(
+            "oneshot::Sender dropped before sending \
                                response from BufferedServer, which \
-                               should be impossible")
+                               should be impossible",
+        )
     }
 }

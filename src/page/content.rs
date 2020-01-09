@@ -22,7 +22,7 @@ pub enum Content {
     Static {
         content_type: Option<String>,
         raw_contents: Vec<u8>,
-    }
+    },
 }
 
 /// The maximum number of messages to buffer before blocking a send. This means
@@ -51,8 +51,11 @@ impl Content {
     /// events: that is, it's identical to `Content::new()`.
     pub async fn is_empty(&mut self) -> bool {
         match self {
-            Content::Dynamic{title, body, ref mut updates}
-            if title == "" && body == "" => updates.connections().await == 0,
+            Content::Dynamic {
+                title,
+                body,
+                ref mut updates,
+            } if title == "" && body == "" => updates.connections().await == 0,
             _ => false,
         }
     }
@@ -62,26 +65,32 @@ impl Content {
     /// Body stream to give to the new client.
     pub async fn update_stream(&mut self) -> Option<Body> {
         match self {
-            Content::Dynamic{updates, title, body} => {
+            Content::Dynamic {
+                updates,
+                title,
+                body,
+            } => {
                 let (channel, stream_body) = Body::channel();
                 let title_event = if *title != "" {
                     EventBuilder::new(&title).event_type("title")
                 } else {
                     EventBuilder::new(".").event_type("clear-title")
-                }.build();
+                }
+                .build();
                 let body_event = if *body != "" {
                     EventBuilder::new(&body).event_type("body")
                 } else {
                     EventBuilder::new(".").event_type("clear-body")
-                }.build();
+                }
+                .build();
                 updates.add_client(channel).await;
                 // We're ignoring these futures because we don't care what
                 // number of clients there are
                 let _unused = updates.send_to_clients(title_event).await;
                 let _unused = updates.send_to_clients(body_event).await;
                 Some(stream_body)
-            },
-            Content::Static{..} => None
+            }
+            Content::Static { .. } => None,
         }
     }
 
@@ -91,11 +100,11 @@ impl Content {
     /// live updates to the page.
     pub async fn send_heartbeat(&mut self) -> Option<usize> {
         match self {
-            Content::Dynamic{updates, ..} => {
+            Content::Dynamic { updates, .. } => {
                 // Send a heartbeat to pages waiting on <body> updates
                 Some(updates.send_heartbeat().await.await)
-            },
-            Content::Static{..} => None,
+            }
+            Content::Static { .. } => None,
         }
     }
 
@@ -103,13 +112,13 @@ impl Content {
     /// This has no effect if it is (currently) static.
     pub async fn refresh(&mut self) {
         match self {
-            Content::Dynamic{updates, ..} => {
+            Content::Dynamic { updates, .. } => {
                 let event = EventBuilder::new(".").event_type("refresh").build();
                 // We're ignoring this future because we don't care what number
                 // of clients there are
                 let _unused = updates.send_to_clients(event).await;
-            },
-            Content::Static{..} => { },
+            }
+            Content::Static { .. } => {}
         }
     }
 
@@ -117,11 +126,15 @@ impl Content {
     /// self-refreshing functionality. All clients will be told to refresh their
     /// page to load the new static content (which will not be able to update
     /// itself until a client refreshes their page again).
-    pub async fn set_static(&mut self,
-                            content_type: Option<String>,
-                            raw_contents: impl Into<Vec<u8>>) {
-        let mut page =
-            Content::Static{content_type, raw_contents: raw_contents.into()};
+    pub async fn set_static(
+        &mut self,
+        content_type: Option<String>,
+        raw_contents: impl Into<Vec<u8>>,
+    ) {
+        let mut page = Content::Static {
+            content_type,
+            raw_contents: raw_contents.into(),
+        };
         mem::swap(&mut page, self);
         page.refresh().await;
     }
@@ -131,8 +144,8 @@ impl Content {
     /// client-configurable).
     pub fn content_type(&self) -> Option<String> {
         match self {
-            Content::Dynamic{..} => None,
-            Content::Static{content_type, ..} => content_type.clone(),
+            Content::Dynamic { .. } => None,
+            Content::Static { content_type, .. } => content_type.clone(),
         }
     }
 
@@ -142,7 +155,11 @@ impl Content {
     pub async fn set_title(&mut self, new_title: impl Into<String>) {
         loop {
             match self {
-                Content::Dynamic{ref mut title, ref mut updates, ..} => {
+                Content::Dynamic {
+                    ref mut title,
+                    ref mut updates,
+                    ..
+                } => {
                     let new_title = new_title.into();
                     if new_title != *title {
                         *title = new_title.clone();
@@ -156,8 +173,8 @@ impl Content {
                         let _unused = updates.send_to_clients(event.build()).await;
                     }
                     break; // title has been set
-                },
-                Content::Static{..} => {
+                }
+                Content::Static { .. } => {
                     *self = Content::new().await;
                     // and loop again to actually set the title
                 }
@@ -171,7 +188,11 @@ impl Content {
     pub async fn set_body(&mut self, new_body: impl Into<String>) {
         loop {
             match self {
-                Content::Dynamic{ref mut body, ref mut updates, ..} => {
+                Content::Dynamic {
+                    ref mut body,
+                    ref mut updates,
+                    ..
+                } => {
                     let new_body = new_body.into();
                     if new_body != *body {
                         *body = new_body.clone();
@@ -185,8 +206,8 @@ impl Content {
                         let _unused = updates.send_to_clients(event.build()).await;
                     }
                     break; // body has been set
-                },
-                Content::Static{..} => {
+                }
+                Content::Static { .. } => {
                     *self = Content::new().await;
                     // and loop again to actually set the body
                 }

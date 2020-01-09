@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use bytes::{Buf, Bytes};
+use futures::{Stream, StreamExt};
 use reqwest;
 use serde_json::{json, Value};
-use futures::{Stream, StreamExt};
-use bytes::{Bytes, Buf};
+use std::collections::HashMap;
 use std::marker::Unpin;
 
 /// A stream of `Bytes` chunks paired with a buffer, to allow us to read from it
@@ -17,7 +17,10 @@ impl<E, S: Unpin + Stream<Item = Result<Bytes, E>>> BufByteStream<E, S> {
     /// Wrap a stream of chunks or errors (as, for example, would be returned
     /// from `reqwest::Response::bytes_stream`) in a buffered async reader.
     pub fn from_result_stream(stream: S) -> BufByteStream<E, S> {
-        BufByteStream{stream, buffer: Bytes::new()}
+        BufByteStream {
+            stream,
+            buffer: Bytes::new(),
+        }
     }
 
     /// Return a `Vec` of bytes representing all bytes in this reader up to *and
@@ -74,7 +77,7 @@ impl Event {
 /// A stream of `Event`s read from the network.
 #[derive(Debug)]
 pub struct EventStream<S: Unpin + Stream<Item = Result<Bytes, reqwest::Error>>>(
-    BufByteStream<reqwest::Error, S>
+    BufByteStream<reqwest::Error, S>,
 );
 
 /// The possible errors that could occur when decoding an event from a stream.
@@ -87,11 +90,10 @@ pub enum EventStreamError {
 }
 
 impl<S: Unpin + Stream<Item = Result<Bytes, reqwest::Error>>> EventStream<S> {
-
     /// Return the next event in the stream, or an error if the stream
     /// terminates or is malformed.
     pub async fn next(&mut self) -> Result<Event, EventStreamError> {
-        let mut event_id:   Option<Vec<u8>> = None;
+        let mut event_id: Option<Vec<u8>> = None;
         let mut event_type: Option<Vec<u8>> = None;
         let mut raw_event_data = Vec::new();
         let mut started = false;
@@ -99,46 +101,50 @@ impl<S: Unpin + Stream<Item = Result<Bytes, reqwest::Error>>> EventStream<S> {
             let line = self.0.read_line().await;
             match line.as_slice() {
                 b"" => return Err(EventStreamError::EndOfStream),
-                b":\n" => { /* heartbeat message */ },
-                b"\n" =>
+                b":\n" => { /* heartbeat message */ }
+                b"\n" => {
                     if started {
                         let event = Event {
-                            id: event_id.map(|id| {
-                                String::from_utf8_lossy(&id).trim().to_string()
-                            }),
-                            event: event_type.map(|event| {
-                                String::from_utf8_lossy(&event).trim().to_string()
-                            }),
+                            id: event_id.map(|id| String::from_utf8_lossy(&id).trim().to_string()),
+                            event: event_type
+                                .map(|event| String::from_utf8_lossy(&event).trim().to_string()),
                             data: match serde_json::from_slice(&raw_event_data) {
                                 Ok(data) => data,
-                                Err(err) => return Err(EventStreamError::BadData(err, raw_event_data)),
+                                Err(err) => {
+                                    return Err(EventStreamError::BadData(err, raw_event_data))
+                                }
                             },
                         };
-                        return Ok(event)
-                    },
+                        return Ok(event);
+                    }
+                }
                 line => {
                     started = true;
-                    match line.splitn(2, |c| *c == b':').collect::<Vec<_>>().as_slice() {
+                    match line
+                        .splitn(2, |c| *c == b':')
+                        .collect::<Vec<_>>()
+                        .as_slice()
+                    {
                         [b"id", id] => {
                             if event_id.is_some() {
                                 return Err(EventStreamError::BadStreamFormat);
                             } else {
                                 event_id = Some(id.to_vec());
                             }
-                        },
+                        }
                         [b"event", event] => {
                             if event_type.is_some() {
                                 return Err(EventStreamError::BadStreamFormat);
                             } else {
                                 event_type = Some(event.to_vec());
                             }
-                        },
+                        }
                         [b"data", data] => {
                             raw_event_data.extend_from_slice(data);
-                        },
+                        }
                         _ => return Err(EventStreamError::BadStreamFormat),
                     }
-                },
+                }
             }
         }
     }
@@ -147,23 +153,22 @@ impl<S: Unpin + Stream<Item = Result<Bytes, reqwest::Error>>> EventStream<S> {
 #[tokio::main]
 async fn main() {
     let client = reqwest::Client::new();
-    let subscription =
-        json!({
-            "#container": {
-                "mousemove": [
-                    ".clientX",
-                    ".clientY",
-                    "window.innerHeight",
-                    "window.innerWidth",
-                ],
-            },
-            "window": {
-                "resize": [
-                    "window.innerHeight",
-                    "window.innerWidth",
-                ],
-            },
-        });
+    let subscription = json!({
+        "#container": {
+            "mousemove": [
+                ".clientX",
+                ".clientY",
+                "window.innerHeight",
+                "window.innerWidth",
+            ],
+        },
+        "window": {
+            "resize": [
+                "window.innerHeight",
+                "window.innerWidth",
+            ],
+        },
+    });
 
     let draw_body = |mouse: &Option<(u64, u64)>, window: &Option<(u64, u64)>| -> String {
         let mut angle;
@@ -175,10 +180,11 @@ async fn main() {
             let w = *w as f64;
             let h = *h as f64;
             angle = (y - h / 2_f64).atan2(x - w / 2_f64).to_degrees() + 90.0;
-            if angle < 0.0 { angle = angle + 360.0 }
-            let ratio_from_edge = 1.0 -
-                ((y - h / 2_f64).abs() + (x - w / 2_f64).abs())
-                / (h / 2_f64 + w / 2_f64);
+            if angle < 0.0 {
+                angle = angle + 360.0
+            }
+            let ratio_from_edge =
+                1.0 - ((y - h / 2_f64).abs() + (x - w / 2_f64).abs()) / (h / 2_f64 + w / 2_f64);
             saturation = 100.0 * ratio_from_edge;
             lightness = 100.0 - 50.0 * ratio_from_edge;
         } else {
@@ -186,7 +192,8 @@ async fn main() {
             saturation = 100_f64;
             lightness = 50.0;
         }
-        format!("<div id=\"container\" style=\"overflow: hidden; margin: 0px; \
+        format!(
+            "<div id=\"container\" style=\"overflow: hidden; margin: 0px; \
                  padding: 0px; height: 100vh; background:                     \
                  hsl({angle}, {saturation}%, {lightness}%);                   \
                  width: 100vw; text-align: center; position: relative;\">     \
@@ -196,57 +203,84 @@ async fn main() {
                  white; background: rgba(0, 0, 0, 0.4); border-radius: 300pt; \
                  border: none; padding: 100pt; width: 550pt; text-shadow:     \
                  0 0 25pt black\">{angle}°</span></div>",
-                angle = angle as i64,
-                saturation = saturation,
-                lightness = lightness)
+            angle = angle as i64,
+            saturation = saturation,
+            lightness = lightness
+        )
     };
 
-    if let Ok(response) =
-        client.post("http://localhost:1123/?subscribe")
-        .body(subscription.to_string()).send().await {
-            let mut events =
-                EventStream(BufByteStream::from_result_stream(response.bytes_stream()));
+    if let Ok(response) = client
+        .post("http://localhost:1123/?subscribe")
+        .body(subscription.to_string())
+        .send()
+        .await
+    {
+        let mut events = EventStream(BufByteStream::from_result_stream(response.bytes_stream()));
 
-            // The main event loop
-            let mut mouse_location: Option<(u64, u64)> = None;
-            let mut window_size:    Option<(u64, u64)> = None;
-            loop {
-                if let Err(err) =
-                    client.post("http://localhost:1123/")
-                    .body(draw_body(&mouse_location, &window_size))
-                    .send().await {
-                        println!("{:?}", err);
-                        break;
+        // The main event loop
+        let mut mouse_location: Option<(u64, u64)> = None;
+        let mut window_size: Option<(u64, u64)> = None;
+        loop {
+            if let Err(err) = client
+                .post("http://localhost:1123/")
+                .body(draw_body(&mouse_location, &window_size))
+                .send()
+                .await
+            {
+                println!("{:?}", err);
+                break;
+            }
+            let event = match events.next().await {
+                Ok(event) => event,
+                Err(err) => {
+                    println!("{:?}", err);
+                    break;
+                }
+            };
+            // Dispatch on events to update the model
+            if let Some(id) = event.id {
+                match id.as_str() {
+                    "#container" => {
+                        mouse_location = Some((
+                            event.data.get(".clientX").unwrap().as_u64().unwrap(),
+                            event.data.get(".clientY").unwrap().as_u64().unwrap(),
+                        ));
+                        window_size = Some((
+                            event
+                                .data
+                                .get("window.innerWidth")
+                                .unwrap()
+                                .as_u64()
+                                .unwrap(),
+                            event
+                                .data
+                                .get("window.innerHeight")
+                                .unwrap()
+                                .as_u64()
+                                .unwrap(),
+                        ));
                     }
-                let event = match events.next().await {
-                    Ok(event) => event,
-                    Err(err) => {
-                        println!("{:?}", err);
-                        break;
+                    "window" => {
+                        window_size = Some((
+                            event
+                                .data
+                                .get("window.innerWidth")
+                                .unwrap()
+                                .as_u64()
+                                .unwrap(),
+                            event
+                                .data
+                                .get("window.innerHeight")
+                                .unwrap()
+                                .as_u64()
+                                .unwrap(),
+                        ));
                     }
-                };
-                // Dispatch on events to update the model
-                if let Some(id) = event.id {
-                    match id.as_str()  {
-                        "#container" => {
-                            mouse_location =
-                                Some((event.data.get(".clientX").unwrap().as_u64().unwrap(),
-                                      event.data.get(".clientY").unwrap().as_u64().unwrap()));
-                            window_size =
-                                Some((event.data.get("window.innerWidth").unwrap().as_u64().unwrap(),
-                                      event.data.get("window.innerHeight").unwrap().as_u64().unwrap()));
-                        },
-                        "window" => {
-                            window_size =
-                                Some((event.data.get("window.innerWidth").unwrap().as_u64().unwrap(),
-                                      event.data.get("window.innerHeight").unwrap().as_u64().unwrap()));
-                        },
-                        _ => { },
-                    }
+                    _ => {}
                 }
             }
-
-        } else {
-            println!("Couldn't connect to myxine server.");
         }
+    } else {
+        println!("Couldn't connect to myxine server.");
+    }
 }
