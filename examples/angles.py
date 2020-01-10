@@ -29,19 +29,19 @@ class State:
         lightness = 100 - 50 * ratio_from_edge
 
         container_style = f'''
+        background: hsl({angle}, {saturation}%, {lightness}%);
         overflow: hidden;
         margin: 0px;
         padding: 0px;
         height: 100vh;
         width: 100vw;
-        background: hsl({angle}, {saturation}%, {lightness}%);
         text-align: center;
         position: relative;
         '''
         span_style = f'''
+        transform: translate(-50%, -50%) rotate({angle}deg);
         position: absolute;
         top: 50%;
-        transform: translate(-50%, -50%) rotate({angle}deg);
         font-family: Helvetica Neue;
         font-weight: 200;
         font-size: 250pt;
