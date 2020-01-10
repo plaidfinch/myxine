@@ -66,7 +66,7 @@ pub async fn run(socket_addr: SocketAddr) {
                 Ok::<_, hyper::Error>(service_fn(move |request: Request<Body>| {
                     process_request(base_uri.clone(), request)
                 }))
-                }
+            }
         })).fuse();
 
     pin_mut!(serve, heartbeat);
@@ -98,13 +98,16 @@ async fn get_page(path: &str) -> Arc<Page> {
 /// The response for serving a particular file as a static asset with liberal
 /// cache policy and a particular content type.
 macro_rules! static_asset {
-    ($content_type:expr, $path:expr) => {
-        Response::builder()
-            .header("Access-Control-Allow-Origin", "*")
-            .header("Content-Type", $content_type)
-            .header("Cache-Control", "public, max-age=31536000")
-            .body(Body::from(include_str!($path)))
-            .unwrap()
+    ($cache:expr, $content_type:expr, $path:expr) => {
+        {
+            let mut builder = Response::builder()
+                .header("Access-Control-Allow-Origin", "*")
+                .header("Content-Type", $content_type);
+            if $cache {
+                builder = builder.header("Cache-Control", "public, max-age=31536000");
+            }
+            builder.body(Body::from(include_str!($path))).unwrap()
+        }
     };
 }
 
@@ -115,11 +118,11 @@ fn process_special_request(
 ) -> Result<Response<Body>, hyper::Error> {
     Ok(match (method, path) {
         (Method::GET, "/assets/diffhtml.min.js") =>
-            static_asset!("application/javascript", "server/assets/diffhtml.min.js"),
+            static_asset!(true, "application/javascript", "server/assets/diffhtml.min.js"),
         (Method::GET, "/assets/dynamic-page.js") =>
-            static_asset!("application/javascript", "server/assets/dynamic-page.js"),
+            static_asset!(false, "application/javascript", "server/assets/dynamic-page.js"),
         (Method::GET, "/assets/send-event.js") =>
-            static_asset!("application/javascript", "server/assets/send-event.js"),
+            static_asset!(false, "application/javascript", "server/assets/send-event.js"),
         (Method::GET, _) =>
             Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap(),
         _ => Response::builder().status(StatusCode::METHOD_NOT_ALLOWED).body(Body::empty()).unwrap(),
