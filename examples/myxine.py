@@ -16,24 +16,24 @@ def parse_event_stream(lines : Iterator[str]) -> Iterator[Event]:
     defined by the W3C Recommendation on Server-Sent Events:
     https://www.w3.org/TR/eventsource/#event-stream-interpretation
     """
-    event = Event()
+    event, data_lines = Event(), []
     for line in lines:
         if line == '':
-            yield event # Dispatch the event
-            event = Event() # Reset and continue
+            # Dispatch the event
+            event.data = '\n'.join(data_lines)
+            yield event
+            # Reset and continue
+            event, data_lines = Event(), []
         else:
             # Extract the field name and value
-            try: field, value = line.split(':', maxsplit=1)
-            except ValueError:
-                field = line
-                value = ''
-            if len(value) > 0 and value[0] == ' ':
-                value = value[1:] # Trim left-most space in the value, if any
+            try:    field, value = line.split(':', maxsplit=1)
+            except: field, value = line, ''
+            if value.startswith(' '): value = value[1:]
 
             # Set the appropriate field of the event, if any
             if   field == 'event': event.event = value
             elif field == 'id':    event.id    = value
-            elif field == 'data':  event.data += value + '\n'
+            elif field == 'data':  data_lines.append(value)
 
 # The default port on which myxine operates; can be overridden in the below
 # functions if the server is running on another port.
