@@ -35,7 +35,7 @@ impl Page {
     }
 
     /// Render a whole page as HTML (for first page load).
-    pub async fn render(&self, base_url: &str, _this_url: &str) -> Vec<u8> {
+    pub async fn render(&self) -> Vec<u8> {
         match &*self.content.lock().await {
             Content::Dynamic{title, body, ..} => {
                 let subscribers = self.subscribers.lock().await;
@@ -45,7 +45,6 @@ impl Page {
                 let mut bytes = Vec::with_capacity(TEMPLATE_SIZE);
                 write!(&mut bytes,
                        include_str!("page/dynamic.html"),
-                       base_url = base_url,
                        subscription = subscription,
                        debug = cfg!(debug_assertions),
                        title = title,

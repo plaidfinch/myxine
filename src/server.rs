@@ -12,6 +12,7 @@ use futures::future::FutureExt;
 use futures::{select, pin_mut};
 use futures::stream::StreamExt;
 use itertools::Itertools;
+use void::Void;
 
 mod params;
 mod heartbeat;
@@ -26,30 +27,14 @@ lazy_static! {
         = Mutex::new(HashMap::new());
 }
 
-/// Try to unwrap a `Result`, returning it if it is `Ok`. If it is an `Err`,
-/// print the error to stderr, send `()` to the provided `Sender`, and return
-/// early. (The lattermost part of this is why this has to be a macro and not a
-/// function.)
-macro_rules! unwrap_or_abort {
-    ($e:expr) => {
-        match $e {
-            Err(err) => {
-                eprintln!("{}", err);
-                return;
-            },
-            Ok(result) => result,
-        }
-    };
-}
-
 /// Run the main server loop alongside the heartbeat to all SSE clients
 #[allow(clippy::unnecessary_mut_passed)]
-pub async fn run(socket_addr: SocketAddr) {
+pub async fn run(socket_addr: SocketAddr) -> Result<(), Box<dyn std::error::Error>> {
     // Bind the server to this socket address
-    let listener   = unwrap_or_abort!(TcpListener::bind(socket_addr));
-    let local_addr = unwrap_or_abort!(listener.local_addr());
-    let server     = unwrap_or_abort!(hyper::Server::from_tcp(listener));
-    let base_uri   = Arc::new(unwrap_or_abort!(Uri::try_from(format!("http://{}", local_addr))));
+    let listener   = TcpListener::bind(socket_addr)?;
+    let local_addr = listener.local_addr()?;
+    let server     = hyper::Server::from_tcp(listener)?;
+    let base_uri   = Arc::new(Uri::try_from(format!("http://{}", local_addr))?);
 
     // Print the base URI to stdout: in a managed mode, a calling process could
     // read this to determine where to direct its future requests.
@@ -59,20 +44,14 @@ pub async fn run(socket_addr: SocketAddr) {
     let heartbeat = heartbeat::heartbeat_loop().fuse();
 
     // The regular server
-    let serve =
-        server.serve(make_service_fn(move |_| {
-            let base_uri = base_uri.clone();
-            async move {
-                Ok::<_, hyper::Error>(service_fn(move |request: Request<Body>| {
-                    process_request(base_uri.clone(), request)
-                }))
-            }
-        })).fuse();
+    let serve = server.serve(make_service_fn(|_| {
+        async { Ok::<_, Void>(service_fn(process_request)) }
+    })).fuse();
 
     pin_mut!(serve, heartbeat);
     select! {
-        result = serve => result.unwrap_or_else(|err| eprintln!("{}", err)),
-        () = heartbeat => (),
+        result = serve => Ok(result?),
+        () = heartbeat => Ok(()),
     }
 }
 
@@ -129,10 +108,7 @@ fn process_special_request(
     })
 }
 
-async fn process_request(
-    base_uri: Arc<Uri>,
-    request: Request<Body>,
-) -> Result<Response<Body>, hyper::Error> {
+async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper::Error> {
 
     // Disassemble the request into the parts we care about
     let (parts, mut body) = request.into_parts();
@@ -203,9 +179,7 @@ async fn process_request(
                         builder = builder.header("Cache-Control", "no-cache");
                     }
                     if method == Method::GET {
-                        let base_url = base_uri.to_string().trim_end_matches('/').to_owned();
-                        let this_page_url = base_url.clone() + &path;
-                        body = page.render(&base_url, &this_page_url).await.into();
+                        body = page.render().await.into();
                     }
                     builder.body(body).unwrap()
                 },

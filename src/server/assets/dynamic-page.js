@@ -1,4 +1,4 @@
-export function activate(initialSubscription, innerHTML, debugMode) {
+export function activate(initialSubscription, diff, debugMode) {
 
     // The initial subscription at page load time
     let subscription = JSON.parse(initialSubscription);
@@ -45,8 +45,7 @@ export function activate(initialSubscription, innerHTML, debugMode) {
 
     // Actually send an event back to the server
     // This uses a web worker to avoid doing the sending work in the main thread
-    let sendEventWorker =
-        new Worker('http://' + window.location.host + '/.myxine/assets/send-event.js');
+    let sendEventWorker = new Worker('/.myxine/assets/send-event.js');
 
     // Tell the worker where it'll be sending its messages...
     sendEventWorker.postMessage({thisUrl: window.location.href});
@@ -105,7 +104,7 @@ export function activate(initialSubscription, innerHTML, debugMode) {
         // Introduce a yield point so that a burst of updates could mean only
         // one re-draw of the window
         setTimeout(() => {
-            innerHTML(document.body, body);
+            diff.innerHTML(document.body, body);
             updateSubscription();
         });
     }
