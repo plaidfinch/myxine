@@ -47,7 +47,7 @@ class State:
         font-size: 250pt;
         color: white;
         background: rgba(0, 0, 0, 0.4);
-        border-radius: 300pt;
+        border-radius: {300 * ratio_from_edge}pt;
         border: none;
         padding: 100pt;
         width: 550pt;
