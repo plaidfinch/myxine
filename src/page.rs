@@ -92,8 +92,8 @@ impl Page {
                     Content::Dynamic{ref mut updates, ..} => {
                         set_subscriptions(updates, total_subscription).await;
                     }
+                }
             }
-        }
     }
 
     /// Send an empty "heartbeat" message to all clients of a page, if it is
@@ -168,6 +168,22 @@ impl Page {
     /// existed, if any.
     pub async fn set_body(&self, new_body: impl Into<String>) {
         self.content.lock().await.set_body(new_body).await
+    }
+
+    /// Clear the page entirely, removing all subscribers and resetting the page
+    /// title and body to empty.
+    pub async fn clear(&self) {
+        let subscribers = &mut *self.subscribers.lock().await;
+        *subscribers = Subscribers::new();
+        let content = &mut *self.content.lock().await;
+        match content {
+            Content::Static{..} => { },
+            Content::Dynamic{ref mut updates, ..} => {
+                set_subscriptions(updates, AggregateSubscription::empty()).await;
+            }
+        }
+        content.set_title("").await;
+        content.set_body("").await;
     }
 }
 

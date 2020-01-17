@@ -25,6 +25,14 @@ pub struct AggregateSubscription<'a>(
     HashMap<&'a AbsolutePath, HashMap<&'a String, HashSet<&'a Path>>>
 );
 
+impl<'a> AggregateSubscription<'a> {
+    /// Make an empty aggregate subscription (useful when specifying that a page
+    /// should disconnect all open subscribers).
+    pub fn empty() -> AggregateSubscription<'a> {
+        AggregateSubscription(HashMap::new())
+    }
+}
+
 /// The maximum number of messages to buffer before blocking a send. This means
 /// a client can send a burst of up to this number of UI events before it
 /// experiences backpressure. It usually makes sense for this to be much higher

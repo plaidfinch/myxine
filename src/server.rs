@@ -1,15 +1,15 @@
 use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Method, Request, Response, StatusCode, Uri};
+use hyper::{Body, Method, Request, Response, StatusCode};
+use hyper::server::conn::AddrStream;
 use http::request::Parts;
 use http::header::{HeaderMap, HeaderValue};
 use lazy_static::lazy_static;
 use std::sync::Arc;
 use std::collections::{hash_map::Entry, HashMap};
-use std::convert::TryFrom;
-use std::net::{SocketAddr, TcpListener};
+use std::net::SocketAddr;
 use tokio::sync::Mutex;
 use futures::future::FutureExt;
-use futures::{select, pin_mut};
+use futures::{future, select, pin_mut};
 use futures::stream::StreamExt;
 use itertools::Itertools;
 use void::Void;
@@ -29,28 +29,36 @@ lazy_static! {
 
 /// Run the main server loop alongside the heartbeat to all SSE clients
 #[allow(clippy::unnecessary_mut_passed)]
-pub async fn run(socket_addr: SocketAddr) -> Result<(), Box<dyn std::error::Error>> {
-    // Bind the server to this socket address
-    let listener   = TcpListener::bind(socket_addr)?;
-    let local_addr = listener.local_addr()?;
-    let server     = hyper::Server::from_tcp(listener)?;
-    let base_uri   = Arc::new(Uri::try_from(format!("http://{}", local_addr))?);
+pub async fn run(socket_addr: SocketAddr) -> Result<(), hyper::Error> {
 
-    // Print the base URI to stdout: in a managed mode, a calling process could
-    // read this to determine where to direct its future requests.
-    println!("Running at: {}", base_uri.to_string().trim_end_matches('/'));
+    // The regular server
+    let server = hyper::Server::try_bind(&socket_addr)?
+        .serve(make_service_fn(|_socket: &AddrStream| {
+            async { Ok::<_, Void>(service_fn(process_request)) }
+        }));
 
     // The heartbeat loop
     let heartbeat = heartbeat::heartbeat_loop().fuse();
 
-    // The regular server
-    let serve = server.serve(make_service_fn(|_| {
-        async { Ok::<_, Void>(service_fn(process_request)) }
-    })).fuse();
+    // Note the local address to the user
+    println!("Running at: http://{}",
+             server.local_addr().to_string().trim_end_matches('/'));
 
+    // Signals to shut down the server
+    let serve = server.with_graceful_shutdown(async {
+        tokio::signal::ctrl_c().await.unwrap_or(());
+        // Clean-up after the server is killed: set every extant page to the
+        // empty page and remove all their subscriptions
+        let mut pages = PAGES.lock().await;
+        let all_pages = pages.values().cloned().collect::<Vec<_>>();
+        pages.clear();
+        future::join_all(all_pages.iter().map(move |page| page.clear())).await;
+    }).fuse();
+
+    // Run the heartbeat loop and server concurrently
     pin_mut!(serve, heartbeat);
     select! {
-        result = serve => Ok(result?),
+        result = serve => result,
         () = heartbeat => Ok(()),
     }
 }
