@@ -38,15 +38,22 @@ impl Page {
     pub async fn render(&self) -> Vec<u8> {
         match &*self.content.lock().await {
             Content::Dynamic{title, body, ..} => {
-                let subscribers = self.subscribers.lock().await;
-                let aggregate_subscription = subscribers.total_subscription();
-                let subscription =
-                    serde_json::to_string(&aggregate_subscription).unwrap();
-                let mut bytes = Vec::with_capacity(TEMPLATE_SIZE);
+                let debug = cfg!(debug_assertions).to_string();
+                let subscription = {
+                    let subscribers = self.subscribers.lock().await;
+                    let aggregate_subscription = subscribers.total_subscription();
+                    serde_json::to_string(&aggregate_subscription).unwrap()
+                };
+
+                // Pre-allocate a buffer exactly the right size
+                let buffer_size =
+                    TEMPLATE_SIZE + subscription.len() + debug.len() + title.len() + body.len();
+                let mut bytes = Vec::with_capacity(buffer_size);
+
                 write!(&mut bytes,
                        include_str!("page/dynamic.html"),
                        subscription = subscription,
-                       debug = cfg!(debug_assertions),
+                       debug = debug,
                        title = title,
                        body = body)
                     .expect("Internal error: write!() failed on a Vec<u8>");
