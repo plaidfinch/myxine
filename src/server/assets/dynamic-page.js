@@ -4,7 +4,7 @@ export function activate(initialSubscription, diff, debugMode) {
     let subscription = JSON.parse(initialSubscription);
 
     // The new body, cached before it's put in place
-    let body = "";
+    let body = null;
 
     // The initial set of listeners is empty
     let listeners = [];
@@ -103,9 +103,12 @@ export function activate(initialSubscription, diff, debugMode) {
         body = string;
         // Introduce a yield point so that a burst of updates could mean only
         // one re-draw of the window
-        setTimeout(() => {
-            diff.innerHTML(document.body, body);
-            updateSubscription();
+        window.requestAnimationFrame(timestamp => {
+            if (body !== null) {
+                diff.innerHTML(document.body, body);
+                body = null;
+                updateSubscription();
+            }
         });
     }
 
