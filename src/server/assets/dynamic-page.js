@@ -101,8 +101,7 @@ export function activate(initialSubscription, diff, debugMode) {
     // Set the body
     function setBodyTo(string) {
         body = string;
-        // Introduce a yield point so that a burst of updates could mean only
-        // one re-draw of the window
+        // Redraw the body before the next repaint (but not right now yet)
         window.requestAnimationFrame(timestamp => {
             if (body !== null) {
                 diff.innerHTML(document.body, body);
