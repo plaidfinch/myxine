@@ -145,9 +145,9 @@ impl Content {
                 Content::Dynamic{ref mut title, ref mut updates, ..} => {
                     let new_title = new_title.into();
                     if new_title != *title {
-                        *title = new_title.clone();
-                        let event = if *title != "" {
-                            EventBuilder::new(&new_title).event_type("title")
+                        *title = new_title;
+                        let event = if title != "" {
+                            EventBuilder::new(title).event_type("title")
                         } else {
                             EventBuilder::new(".").event_type("clear-title")
                         };
@@ -174,9 +174,9 @@ impl Content {
                 Content::Dynamic{ref mut body, ref mut updates, ..} => {
                     let new_body = new_body.into();
                     if new_body != *body {
-                        *body = new_body.clone();
-                        let event = if *body != "" {
-                            EventBuilder::new(&new_body).event_type("body")
+                        *body = new_body;
+                        let event = if body != "" {
+                            EventBuilder::new(body).event_type("body")
                         } else {
                             EventBuilder::new(".").event_type("clear-body")
                         };
