@@ -19,8 +19,8 @@ class State:
         if y is not None: self.y = y
 
     def draw(self):
-        angle = round(degrees(atan2(self.y - self.h/2,
-                                    self.x - self.w/2)) + 90)
+        angle = degrees(atan2(self.y - self.h/2,
+                              self.x - self.w/2)) + 90
         if angle < 0: angle = angle + 360
         ratio_from_edge = \
             1 - (abs(self.y - self.h/2) +
@@ -29,7 +29,7 @@ class State:
         lightness = 100 - 50 * ratio_from_edge
 
         container_style = f'''
-        background: hsl({angle}, {saturation}%, {lightness}%);
+        background: hsl({round(angle)}, {round(saturation)}%, {round(lightness)}%);
         overflow: hidden;
         margin: 0px;
         padding: 0px;
@@ -39,7 +39,7 @@ class State:
         position: relative;
         '''
         span_style = f'''
-        transform: translate(-50%, -50%) rotate({angle}deg);
+        transform: translate(-50%, -50%) rotate({round(angle, 2)}deg);
         position: absolute;
         top: 50%;
         font-family: Helvetica Neue;
@@ -56,7 +56,7 @@ class State:
         html = f'''
         <div id="container" style="{container_style}">
             <span style="{span_style}">
-                {angle}°
+                {round(angle)}°
             </span>
         </div>'''
         return html
