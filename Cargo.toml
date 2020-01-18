@@ -15,8 +15,11 @@ tokio = { version = "0.2.4", features = ["full"] }
 lazy_static = "1.4.0"
 percent-encoding = "2.1.0"
 itertools = "0.8.2"
-web-view = { version = "0.5.4", optional = true }
+web-view = { version = "0.6.0", optional = true }
 
 [features]
 windowing = [ "web-view" ]
 default = [ "windowing" ]
+
+[dev-dependencies]
+reqwest = "0.10"

@@ -216,7 +216,7 @@ async fn process_request(
                         // If we are running in windowing mode, make sure we
                         // have a window for this path. Otherwise, this does
                         // nothing.
-                        window_manager.ensure_window(base_uri.to_string(), path, title);
+                        window_manager.ensure_window(format!("http://localhost:8000{}", path.trim_end_matches('/')), path, title);
                     },
                     Err(_) => return Ok(bad_request("Invalid UTF-8 in POST data (only UTF-8 is supported).")),
                 };
