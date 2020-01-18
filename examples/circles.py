@@ -4,22 +4,16 @@ from uuid import *
 import random
 import myxine
 
-current_z_index = 0
-
 class Circle:
-    # Parameters (pixels)
-    x: float  # x-position
-    y: float  # y-position
-    r: float  # radius
+    current_z_index = 0  # increasing counter for z-index of circles
 
     def __init__(self, *, x, y, r):
-        self.hue = random.uniform(0, 360)
-        self.x = x
-        self.y = y
-        self.r = r
-        global current_z_index
-        self.z = current_z_index
-        current_z_index += 1
+        self.hue = random.uniform(0, 360) # random hue
+        self.x = x  # x-coordinate for origin
+        self.y = y  # y-coordinate for origin
+        self.r = r  # radius of circle
+        self.z = Circle.current_z_index # put it on top of all the others
+        Circle.current_z_index += 1
 
     def draw(self, current=False):
         border_width = 2;
@@ -34,12 +28,9 @@ class Circle:
                                border-radius: {self.r}px;"></div>'''
 
 class State:
-    # The currently-in-progress circle, if any
-    current = None
-    # The already-drawn circles
-    rest = []
-    # The current mouse location
-    (x, y) = (0, 0)
+    current = None   # The currently-in-progress circle, if any
+    rest = []        # The already-drawn circles
+    (x, y) = (0, 0)  # The current mouse location
 
     def update(self, e):
         if e.event() == 'mousedown':
@@ -61,11 +52,20 @@ class State:
             circles.append(self.current.draw(current=True))
         for circle in self.rest:
             circles.append(circle.draw())
-        return f'''<div id="container"
-                        style="position: relative;
-                               height: 100vh;
-                               width: 100vw;
-                               overflow: hidden;">{''.join(circles)}</div>'''
+        if circles != []:
+            content = ''.join(circles)
+        else:
+            content = '''<span style="transform: translate(-50%, -100%);
+                                      text-align: center; width: 100vw;
+                                      position: absolute;
+                                      top: 50%; left: 50%;
+                                      font-family: Helvetica Neue;
+                                      font-size: 50pt; color: darkgrey">
+                            Click & drag to make art!
+                         </span>'''
+        return f'''<div style="position: relative; padding: 0px;
+                               height: 100vh; width: 100vw;
+                               overflow: hidden;">{content}</div>'''
 
 # A description of the events we wish to monitor
 subscription = {
