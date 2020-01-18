@@ -8,7 +8,7 @@ class Circle:
     current_z_index = 0  # increasing counter for z-index of circles
 
     def __init__(self, *, x, y, r):
-        self.hue = random.uniform(0, 360) # random hue
+        self.hue = round(random.uniform(0, 360)) # random hue
         self.x = x  # x-coordinate for origin
         self.y = y  # y-coordinate for origin
         self.r = r  # radius of circle
@@ -18,14 +18,14 @@ class Circle:
     def draw(self, current=False):
         border_width = 2;
         return f'''<div style="position: absolute;
-                               top: {self.y - self.r/2 - border_width/2}px;
-                               left: {self.x - self.r/2 - border_width/2}px;
-                               width: {self.r}px;
-                               height: {self.r}px;
+                               top: {round(self.y - self.r/2 - border_width/2)}px;
+                               left: {round(self.x - self.r/2 - border_width/2)}px;
+                               width: {round(self.r)}px;
+                               height: {round(self.r)}px;
                                z-index: {self.z};
                                background: hsla({self.hue}, 100%, 75%, 25%);
                                border: {border_width}px solid hsla({self.hue}, 50%, 50%, 75%);
-                               border-radius: {self.r}px;"></div>'''
+                               border-radius: {round(self.r)}px;"></div>'''
 
 class State:
     current = None   # The currently-in-progress circle, if any
@@ -48,10 +48,10 @@ class State:
 
     def draw(self):
         circles = []
-        if self.current is not None:
-            circles.append(self.current.draw(current=True))
         for circle in self.rest:
             circles.append(circle.draw())
+        if self.current is not None:
+            circles.append(self.current.draw(current=True))
         if circles != []:
             content = ''.join(circles)
         else:
