@@ -3,9 +3,6 @@ export function activate(initialSubscription, diff, debugMode) {
     // The initial subscription at page load time
     let subscription = JSON.parse(initialSubscription);
 
-    // The new body, cached before it's put in place
-    let body = null;
-
     // The initial set of listeners is empty
     let listeners = [];
 
@@ -102,20 +99,15 @@ export function activate(initialSubscription, diff, debugMode) {
     }
 
     // Set the body
-    function setBodyTo(string) {
-        // Store the body, not setting it in the DOM yet
-        body = string;
+    function setBodyTo(body) {
         // Cancel the previous animation frame, if any
         if (animationId !== null) {
             window.cancelAnimationFrame(animationId);
         }
         // Redraw the body before the next repaint (but not right now yet)
         animationId = window.requestAnimationFrame(timestamp => {
-            if (body !== null) {
-                diff.innerHTML(document.body, body);
-                body = null;
-                updateSubscription();
-            }
+            diff.innerHTML(document.body, body);
+            updateSubscription();
         });
     }
 
