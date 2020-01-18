@@ -9,6 +9,9 @@ export function activate(initialSubscription, diff, debugMode) {
     // The initial set of listeners is empty
     let listeners = [];
 
+    // Current animation frame callback ID, if any
+    let animationId = null;
+
     // Print debug info if in debug build mode
     function debug(string) {
         if (debugMode) {
@@ -100,9 +103,14 @@ export function activate(initialSubscription, diff, debugMode) {
 
     // Set the body
     function setBodyTo(string) {
+        // Store the body, not setting it in the DOM yet
         body = string;
+        // Cancel the previous animation frame, if any
+        if (animationId !== null) {
+            window.cancelAnimationFrame(animationId);
+        }
         // Redraw the body before the next repaint (but not right now yet)
-        window.requestAnimationFrame(timestamp => {
+        animationId = window.requestAnimationFrame(timestamp => {
             if (body !== null) {
                 diff.innerHTML(document.body, body);
                 body = null;
