@@ -5,27 +5,24 @@ import random
 import myxine
 
 class Circle:
-    current_z_index = 0  # increasing counter for z-index of circles
-
     def __init__(self, *, x, y, r):
         self.hue = round(random.uniform(0, 360)) # random hue
         self.x = x  # x-coordinate for origin
         self.y = y  # y-coordinate for origin
         self.r = r  # radius of circle
-        self.z = Circle.current_z_index # put it on top of all the others
-        Circle.current_z_index += 1
 
     def draw(self, current=False):
-        border_width = 2;
+        border_width = 2
+        radius = round(self.r)
+        diameter = radius * 2
         return f'''<div style="position: absolute;
-                               top: {round(self.y - self.r/2 - border_width/2)}px;
-                               left: {round(self.x - self.r/2 - border_width/2)}px;
-                               width: {round(self.r)}px;
-                               height: {round(self.r)}px;
-                               z-index: {self.z};
+                               top: {self.y - radius - border_width/2}px;
+                               left: {self.x - radius - border_width/2}px;
+                               width: {diameter}px;
+                               height: {diameter}px;
                                background: hsla({self.hue}, 100%, 75%, 25%);
                                border: {border_width}px solid hsla({self.hue}, 50%, 50%, 75%);
-                               border-radius: {round(self.r)}px;"></div>'''
+                               border-radius: {radius}px;"></div>'''
 
 class State:
     current = None   # The currently-in-progress circle, if any
@@ -43,8 +40,8 @@ class State:
             self.x = e['.x']
             self.y = e['.y']
             if self.current is not None:
-                self.current.r = 2* sqrt((self.x - self.current.x)**2 +
-                                         (self.y - self.current.y)**2)
+                self.current.r = sqrt((self.x - self.current.x)**2 +
+                                      (self.y - self.current.y)**2)
 
     def draw(self):
         circles = []
