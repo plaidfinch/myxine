@@ -31,11 +31,13 @@ class State:
 
     def update(self, e):
         if e.event() == 'mousedown':
+            if self.current is not None:
+                self.rest.append(self.current)
             self.current = Circle(x = self.x, y = self.y, r = 0)
         elif e.event() == 'mouseup':
             if self.current is not None:
                 self.rest.append(self.current)
-                self.current = None
+            self.current = None
         elif e.event() == 'mousemove':
             self.x = e['.x']
             self.y = e['.y']
