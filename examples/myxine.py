@@ -1,4 +1,5 @@
 from typing import Optional, Iterator, Dict, List, Any
+from copy import deepcopy
 from dataclasses import *
 import requests
 from requests import RequestException
@@ -44,33 +45,39 @@ class PageEvent:
     where the data is a dictionary from strings to values, representing the
     fields requested by the subscription.
     """
-    __event: str
-    __id:    str
-    __data:  str
+    type:   str
+    target: str
+    __data: str
     __mapping: Optional[Dict[str, Any]] = None
+    __immutable: bool = False
 
     def __init__(self, wrapped : Event) -> None:
-        self.__event = wrapped.event
-        self.__id    = wrapped.id
-        self.__data  = wrapped.data
+        self.type = wrapped.event
+        self.target = wrapped.id
+        self.__data = wrapped.data
+        self.__immutable = True
 
-    def event(self) -> str:
-        """Get the event type of this event."""
-        return self.__event
-
-    def id(self) -> str:
-        """Get the event id of this event."""
-        return self.__id
-
-    def data(self) -> str:
-        """Get the raw data of this event as a string."""
-        return self.__data
-
-    def __getitem__(self, key : str) -> Optional[Any]:
+    # Accessing fields looks them up in the dictionary
+    def __getattr__(self, key : str) -> Any:
         if self.__mapping is None:
+            # Delay parsing until first lookup, then cache results
             try: self.__mapping = json.loads(self.__data)
             except: self.__mapping = {}
-        return self.__mapping.get(key)
+        if key == 'id':
+            try: return self.__mapping['currentTarget']['id']
+            except: return None
+        val = self.__mapping.get(key)
+        if val is not None:
+            return deepcopy(val)
+        else:
+            raise AttributeError(f"{self.__class__.__name__} object has no attribute {key}")
+
+    # Block setting attributes
+    def __setattr__(self, key : str, val : str) -> None:
+        if self.__immutable and key != '_PageEvent__mapping':
+            raise AttributeError(f"{self.__class__.__name__} object is immutable: {key} cannot be set")
+        else:
+            super().__setattr__(key, val)
 
 def page_url(path : str, port : int = MYXINE_DEFAULT_PORT) -> str:
     """Normalize a port & path to give the localhost url for that location."""
@@ -88,7 +95,8 @@ def subscribe(path : str,
         response = requests.post(url, stream=True, json=subscription)
         if response.encoding is None: response.encoding = 'utf-8'
         for event in parse_event_stream(response.iter_lines(decode_unicode=True)):
-            yield PageEvent(event)
+            if event.data is not '': # filter out heartbeat events
+                yield PageEvent(event)
     except RequestException as e:
         raise ValueError("Connection issue with myxine server (is it running?):", e)
 

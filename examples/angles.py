@@ -4,19 +4,17 @@ import myxine
 
 class State:
     # The dimensions of the browser window
-    (w, h) = (1, 1)
+    (w, h) = (500, 500)
     # The location of the cursor relative to the browser window
     (x, y) = (0.5, 0.5 - 0.000001)
 
     def update(self, event):
-        w = event['window.innerWidth']
-        h = event['window.innerHeight']
-        x = event['.clientX']
-        y = event['.clientY']
-        if w is not None: self.w = w
-        if h is not None: self.h = h
-        if x is not None: self.x = x
-        if y is not None: self.y = y
+        if event.type == 'mousemove':
+            self.x = event.x
+            self.y = event.y
+        elif event.type == 'resize':
+            # TODO: Get window size by asking browser for it
+            pass
 
     def draw(self):
         angle = degrees(atan2(self.y - self.h/2,
@@ -63,23 +61,7 @@ class State:
 
 # A description of the events we wish to monitor
 subscription = {
-    # Look for events on this element (id="container")
-    '#container': {
-        # Look for this event:
-        'mousemove': [
-            # Report these properties back when the event fires:
-            '.clientX', # Property of the event
-            '.clientY',
-            'window.innerHeight', # Sub-property of top-level object
-            'window.innerWidth'
-        ],
-    },
-    'window': {
-        'resize': [
-            'window.innerHeight',
-            'window.innerWidth'
-        ]
-    }
+    'window': ['resize', 'mousemove']
 }
 
 def main():
@@ -90,6 +72,8 @@ def main():
 
         # Make a new state object
         state = State()
+
+        # TODO: Ask the page for its size
 
         # Draw the page for the first time
         myxine.update(path, state.draw())

@@ -29,18 +29,18 @@ class State:
     rest = []        # The already-drawn circles
     (x, y) = (0, 0)  # The current mouse location
 
-    def update(self, e):
-        if e.event() == 'mousedown':
+    def update(self, event):
+        if event.type == 'mousedown':
             if self.current is not None:
                 self.rest.append(self.current)
             self.current = Circle(x = self.x, y = self.y, r = 0)
-        elif e.event() == 'mouseup':
+        elif event.type == 'mouseup':
             if self.current is not None:
                 self.rest.append(self.current)
             self.current = None
-        elif e.event() == 'mousemove':
-            self.x = e['.x']
-            self.y = e['.y']
+        elif event.type == 'mousemove':
+            self.x = event.x
+            self.y = event.y
             if self.current is not None:
                 self.current.r = sqrt((self.x - self.current.x)**2 +
                                       (self.y - self.current.y)**2)
@@ -68,11 +68,7 @@ class State:
 
 # A description of the events we wish to monitor
 subscription = {
-    'window': {
-        'mousemove': ['.x', '.y'],
-        'mouseup': [],
-        'mousedown': [],
-    },
+    'window': ['mousemove', 'mouseup', 'mousedown'],
 }
 
 def main():
