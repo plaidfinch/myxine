@@ -108,8 +108,8 @@ fn process_special_request(
             static_asset!(true, "application/javascript", "server/assets/diffhtml.min.js"),
         (Method::GET, "/assets/dynamic-page.js") =>
             static_asset!(false, "application/javascript", "server/assets/dynamic-page.js"),
-        (Method::GET, "/assets/send-event.js") =>
-            static_asset!(false, "application/javascript", "server/assets/send-event.js"),
+        (Method::GET, "/assets/post.js") =>
+            static_asset!(false, "application/javascript", "server/assets/post.js"),
         (Method::GET, _) =>
             Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap(),
         _ => Response::builder().status(StatusCode::METHOD_NOT_ALLOWED).body(Body::empty()).unwrap(),

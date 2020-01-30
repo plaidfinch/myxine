@@ -28,19 +28,28 @@ export function activate(initialSubscription, diff, debugMode) {
     const htmlElement =
           /^(html|base|head|link|meta|style|title|body|address|article|aside|footer|header|h1|h2|h3|h4|h5|h6|hgroup|main|nav|section|blockquote|dd|div|dl|dt|figcaption|figure|hr|li|main|ol|p|pre|ul|a|abbr|b|bdi|bdo|br|cite|code|data|dfn|em|i|kbd|mark|q|rb|rp|rt|rtc|ruby|s|samp|small|span|strong|sub|sup|time|u|var|wbr|area|audio|img|map|track|video|embed|iframe|object|param|picture|source|canvas|noscript|script|del|ins|caption|col|colgroup|table|tbody|td|tfoot|th|thead|tr|button|datalist|fieldset|form|input|label|legend|meter|optgroup|option|output|progress|select|textarea|details|dialog|menu|summary|slot|template|acronym|applet|basefont|bgsound|big|blink|center|command|content|dir|element|font|frame|frameset|image|isindex|keygen|listing|marquee|menuitem|multicol|nextid|nobr|noembed|noframes|plaintext|shadow|spacer|strike|tt|xmp)$/;
 
-    // Get a list of objects by CSS query selector or a path in the DOM
+    // Get a list of objects by CSS queryAll selector or a path in the DOM
     // These should be unambiguous, provided that no top-level DOM object has a
     // name which is the same as a valid HTML tag name -- and this is indeed the
     // case in our pages
-    function query(q) {
+    function queryAll(q, all) {
+        // Determine if we should match all, or just one
+        if (typeof all === 'undefined') {
+            all = true;
+        }
+        // Trim the query to remove spaces for matching below
         q = q.trim();
         // If the query starts with a valid HTML element or any non-word
         // character, assume it's a CSS selector
         if (/^\W/.test(q) || htmlElement.test(q.split(/\b/, 1)[0])) {
             try {
-                return Array.from(document.querySelectorAll(q));
+                if (all) {
+                    return Array.from(document.querySelectorAll(q));
+                } else {
+                    return document.querySelector(q);
+                }
             } catch(err) {
-                debug("Selector lookup query failed: '" + q + "': " + err);
+                debug("Selector lookup queryAll failed: '" + q + "': " + err);
                 return [];
             }
         // Otherwise, assume it's an object lookup
@@ -49,10 +58,18 @@ export function activate(initialSubscription, diff, debugMode) {
             let object = window;
             segments.forEach(segment => object = object[segment]);
             if (typeof object !== 'undefined') {
-                return [object];
+                if (all) {
+                    return [object];
+                } else {
+                    return object;
+                }
             } else {
-                debug("Object lookup query failed: '" + q + "'");
-                return [];
+                debug("Object lookup queryAll failed: '" + q + "'");
+                if (all) {
+                    return [];
+                } else {
+                    return null;
+                }
             }
         }
     }
@@ -70,18 +87,41 @@ export function activate(initialSubscription, diff, debugMode) {
         return result;
     }
 
-    // Actually send an event back to the server
-    // This uses a web worker to avoid doing the sending work in the main thread
-    let sendEventWorker = new Worker('/.myxine/assets/send-event.js');
+    // NOTE: Why do we use separate workers for events and query results, but
+    // only one worker for all events? Well, it matters that events arrive in
+    // order so using one worker forces them to be linearized. And having a
+    // second, separate worker for query results means that query results can be
+    // processed concurrently with events, since their interleaving doesn't
+    // matter.
 
-    // Tell the worker where it'll be sending its messages...
-    sendEventWorker.postMessage({thisUrl: window.location.href});
+    // Actually send an event back to the server
+    let sendEventWorker = new Worker('/.myxine/assets/post.js');
+
     function sendEvent(targetQuery, targetId, eventType, returnData) {
+        let url = window.location.href
+            + "?event="  + encodeURIComponent(eventType)
+            + "&target=" + encodeURIComponent(targetQuery)
+            + "&id="     + encodeURIComponent(targetId);
         sendEventWorker.postMessage({
-            targetQuery: targetQuery,
-            targetId: targetId,
-            eventType: eventType,
-            returnData: returnData,
+            url: url,
+            contentType: "application/json",
+            data: JSON.stringify(returnData),
+        });
+    }
+
+    // Actually send a query result back to the server
+    let sendQueryResultsWorker = new Worker('/.myxine/assets/post.js');
+
+    function sendQueryResults(id, results) {
+        let url = window.location.href
+            + "?query="  + encodeURIComponent(id);
+        sendQueryResultsWorker.postMessage({
+            url: url,
+            contentType: "application/json",
+            data: JSON.stringify({
+                id: id,
+                results: results,
+            }),
         });
     }
 
@@ -97,7 +137,7 @@ export function activate(initialSubscription, diff, debugMode) {
             debug("Processing target path: " + targetQuery);
             events.forEach(eventType => {
                 debug("Processing event type: " + eventType);
-                const targets = query(targetQuery); // All things matching query
+                const targets = queryAll(targetQuery);
                 targets.forEach(eventTarget => {
                     const eventListener = (function (event) {
                         let returnData = primitiveProperties(event);
@@ -110,9 +150,13 @@ export function activate(initialSubscription, diff, debugMode) {
                         // can use the id to look up more things.
                         returnData.currentTarget = {};
                         let targetId = event.currentTarget.id;
+                        if (typeof targetId !== 'string') {
+                            targetId = '';
+                        }
                         if (typeof targetId === 'string') {
                             returnData.currentTarget.id = targetId;
                         }
+                        // Actually send the event
                         sendEvent(targetQuery, targetId, eventType, returnData);
                     });
                     if (eventTarget !== null) {
@@ -175,7 +219,32 @@ export function activate(initialSubscription, diff, debugMode) {
     // Reload the *whole* page from the server
     // Called when transitioning to static page, among other situations
     function refresh(event) {
-        location.reload();
+        window.location.reload();
+    }
+
+    // Query the page for a particular list of values
+    function query(event) {
+        const id = event.id;
+        const data = JSON.parse(event.data);
+        const results = {};
+        try {
+            data.forEach(([target, properties]) => {
+                results[target] = [];
+                const object = queryAll(target, false);  // get just one
+                properties.forEach(property => {
+                    let value = object[property];
+                    let type = typeof value;
+                    // If it's not a primitive type, don't return it
+                    if (!(type === 'boolean' || type === 'number' || type === 'string')) {
+                        value = null;
+                    }
+                    results[target].push(value);
+                });
+            });
+        } catch(err) {
+            debug("Could not query page properly: " + err);
+        }
+        sendQueryResults(id, results);
     }
 
     // Actually set up SSE...
@@ -186,6 +255,7 @@ export function activate(initialSubscription, diff, debugMode) {
     sse.addEventListener("clear-title", clearTitle);
     sse.addEventListener("refresh", refresh);
     sse.addEventListener("subscribe", subscribe);
+    sse.addEventListener("queryAll", query);
 
     // Make sure the subscription gets updated once the whole page is loaded
     if (document.readyState === "loading") {
