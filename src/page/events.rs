@@ -8,8 +8,6 @@ use futures::future;
 use std::string::ToString;
 use uuid::Uuid;
 
-mod path;
-pub use path::{Path, AbsolutePath, RelativePath};
 use super::sse;
 
 // Exterior interface is opaque type `Subscription` which can only be
@@ -17,12 +15,12 @@ use super::sse;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Subscription(
-    HashMap<AbsolutePath, HashMap<String, HashSet<Path>>>
+    HashMap<String, HashSet<String>>
 );
 
 #[derive(Debug, Clone, Serialize)]
 pub struct AggregateSubscription<'a>(
-    HashMap<&'a AbsolutePath, HashMap<&'a String, HashSet<&'a Path>>>
+    HashMap<&'a String, HashSet<&'a String>>
 );
 
 impl<'a> AggregateSubscription<'a> {
@@ -43,12 +41,11 @@ const EVENT_BUFFER_SIZE: usize = 10_000;
 #[derive(Debug)]
 pub struct Subscribers {
     servers: HashMap<Uuid, Arc<sse::BufferedServer>>,
-    routes: HashMap<AbsolutePath, HashMap<String, Vec<Sink>>>,
+    routes: HashMap<String, HashMap<String, Vec<Sink>>>,
 }
 
 #[derive(Debug, Clone)]
 struct Sink {
-    return_paths: HashSet<Path>,
     server: Weak<sse::BufferedServer>,
 }
 
@@ -100,13 +97,13 @@ impl Subscribers {
         let server = Arc::new(server);
         // Add a reference to the server, with the appropriate property filter,
         // to each place corresponding to its desired subscription.
-        for (path, events) in subscription.0 {
+        for (target, events) in subscription.0 {
             let existing_events =
-                self.routes.entry(path).or_insert_with(HashMap::new);
-            for (event, return_paths) in events {
+                self.routes.entry(target).or_insert_with(HashMap::new);
+            for event in events {
                 let existing_sinks =
                     existing_events.entry(event).or_insert_with(Vec::new);
-                existing_sinks.push(Sink{server: Arc::downgrade(&server), return_paths});
+                existing_sinks.push(Sink{server: Arc::downgrade(&server)});
             }
         }
         // Add the server to the top-level list of server references
@@ -121,26 +118,24 @@ impl Subscribers {
     /// returns the union of all now-current subscriptions.
     pub async fn send_event<'a>(&'a mut self,
                                 event_type: &str,
-                                event_path: &AbsolutePath,
-                                event_data: &HashMap<Path, Value>
+                                event_target: &str,
+                                _event_id: &str, // We don't use this right now,
+                                // since it's more helpful to the user to hand
+                                // them the original query they specified, and
+                                // place the specific id in .currentTarget.id.
+                                event_data: &HashMap<String, Value>
     ) -> Option<AggregateSubscription<'a>> {
         let mut subscription_changed = false;
         if let Some(sinks) =
-            self.routes.get_mut(event_path).and_then(|m| m.get_mut(event_type)) {
+            self.routes.get_mut(event_target).and_then(|m| m.get_mut(event_type)) {
                 let mut sent = future::join_all(sinks.iter_mut().map(|sink| {
-                    // Filter the fields of the event to those expected by this
-                    // particular subscriber
-                    let filtered: HashMap<&Path, &Value> =
-                        sink.return_paths.iter().filter_map(|path| {
-                            event_data.get(path).map(|value| (path, value))
-                        }).collect();
                     // Serialize the fields to JSON
-                    let data = serde_json::to_string(&filtered)
+                    let data = serde_json::to_string(&event_data)
                         .expect("Serializing fields to a string shouldn't fail");
                     // Build a text/event-stream message to send to subscriber
                     let message =
                         EventBuilder::new(&data)
-                        .id(&event_path.to_string())
+                        .id(&event_target.to_string())
                         .event_type(event_type)
                         .build();
                     // Make a future for sending the message to the subscriber
@@ -161,7 +156,7 @@ impl Subscribers {
                 if sinks.len() != previous_len { subscription_changed = true }
             }
         // Prune the routes to remove empty hashmaps
-        if let Some(events) = self.routes.get_mut(event_path) {
+        if let Some(events) = self.routes.get_mut(event_target) {
             if let Some(sinks) = events.get_mut(event_type) {
                 if sinks.is_empty() {
                     events.remove(event_type);
@@ -169,7 +164,7 @@ impl Subscribers {
                 }
             }
             if events.is_empty() {
-                self.routes.remove(event_path);
+                self.routes.remove(event_target);
                 subscription_changed = true;
             }
         }
@@ -226,17 +221,8 @@ impl Subscribers {
     /// Calculate the union of all subscriptions currently active
     pub fn total_subscription(&self) -> AggregateSubscription<'_> {
         let subscription =
-            self.routes.iter().map(|(id, events)| {
-                (id,
-                 events.iter().map(|(event_type, sinks)| {
-                     (event_type,
-                      sinks.iter().fold(HashSet::new(), |all, Sink{return_paths, ..}| {
-                          return_paths.iter().fold(all, |mut all, return_path| {
-                              all.insert(return_path);
-                              all
-                          })
-                      }))
-                 }).collect())
+            self.routes.iter().map(|(path, events)| {
+                (path, events.keys().collect())
             }).collect();
         AggregateSubscription(subscription)
     }

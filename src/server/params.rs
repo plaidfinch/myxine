@@ -1,10 +1,7 @@
 use std::collections::HashMap;
 use percent_encoding::percent_decode;
 use std::borrow::Cow;
-use std::convert::TryFrom;
 use uuid::Uuid;
-
-use crate::page::events::AbsolutePath;
 
 /// Parsed parameters from a query string for a GET/HEAD request.
 pub(crate) enum GetParams {
@@ -32,7 +29,7 @@ pub(crate) enum PostParams {
     DynamicPage{title: String},
     StaticPage,
     SubscribeEvents{uuid: Option<Uuid>},
-    PageEvent{event: String, path: AbsolutePath},
+    PageEvent{event: String, target: String, id: String},
 }
 
 impl PostParams {
@@ -55,18 +52,12 @@ impl PostParams {
         } else if let Some(event) =
             param_as_str("event", &params)?.map(String::from)
         {
-            if let Some(id) = param_as_str("id", &params)? {
-                if constrained_to_keys(&params, &["event", "id"])
-                    && event != "" && id != ""
-                {
-                    if let Ok(path) = AbsolutePath::try_from("#".to_string() + id) {
-                        return Some(PostParams::PageEvent{event, path});
-                    }
-                }
-            } else if let Some(path) = param_as_str("path", &params)? {
-                if constrained_to_keys(&params, &["event", "path"]) && event != "" {
-                    if let Ok(path) = AbsolutePath::try_from(path.to_string()) {
-                        return Some(PostParams::PageEvent{event, path});
+            if let Some(target) = param_as_str("target", &params)?.map(String::from) {
+                if let Some(id) = param_as_str("id", &params)?.map(String::from) {
+                    if constrained_to_keys(&params, &["event", "target", "id"])
+                        && event != "" && target != ""
+                    {
+                        return Some(PostParams::PageEvent{event, target, id})
                     }
                 }
             }

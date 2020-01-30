@@ -11,7 +11,7 @@ pub mod sse;
 pub mod events;
 mod content;
 
-use events::{Subscribers, Subscription, AggregateSubscription, AbsolutePath, Path};
+use events::{Subscribers, Subscription, AggregateSubscription};
 use content::Content;
 
 /// A `Page` pairs some page `Content` (either dynamic or static) with a set of
@@ -88,11 +88,12 @@ impl Page {
     /// result!
     pub async fn send_event(&self,
                             event_type: &str,
-                            event_path: &AbsolutePath,
-                            event_data: &HashMap<Path, Value>) {
+                            event_target: &str,
+                            event_id: &str,
+                            event_data: &HashMap<String, Value>) {
         if let Some(total_subscription) =
             self.subscribers.lock().await
-            .send_event(event_type, event_path, event_data).await {
+            .send_event(event_type, event_target, event_id, event_data).await {
                 let content = &mut *self.content.lock().await;
                 match content {
                     Content::Static{..} => { },
