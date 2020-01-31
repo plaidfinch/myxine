@@ -83,7 +83,7 @@ async fn get_page(path: &str) -> Arc<Page> {
 }
 
 /// The response for serving a particular file as a static asset with liberal
-/// cache policy and a particular content type.
+/// cache policy (if specified) and a particular content type.
 macro_rules! static_asset {
     ($cache:expr, $content_type:expr, $path:expr) => {
         {
@@ -116,6 +116,10 @@ fn process_special_request(
     })
 }
 
+// The location of the special path for myxine's assets
+// (this path and its subpaths cannot be treated as ordinary
+const MYXINE_SPECIAL_PATH: &str = "/.myxine/";
+
 async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper::Error> {
 
     // Disassemble the request into the parts we care about
@@ -145,8 +149,9 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
     }
 
     // Shortcut to special processing if the path is in our reserved namespace
-    if path.starts_with("/.myxine/") {
-        return process_special_request(method, &path[8..], query);
+    if path.starts_with(MYXINE_SPECIAL_PATH) {
+        let subpath = &path[MYXINE_SPECIAL_PATH.len() - 1 ..];
+        return process_special_request(method, subpath, query);
     }
 
     // Get the page at this path
@@ -203,6 +208,8 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
 
         Method::POST => {
             // Slurp the body into memory
+            // TODO: delay this until we need to do it by refactoring out into a
+            // separate function?
             let mut body_bytes: Vec<u8> = Vec::new();
             while let Some(chunk) = body.next().await {
                 let chunk = chunk?;
@@ -227,25 +234,54 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                         return Ok(bad_request("Invalid ASCII in Content-Type header.")),
                 };
 
+            // Determine if the endpoint is a "special" path, which cannot be
+            // updated by the user
+
+            // TODO: implement dashboard at special path root. Instead of
+            // unilaterally banning updates to the path, we should allow them
+            // only if a query parameter matches a dynamically generated token
+            // which is never revealed outside the process, which means only we
+            // ourselves can update the page, but we can do so through the
+            // public-facing API using the client library, rather than fiddling
+            // with the Page contents directly. This also has the side-effect of
+            // forcing us to eat our own dogfood, to construct this page.
+            let writeable_path =
+                path != MYXINE_SPECIAL_PATH.trim_end_matches('/')
+                && !path.starts_with(MYXINE_SPECIAL_PATH);
+
             match PostParams::parse(query) {
                 // Client wants to store a static file of a known Content-Type:
                 Some(PostParams::StaticPage) => {
-                    page.set_static(content_type.map(String::from), body_bytes).await;
-                    Response::new(Body::empty())
+                    if writeable_path {
+                        page.set_static(content_type.map(String::from), body_bytes).await;
+                        Response::new(Body::empty())
+                    } else {
+                        Response::builder()
+                            .status(StatusCode::FORBIDDEN)
+                            .body(Body::empty())
+                            .unwrap()
+                    }
                 },
                 // Client wants to publish some HTML to a dynamic page:
                 Some(PostParams::DynamicPage{title}) => {
-                    match String::from_utf8(body_bytes) {
-                        Ok(body) => {
-                            if cfg!(debug_assertions) {
-                                eprintln!("\n{}", body);
-                            }
-                            page.set_title(title).await;
-                            page.set_body(body).await;
-                            Response::new(Body::empty())
-                        },
-                        Err(_) =>
-                            return Ok(bad_request("Invalid UTF-8 in POST data (only UTF-8 is supported).")),
+                    if writeable_path {
+                        match String::from_utf8(body_bytes) {
+                            Ok(body) => {
+                                if cfg!(debug_assertions) {
+                                    eprintln!("\n{}", body);
+                                }
+                                page.set_title(title).await;
+                                page.set_body(body).await;
+                                Response::new(Body::empty())
+                            },
+                            Err(_) =>
+                                return Ok(bad_request("Invalid UTF-8 in POST data (only UTF-8 is supported).")),
+                        }
+                    } else {
+                        Response::builder()
+                            .status(StatusCode::FORBIDDEN)
+                            .body(Body::empty())
+                            .unwrap()
                     }
                 },
                 // Client wants to subscribe to interface events on this page:
