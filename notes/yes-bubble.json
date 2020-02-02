@@ -1,0 +1,179 @@
+{
+  "abort": [
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/abort_indexedDB"
+  ],
+  "click": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/click"
+  ],
+  "contextmenu": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/contextmenu"
+  ],
+  "drag": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/drag"
+  ],
+  "dragend": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/dragend"
+  ],
+  "dragenter": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/dragenter"
+  ],
+  "dragover": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/dragover"
+  ],
+  "dragstart": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/dragstart"
+  ],
+  "focusout": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/focusout"
+  ],
+  "fullscreenchange": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/fullscreenchange"
+  ],
+  "focusin": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/focusin"
+  ],
+  "fullscreenerror": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/fullscreenerror"
+  ],
+  "keydown": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/keydown"
+  ],
+  "keypress": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/keypress"
+  ],
+  "mousedown": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/mousedown"
+  ],
+  "mousemove": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/mousemove"
+  ],
+  "mouseout": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/mouseout"
+  ],
+  "mouseover": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/mouseover"
+  ],
+  "mouseup": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/mouseup"
+  ],
+  "paste": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/paste"
+  ],
+  "scroll": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/scroll"
+  ],
+  "pointerlockerror": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerlockerror"
+  ],
+  "wheel": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/wheel"
+  ],
+  "select": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/select"
+  ],
+  "SVGError": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGError"
+  ],
+  "DOMContentLoaded": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/DOMContentLoaded"
+  ],
+  "dragleave": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/dragleave"
+  ],
+  "drop": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/drop"
+  ],
+  "compositionstart": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/compositionstart"
+  ],
+  "hashchange": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/hashchange"
+  ],
+  "keyup": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/keyup"
+  ],
+  "transitionend": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/transitionend"
+  ],
+  "copy": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/copy"
+  ],
+  "compositionend": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/compositionend"
+  ],
+  "compositionupdate": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/compositionupdate"
+  ],
+  "cut": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/cut"
+  ],
+  "dblclick": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/dblclick"
+  ],
+  "visibilitychange": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/visibilitychange"
+  ],
+  "slotchange": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/slotchange"
+  ],
+  "selectstart": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/selectstart"
+  ],
+  "animationiteration": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/animationiteration"
+  ],
+  "change": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/change"
+  ],
+  "animationend": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/animationend"
+  ],
+  "animationcancel": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/animationcancel"
+  ],
+  "pointercancel": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pointercancel"
+  ],
+  "pointermove": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pointermove"
+  ],
+  "pointerlockchange": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerlockchange"
+  ],
+  "pointerdown": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerdown"
+  ],
+  "pointerout": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerout"
+  ],
+  "pointerup": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerup"
+  ],
+  "pointerover": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerover"
+  ],
+  "resourcetimingbufferfull": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/resourcetimingbufferfull"
+  ],
+  "popstate": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/popstate"
+  ],
+  "touchmove": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/touchmove"
+  ],
+  "touchcancel": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/touchcancel"
+  ],
+  "touchend": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/touchend"
+  ],
+  "touchstart": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/touchstart"
+  ],
+  "animationstart": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/animationstart"
+  ],
+  "input": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/input"
+  ]
+}

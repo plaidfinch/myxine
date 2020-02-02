@@ -1,0 +1,290 @@
+{
+  "abort": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/abort",
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/abort_(ProgressEvent)"
+  ],
+  "audioend": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/audioend"
+  ],
+  "beforeprint": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/beforeprint"
+  ],
+  "beforeunload": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/beforeunload"
+  ],
+  "boundary": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/boundary"
+  ],
+  "focus": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/focus"
+  ],
+  "devicechange": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/devicechange"
+  ],
+  "end": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/end_(SpeechRecognition)",
+    "https://developer.mozilla.org/en-US/docs/Web/Events/end_(SpeechSynthesis)"
+  ],
+  "error": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/error",
+    "https://developer.mozilla.org/en-US/docs/Web/Events/error_(SpeechRecognitionError)"
+  ],
+  "gamepadconnected": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/gamepadconnected"
+  ],
+  "gamepaddisconnected": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/gamepaddisconnected"
+  ],
+  "languagechange": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/languagechange"
+  ],
+  "mouseleave": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/mouseleave"
+  ],
+  "load": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/load",
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/load_(ProgressEvent)"
+  ],
+  "loadedmetadata": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/loadedmetadata"
+  ],
+  "loadend": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/loadend"
+  ],
+  "loadstart": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/loadstart"
+  ],
+  "mark": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/mark"
+  ],
+  "messageerror": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/messageerror"
+  ],
+  "message": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/message_(ServiceWorker)",
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/message_websocket",
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/message_webworker",
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/message_serversentevents"
+  ],
+  "mouseenter": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/mouseenter"
+  ],
+  "nomatch": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/nomatch"
+  ],
+  "notificationclick": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/notificationclick"
+  ],
+  "offline": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/offline"
+  ],
+  "online": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/online"
+  ],
+  "orientationchange": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/orientationchange"
+  ],
+  "pagehide": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pagehide"
+  ],
+  "pageshow": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pageshow"
+  ],
+  "pause": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pause_(SpeechSynthesis)",
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pause"
+  ],
+  "start": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/start_(SpeechRecognition)",
+    "https://developer.mozilla.org/en-US/docs/Web/Events/start_(SpeechSynthesis)"
+  ],
+  "result": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/result"
+  ],
+  "resume": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/resume"
+  ],
+  "speechstart": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/speechstart"
+  ],
+  "push": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/push"
+  ],
+  "reset": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/reset"
+  ],
+  "seeking": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/seeking"
+  ],
+  "SVGAbort": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGAbort"
+  ],
+  "SVGResize": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGResize"
+  ],
+  "SVGScroll": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGScroll"
+  ],
+  "SVGLoad": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGLoad"
+  ],
+  "SVGUnload": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGUnload"
+  ],
+  "waiting": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/waiting"
+  ],
+  "unload": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/unload"
+  ],
+  "progress": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/progress"
+  ],
+  "canplaythrough": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/canplaythrough"
+  ],
+  "afterprint": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/afterprint"
+  ],
+  "endEvent": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/endEvent"
+  ],
+  "beginEvent": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/beginEvent"
+  ],
+  "blur": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/blur"
+  ],
+  "soundend": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/soundend"
+  ],
+  "repeatEvent": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/repeatEvent"
+  ],
+  "readystatechange": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/readystatechange"
+  ],
+  "voiceschanged": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/voiceschanged"
+  ],
+  "show": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/show"
+  ],
+  "audiostart": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/audiostart"
+  ],
+  "soundstart": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/soundstart"
+  ],
+  "selectionchange": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/selectionchange"
+  ],
+  "speechend": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/speechend"
+  ],
+  "appinstalled": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/appinstalled"
+  ],
+  "stalled": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/stalled"
+  ],
+  "ended": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/ended",
+    "https://developer.mozilla.org/en-US/docs/Web/Events/ended_(Web_Audio)"
+  ],
+  "close": [
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/close_websocket"
+  ],
+  "devicemotion": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/devicemotion"
+  ],
+  "durationchange": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/durationchange"
+  ],
+  "complete": [
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/complete_indexedDB",
+    "https://developer.mozilla.org/en-US/docs/Web/Events/complete"
+  ],
+  "gotpointercapture": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/gotpointercapture"
+  ],
+  "loadeddata": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/loadeddata"
+  ],
+  "open": [
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/open_websocket",
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/open_serversentevents"
+  ],
+  "pointerleave": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerleave"
+  ],
+  "pointerenter": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerenter"
+  ],
+  "play": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/play"
+  ],
+  "playing": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/playing"
+  ],
+  "resize": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/resize"
+  ],
+  "storage": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/storage"
+  ],
+  "submit": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/submit"
+  ],
+  "success": [
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/success_indexedDB"
+  ],
+  "pushsubscriptionchange": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pushsubscriptionchange"
+  ],
+  "seeked": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/seeked"
+  ],
+  "ratechange": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/ratechange"
+  ],
+  "timeupdate": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/timeupdate"
+  ],
+  "volumechange": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/volumechange"
+  ],
+  "emptied": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/emptied"
+  ],
+  "lostpointercapture": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/lostpointercapture"
+  ],
+  "canplay": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/canplay"
+  ],
+  "audioprocess": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/audioprocess"
+  ],
+  "deviceorientation": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/deviceorientation"
+  ],
+  "blocked": [
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/blocked_indexedDB"
+  ],
+  "suspend": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/suspend"
+  ],
+  "upgradeneeded": [
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/upgradeneeded_indexedDB"
+  ],
+  "userproximity": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/userproximity"
+  ],
+  "versionchange": [
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/versionchange_indexedDB"
+  ],
+  "invalid": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/invalid"
+  ]
+}
