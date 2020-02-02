@@ -1,11 +1,56 @@
 {
+  "DOMContentLoaded": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/DOMContentLoaded": true
+  },
+  "SVGAbort": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGAbort": false
+  },
+  "SVGError": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGError": true
+  },
+  "SVGLoad": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGLoad": false
+  },
+  "SVGResize": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGResize": false
+  },
+  "SVGScroll": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGScroll": false
+  },
+  "SVGUnload": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGUnload": false
+  },
   "abort": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/abort": false,
-    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/abort_indexedDB": true,
-    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/abort_(ProgressEvent)": false
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/abort_(ProgressEvent)": false,
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/abort_indexedDB": true
+  },
+  "afterprint": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/afterprint": false
+  },
+  "animationcancel": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/animationcancel": true
+  },
+  "animationend": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/animationend": true
+  },
+  "animationiteration": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/animationiteration": true
+  },
+  "animationstart": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/animationstart": true
+  },
+  "appinstalled": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/appinstalled": false
   },
   "audioend": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/audioend": false
+  },
+  "audioprocess": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/audioprocess": false
+  },
+  "audiostart": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/audiostart": false
   },
   "beforeprint": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/beforeprint": false
@@ -13,20 +58,66 @@
   "beforeunload": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/beforeunload": false
   },
+  "beginEvent": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/beginEvent": false
+  },
+  "blocked": {
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/blocked_indexedDB": false
+  },
+  "blur": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/blur": false
+  },
   "boundary": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/boundary": false
+  },
+  "canplay": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/canplay": false
+  },
+  "canplaythrough": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/canplaythrough": false
+  },
+  "change": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/change": true
   },
   "click": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/click": true
   },
+  "close": {
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/close_websocket": false
+  },
+  "complete": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/complete": false,
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/complete_indexedDB": false
+  },
+  "compositionend": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/compositionend": true
+  },
+  "compositionstart": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/compositionstart": true
+  },
+  "compositionupdate": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/compositionupdate": true
+  },
   "contextmenu": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/contextmenu": true
   },
-  "focus": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/focus": false
+  "copy": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/copy": true
+  },
+  "cut": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/cut": true
+  },
+  "dblclick": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/dblclick": true
   },
   "devicechange": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/devicechange": false
+  },
+  "devicemotion": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/devicemotion": false
+  },
+  "deviceorientation": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/deviceorientation": false
   },
   "drag": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/drag": true
@@ -37,28 +128,50 @@
   "dragenter": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/dragenter": true
   },
+  "dragleave": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/dragleave": true
+  },
   "dragover": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/dragover": true
   },
   "dragstart": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/dragstart": true
   },
+  "drop": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/drop": true
+  },
+  "durationchange": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/durationchange": false
+  },
+  "emptied": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/emptied": false
+  },
   "end": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/end_(SpeechRecognition)": false,
     "https://developer.mozilla.org/en-US/docs/Web/Events/end_(SpeechSynthesis)": false
   },
+  "endEvent": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/endEvent": false
+  },
+  "ended": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/ended": false,
+    "https://developer.mozilla.org/en-US/docs/Web/Events/ended_(Web_Audio)": false
+  },
   "error": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/error": false,
     "https://developer.mozilla.org/en-US/docs/Web/Events/error_(SpeechRecognitionError)": false
+  },
+  "focus": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/focus": false
+  },
+  "focusin": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/focusin": true
   },
   "focusout": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/focusout": true
   },
   "fullscreenchange": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/fullscreenchange": true
-  },
-  "focusin": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/focusin": true
   },
   "fullscreenerror": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/fullscreenerror": true
@@ -69,11 +182,17 @@
   "gamepaddisconnected": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/gamepaddisconnected": false
   },
-  "languagechange": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/languagechange": false
+  "gotpointercapture": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/gotpointercapture": false
   },
-  "mouseleave": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/mouseleave": false
+  "hashchange": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/hashchange": true
+  },
+  "input": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/input": true
+  },
+  "invalid": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/invalid": false
   },
   "keydown": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/keydown": true
@@ -81,9 +200,18 @@
   "keypress": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/keypress": true
   },
+  "keyup": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/keyup": true
+  },
+  "languagechange": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/languagechange": false
+  },
   "load": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/load": false,
     "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/load_(ProgressEvent)": false
+  },
+  "loadeddata": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/loadeddata": false
   },
   "loadedmetadata": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/loadedmetadata": false
@@ -94,23 +222,29 @@
   "loadstart": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/loadstart": false
   },
+  "lostpointercapture": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/lostpointercapture": false
+  },
   "mark": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/mark": false
   },
-  "messageerror": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/messageerror": false
-  },
   "message": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/message_(ServiceWorker)": false,
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/message_serversentevents": false,
     "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/message_websocket": false,
-    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/message_webworker": false,
-    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/message_serversentevents": false
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/message_webworker": false
+  },
+  "messageerror": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/messageerror": false
   },
   "mousedown": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/mousedown": true
   },
   "mouseenter": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/mouseenter": false
+  },
+  "mouseleave": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/mouseleave": false
   },
   "mousemove": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/mousemove": true
@@ -136,6 +270,10 @@
   "online": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/online": false
   },
+  "open": {
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/open_serversentevents": false,
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/open_websocket": false
+  },
   "orientationchange": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/orientationchange": false
   },
@@ -149,228 +287,8 @@
     "https://developer.mozilla.org/en-US/docs/Web/Events/paste": true
   },
   "pause": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/pause_(SpeechSynthesis)": false,
-    "https://developer.mozilla.org/en-US/docs/Web/Events/pause": false
-  },
-  "scroll": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/scroll": true
-  },
-  "start": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/start_(SpeechRecognition)": false,
-    "https://developer.mozilla.org/en-US/docs/Web/Events/start_(SpeechSynthesis)": false
-  },
-  "pointerlockerror": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerlockerror": true
-  },
-  "result": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/result": false
-  },
-  "resume": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/resume": false
-  },
-  "speechstart": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/speechstart": false
-  },
-  "wheel": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/wheel": true
-  },
-  "push": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/push": false
-  },
-  "reset": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/reset": false
-  },
-  "select": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/select": true
-  },
-  "seeking": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/seeking": false
-  },
-  "SVGAbort": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGAbort": false
-  },
-  "SVGError": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGError": true
-  },
-  "SVGResize": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGResize": false
-  },
-  "SVGScroll": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGScroll": false
-  },
-  "SVGLoad": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGLoad": false
-  },
-  "SVGUnload": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGUnload": false
-  },
-  "waiting": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/waiting": false
-  },
-  "unload": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/unload": false
-  },
-  "progress": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/progress": false
-  },
-  "canplaythrough": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/canplaythrough": false
-  },
-  "afterprint": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/afterprint": false
-  },
-  "DOMContentLoaded": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/DOMContentLoaded": true
-  },
-  "dragleave": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/dragleave": true
-  },
-  "drop": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/drop": true
-  },
-  "endEvent": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/endEvent": false
-  },
-  "beginEvent": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/beginEvent": false
-  },
-  "blur": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/blur": false
-  },
-  "soundend": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/soundend": false
-  },
-  "repeatEvent": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/repeatEvent": false
-  },
-  "readystatechange": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/readystatechange": false
-  },
-  "compositionstart": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/compositionstart": true
-  },
-  "voiceschanged": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/voiceschanged": false
-  },
-  "show": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/show": false
-  },
-  "hashchange": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/hashchange": true
-  },
-  "audiostart": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/audiostart": false
-  },
-  "keyup": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/keyup": true
-  },
-  "transitionend": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/transitionend": true
-  },
-  "soundstart": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/soundstart": false
-  },
-  "selectionchange": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/selectionchange": false
-  },
-  "speechend": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/speechend": false
-  },
-  "copy": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/copy": true
-  },
-  "appinstalled": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/appinstalled": false
-  },
-  "compositionend": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/compositionend": true
-  },
-  "compositionupdate": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/compositionupdate": true
-  },
-  "cut": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/cut": true
-  },
-  "dblclick": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/dblclick": true
-  },
-  "visibilitychange": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/visibilitychange": true
-  },
-  "slotchange": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/slotchange": true
-  },
-  "selectstart": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/selectstart": true
-  },
-  "stalled": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/stalled": false
-  },
-  "ended": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/ended": false,
-    "https://developer.mozilla.org/en-US/docs/Web/Events/ended_(Web_Audio)": false
-  },
-  "animationiteration": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/animationiteration": true
-  },
-  "change": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/change": true
-  },
-  "close": {
-    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/close_websocket": false
-  },
-  "devicemotion": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/devicemotion": false
-  },
-  "durationchange": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/durationchange": false
-  },
-  "complete": {
-    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/complete_indexedDB": false,
-    "https://developer.mozilla.org/en-US/docs/Web/Events/complete": false
-  },
-  "animationend": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/animationend": true
-  },
-  "animationcancel": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/animationcancel": true
-  },
-  "gotpointercapture": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/gotpointercapture": false
-  },
-  "loadeddata": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/loadeddata": false
-  },
-  "open": {
-    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/open_websocket": false,
-    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/open_serversentevents": false
-  },
-  "pointercancel": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/pointercancel": true
-  },
-  "pointermove": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/pointermove": true
-  },
-  "pointerlockchange": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerlockchange": true
-  },
-  "pointerleave": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerleave": false
-  },
-  "pointerdown": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerdown": true
-  },
-  "pointerenter": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerenter": false
-  },
-  "pointerout": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerout": true
-  },
-  "pointerup": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerup": true
-  },
-  "pointerover": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerover": true
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pause": false,
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pause_(SpeechSynthesis)": false
   },
   "play": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/play": false
@@ -378,11 +296,114 @@
   "playing": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/playing": false
   },
+  "pointercancel": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pointercancel": true
+  },
+  "pointerdown": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerdown": true
+  },
+  "pointerenter": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerenter": false
+  },
+  "pointerleave": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerleave": false
+  },
+  "pointerlockchange": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerlockchange": true
+  },
+  "pointerlockerror": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerlockerror": true
+  },
+  "pointermove": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pointermove": true
+  },
+  "pointerout": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerout": true
+  },
+  "pointerover": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerover": true
+  },
+  "pointerup": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerup": true
+  },
+  "popstate": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/popstate": true
+  },
+  "progress": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/progress": false
+  },
+  "push": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/push": false
+  },
+  "pushsubscriptionchange": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pushsubscriptionchange": false
+  },
+  "ratechange": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/ratechange": false
+  },
+  "readystatechange": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/readystatechange": false
+  },
+  "repeatEvent": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/repeatEvent": false
+  },
+  "reset": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/reset": false
+  },
   "resize": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/resize": false
   },
   "resourcetimingbufferfull": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/resourcetimingbufferfull": true
+  },
+  "result": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/result": false
+  },
+  "resume": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/resume": false
+  },
+  "scroll": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/scroll": true
+  },
+  "seeked": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/seeked": false
+  },
+  "seeking": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/seeking": false
+  },
+  "select": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/select": true
+  },
+  "selectionchange": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/selectionchange": false
+  },
+  "selectstart": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/selectstart": true
+  },
+  "show": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/show": false
+  },
+  "slotchange": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/slotchange": true
+  },
+  "soundend": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/soundend": false
+  },
+  "soundstart": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/soundstart": false
+  },
+  "speechend": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/speechend": false
+  },
+  "speechstart": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/speechstart": false
+  },
+  "stalled": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/stalled": false
+  },
+  "start": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/start_(SpeechRecognition)": false,
+    "https://developer.mozilla.org/en-US/docs/Web/Events/start_(SpeechSynthesis)": false
   },
   "storage": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/storage": false
@@ -393,20 +414,8 @@
   "success": {
     "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/success_indexedDB": false
   },
-  "popstate": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/popstate": true
-  },
-  "touchmove": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/touchmove": true
-  },
-  "pushsubscriptionchange": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/pushsubscriptionchange": false
-  },
-  "seeked": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/seeked": false
-  },
-  "ratechange": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/ratechange": false
+  "suspend": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/suspend": false
   },
   "timeupdate": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/timeupdate": false
@@ -414,41 +423,20 @@
   "touchcancel": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/touchcancel": true
   },
-  "volumechange": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/volumechange": false
-  },
-  "emptied": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/emptied": false
-  },
-  "lostpointercapture": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/lostpointercapture": false
-  },
   "touchend": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/touchend": true
+  },
+  "touchmove": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/touchmove": true
   },
   "touchstart": {
     "https://developer.mozilla.org/en-US/docs/Web/Events/touchstart": true
   },
-  "canplay": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/canplay": false
+  "transitionend": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/transitionend": true
   },
-  "animationstart": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/animationstart": true
-  },
-  "audioprocess": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/audioprocess": false
-  },
-  "deviceorientation": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/deviceorientation": false
-  },
-  "blocked": {
-    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/blocked_indexedDB": false
-  },
-  "input": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/input": true
-  },
-  "suspend": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/suspend": false
+  "unload": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/unload": false
   },
   "upgradeneeded": {
     "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/upgradeneeded_indexedDB": false
@@ -459,7 +447,19 @@
   "versionchange": {
     "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/versionchange_indexedDB": false
   },
-  "invalid": {
-    "https://developer.mozilla.org/en-US/docs/Web/Events/invalid": false
+  "visibilitychange": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/visibilitychange": true
+  },
+  "voiceschanged": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/voiceschanged": false
+  },
+  "volumechange": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/volumechange": false
+  },
+  "waiting": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/waiting": false
+  },
+  "wheel": {
+    "https://developer.mozilla.org/en-US/docs/Web/Events/wheel": true
   }
 }

@@ -1,10 +1,37 @@
 {
+  "SVGAbort": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGAbort"
+  ],
+  "SVGLoad": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGLoad"
+  ],
+  "SVGResize": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGResize"
+  ],
+  "SVGScroll": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGScroll"
+  ],
+  "SVGUnload": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGUnload"
+  ],
   "abort": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/abort",
     "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/abort_(ProgressEvent)"
   ],
+  "afterprint": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/afterprint"
+  ],
+  "appinstalled": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/appinstalled"
+  ],
   "audioend": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/audioend"
+  ],
+  "audioprocess": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/audioprocess"
+  ],
+  "audiostart": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/audiostart"
   ],
   "beforeprint": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/beforeprint"
@@ -12,22 +39,63 @@
   "beforeunload": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/beforeunload"
   ],
+  "beginEvent": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/beginEvent"
+  ],
+  "blocked": [
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/blocked_indexedDB"
+  ],
+  "blur": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/blur"
+  ],
   "boundary": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/boundary"
   ],
-  "focus": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/focus"
+  "canplay": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/canplay"
+  ],
+  "canplaythrough": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/canplaythrough"
+  ],
+  "close": [
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/close_websocket"
+  ],
+  "complete": [
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/complete_indexedDB",
+    "https://developer.mozilla.org/en-US/docs/Web/Events/complete"
   ],
   "devicechange": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/devicechange"
+  ],
+  "devicemotion": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/devicemotion"
+  ],
+  "deviceorientation": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/deviceorientation"
+  ],
+  "durationchange": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/durationchange"
+  ],
+  "emptied": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/emptied"
   ],
   "end": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/end_(SpeechRecognition)",
     "https://developer.mozilla.org/en-US/docs/Web/Events/end_(SpeechSynthesis)"
   ],
+  "endEvent": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/endEvent"
+  ],
+  "ended": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/ended",
+    "https://developer.mozilla.org/en-US/docs/Web/Events/ended_(Web_Audio)"
+  ],
   "error": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/error",
     "https://developer.mozilla.org/en-US/docs/Web/Events/error_(SpeechRecognitionError)"
+  ],
+  "focus": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/focus"
   ],
   "gamepadconnected": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/gamepadconnected"
@@ -35,15 +103,21 @@
   "gamepaddisconnected": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/gamepaddisconnected"
   ],
+  "gotpointercapture": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/gotpointercapture"
+  ],
+  "invalid": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/invalid"
+  ],
   "languagechange": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/languagechange"
-  ],
-  "mouseleave": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/mouseleave"
   ],
   "load": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/load",
     "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/load_(ProgressEvent)"
+  ],
+  "loadeddata": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/loadeddata"
   ],
   "loadedmetadata": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/loadedmetadata"
@@ -54,11 +128,11 @@
   "loadstart": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/loadstart"
   ],
+  "lostpointercapture": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/lostpointercapture"
+  ],
   "mark": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/mark"
-  ],
-  "messageerror": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/messageerror"
   ],
   "message": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/message_(ServiceWorker)",
@@ -66,8 +140,14 @@
     "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/message_webworker",
     "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/message_serversentevents"
   ],
+  "messageerror": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/messageerror"
+  ],
   "mouseenter": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/mouseenter"
+  ],
+  "mouseleave": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/mouseleave"
   ],
   "nomatch": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/nomatch"
@@ -80,6 +160,10 @@
   ],
   "online": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/online"
+  ],
+  "open": [
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/open_websocket",
+    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/open_serversentevents"
   ],
   "orientationchange": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/orientationchange"
@@ -94,9 +178,41 @@
     "https://developer.mozilla.org/en-US/docs/Web/Events/pause_(SpeechSynthesis)",
     "https://developer.mozilla.org/en-US/docs/Web/Events/pause"
   ],
-  "start": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/start_(SpeechRecognition)",
-    "https://developer.mozilla.org/en-US/docs/Web/Events/start_(SpeechSynthesis)"
+  "play": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/play"
+  ],
+  "playing": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/playing"
+  ],
+  "pointerenter": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerenter"
+  ],
+  "pointerleave": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerleave"
+  ],
+  "progress": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/progress"
+  ],
+  "push": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/push"
+  ],
+  "pushsubscriptionchange": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/pushsubscriptionchange"
+  ],
+  "ratechange": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/ratechange"
+  ],
+  "readystatechange": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/readystatechange"
+  ],
+  "repeatEvent": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/repeatEvent"
+  ],
+  "reset": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/reset"
+  ],
+  "resize": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/resize"
   ],
   "result": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/result"
@@ -104,131 +220,36 @@
   "resume": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/resume"
   ],
-  "speechstart": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/speechstart"
-  ],
-  "push": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/push"
-  ],
-  "reset": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/reset"
+  "seeked": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/seeked"
   ],
   "seeking": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/seeking"
   ],
-  "SVGAbort": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGAbort"
-  ],
-  "SVGResize": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGResize"
-  ],
-  "SVGScroll": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGScroll"
-  ],
-  "SVGLoad": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGLoad"
-  ],
-  "SVGUnload": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/SVGUnload"
-  ],
-  "waiting": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/waiting"
-  ],
-  "unload": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/unload"
-  ],
-  "progress": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/progress"
-  ],
-  "canplaythrough": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/canplaythrough"
-  ],
-  "afterprint": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/afterprint"
-  ],
-  "endEvent": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/endEvent"
-  ],
-  "beginEvent": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/beginEvent"
-  ],
-  "blur": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/blur"
-  ],
-  "soundend": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/soundend"
-  ],
-  "repeatEvent": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/repeatEvent"
-  ],
-  "readystatechange": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/readystatechange"
-  ],
-  "voiceschanged": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/voiceschanged"
+  "selectionchange": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/selectionchange"
   ],
   "show": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/show"
   ],
-  "audiostart": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/audiostart"
+  "soundend": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/soundend"
   ],
   "soundstart": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/soundstart"
   ],
-  "selectionchange": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/selectionchange"
-  ],
   "speechend": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/speechend"
   ],
-  "appinstalled": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/appinstalled"
+  "speechstart": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/speechstart"
   ],
   "stalled": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/stalled"
   ],
-  "ended": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/ended",
-    "https://developer.mozilla.org/en-US/docs/Web/Events/ended_(Web_Audio)"
-  ],
-  "close": [
-    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/close_websocket"
-  ],
-  "devicemotion": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/devicemotion"
-  ],
-  "durationchange": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/durationchange"
-  ],
-  "complete": [
-    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/complete_indexedDB",
-    "https://developer.mozilla.org/en-US/docs/Web/Events/complete"
-  ],
-  "gotpointercapture": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/gotpointercapture"
-  ],
-  "loadeddata": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/loadeddata"
-  ],
-  "open": [
-    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/open_websocket",
-    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/open_serversentevents"
-  ],
-  "pointerleave": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerleave"
-  ],
-  "pointerenter": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/pointerenter"
-  ],
-  "play": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/play"
-  ],
-  "playing": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/playing"
-  ],
-  "resize": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/resize"
+  "start": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/start_(SpeechRecognition)",
+    "https://developer.mozilla.org/en-US/docs/Web/Events/start_(SpeechSynthesis)"
   ],
   "storage": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/storage"
@@ -239,41 +260,14 @@
   "success": [
     "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/success_indexedDB"
   ],
-  "pushsubscriptionchange": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/pushsubscriptionchange"
-  ],
-  "seeked": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/seeked"
-  ],
-  "ratechange": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/ratechange"
+  "suspend": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/suspend"
   ],
   "timeupdate": [
     "https://developer.mozilla.org/en-US/docs/Web/Events/timeupdate"
   ],
-  "volumechange": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/volumechange"
-  ],
-  "emptied": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/emptied"
-  ],
-  "lostpointercapture": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/lostpointercapture"
-  ],
-  "canplay": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/canplay"
-  ],
-  "audioprocess": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/audioprocess"
-  ],
-  "deviceorientation": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/deviceorientation"
-  ],
-  "blocked": [
-    "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/blocked_indexedDB"
-  ],
-  "suspend": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/suspend"
+  "unload": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/unload"
   ],
   "upgradeneeded": [
     "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/upgradeneeded_indexedDB"
@@ -284,7 +278,13 @@
   "versionchange": [
     "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/versionchange_indexedDB"
   ],
-  "invalid": [
-    "https://developer.mozilla.org/en-US/docs/Web/Events/invalid"
+  "voiceschanged": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/voiceschanged"
+  ],
+  "volumechange": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/volumechange"
+  ],
+  "waiting": [
+    "https://developer.mozilla.org/en-US/docs/Web/Events/waiting"
   ]
 }
