@@ -1,12 +1,12 @@
 digraph {
   rankdir="LR";
   splines=false;
-  node [shape=box, fontname="Courier", fontsize="14pt", overlap=false, penwidth=2];
+  node [shape=box, fontname="Courier", fontsize="18pt", overlap=false, penwidth=2];
   edge [arrowhead=none, overlap=false, concentrate=true, penwidth=2];
   outputorder="edgesfirst";
 
   {
-    node [fillcolor="lightblue", fontcolor="blue", style="filled", fontsize="18pt"];
+    node [fillcolor="lightblue", fontcolor="blue", style="filled", fontsize="20pt"];
     MouseEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent"];
     PointerEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent"];
     DragEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/DragEvent"];
@@ -19,8 +19,6 @@ digraph {
     HashChangeEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/HashChangeEvent"];
     InputEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/InputEvent"];
     KeyboardEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent"];
-    PageTransitionEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/PageTransitionEvent"];
-    PopStateEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/PopStateEvent"];
     TouchEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/TouchEvent"];
   }
 
@@ -33,8 +31,6 @@ digraph {
     PointerEvent
     DragEvent
     TouchEvent
-    PopStateEvent
-    PageTransitionEvent
     HashChangeEvent
     ClipboardEvent
   }
@@ -43,8 +39,6 @@ digraph {
     rank=same
     node [shape=ellipse, fontcolor="blue", style="filled"];
     DOMContentLoaded [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/DOMContentLoaded"];
-    afterprint [fillcolor="yellow", href="https://developer.mozilla.org/en-US/docs/Web/Events/afterprint"];
-    beforeprint [fillcolor="yellow", href="https://developer.mozilla.org/en-US/docs/Web/Events/beforeprint"];
     beforeunload [fillcolor="yellow", href="https://developer.mozilla.org/en-US/docs/Web/Events/beforeunload"];
     blur [fillcolor="yellow", href="https://developer.mozilla.org/en-US/docs/Web/Events/blur"];
     change [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/change"];
@@ -82,18 +76,13 @@ digraph {
     mouseup [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/mouseup"];
     offline [fillcolor="yellow", href="https://developer.mozilla.org/en-US/docs/Web/Events/offline"];
     online [fillcolor="yellow", href="https://developer.mozilla.org/en-US/docs/Web/Events/online"];
-    pagehide [fillcolor="yellow", href="https://developer.mozilla.org/en-US/docs/Web/Events/pagehide"];
-    pageshow [fillcolor="yellow", href="https://developer.mozilla.org/en-US/docs/Web/Events/pageshow"];
     paste [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/paste"];
     pointercancel [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/pointercancel"];
     pointerdown [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/pointerdown"];
-    pointerlockchange [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/pointerlockchange"];
-    pointerlockerror [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/pointerlockerror"];
     pointermove [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/pointermove"];
     pointerout [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/pointerout"];
     pointerover [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/pointerover"];
     pointerup [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/pointerup"];
-    popstate [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/popstate"];
     readystatechange [fillcolor="yellow", href="https://developer.mozilla.org/en-US/docs/Web/Events/readystatechange"];
     reset [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/reset"];
     resize [fillcolor="yellow", href="https://developer.mozilla.org/en-US/docs/Web/Events/resize"];
@@ -122,8 +111,6 @@ digraph {
   Event -> UIEvent;
   Event -> ClipboardEvent;
   Event -> HashChangeEvent;
-  Event -> PageTransitionEvent;
-  Event -> PopStateEvent;
   Event -> TouchEvent;
   Event -> DOMContentLoaded;
   ClipboardEvent -> copy
@@ -139,8 +126,6 @@ digraph {
   DragEvent -> dragover
   DragEvent -> dragstart
   DragEvent -> drop
-  Event -> afterprint
-  Event -> beforeprint
   Event -> beforeunload
   Event -> change
   Event -> fullscreenchange
@@ -149,8 +134,6 @@ digraph {
   Event -> load
   Event -> offline
   Event -> online
-  Event -> pointerlockchange
-  Event -> pointerlockerror
   Event -> readystatechange
   Event -> reset
   Event -> scroll
@@ -176,15 +159,12 @@ digraph {
   MouseEvent -> mouseout
   MouseEvent -> mouseover
   MouseEvent -> mouseup
-  PageTransitionEvent -> pagehide
-  PageTransitionEvent -> pageshow
   PointerEvent -> pointercancel
   PointerEvent -> pointerdown
   PointerEvent -> pointermove
   PointerEvent -> pointerout
   PointerEvent -> pointerover
   PointerEvent -> pointerup
-  PopStateEvent -> popstate
   TouchEvent -> touchcancel
   TouchEvent -> touchend
   TouchEvent -> touchmove
