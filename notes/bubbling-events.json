@@ -1,0 +1,415 @@
+{
+    "DOMContentLoaded": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/DOMContentLoaded",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "SVGError": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/SVGError",
+            "interface": "SVGEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/SVGEvent"
+        }
+    ],
+    "abort": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/abort_indexedDB",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "animationcancel": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/animationcancel",
+            "interface": "AnimationEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/AnimationEvent"
+        }
+    ],
+    "animationend": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/animationend",
+            "interface": "AnimationEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/AnimationEvent"
+        }
+    ],
+    "animationiteration": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/animationiteration",
+            "interface": "AnimationEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/AnimationEvent"
+        }
+    ],
+    "animationstart": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/animationstart",
+            "interface": "AnimationEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/AnimationEvent"
+        }
+    ],
+    "change": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/change",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "click": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/click",
+            "interface": "MouseEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent"
+        }
+    ],
+    "compositionend": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/compositionend",
+            "interface": "CompositionEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/CompositionEvent"
+        }
+    ],
+    "compositionstart": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/compositionstart",
+            "interface": "CompositionEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/CompositionEvent"
+        }
+    ],
+    "compositionupdate": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/compositionupdate",
+            "interface": "CompositionEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/CompositionEvent"
+        }
+    ],
+    "contextmenu": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/contextmenu",
+            "interface": "MouseEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent"
+        }
+    ],
+    "copy": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/copy",
+            "interface": "ClipboardEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/ClipboardEvent"
+        }
+    ],
+    "cut": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/cut",
+            "interface": "ClipboardEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/ClipboardEvent"
+        }
+    ],
+    "dblclick": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/dblclick",
+            "interface": "MouseEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent"
+        }
+    ],
+    "drag": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/drag",
+            "interface": "DragEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/DragEvent"
+        }
+    ],
+    "dragend": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/dragend",
+            "interface": "DragEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/DragEvent"
+        }
+    ],
+    "dragenter": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/dragenter",
+            "interface": "DragEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/DragEvent"
+        }
+    ],
+    "dragleave": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/dragleave",
+            "interface": "DragEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/DragEvent"
+        }
+    ],
+    "dragover": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/dragover",
+            "interface": "DragEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/DragEvent"
+        }
+    ],
+    "dragstart": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/dragstart",
+            "interface": "DragEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/DragEvent"
+        }
+    ],
+    "drop": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/drop",
+            "interface": "DragEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/DragEvent"
+        }
+    ],
+    "focusin": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/focusin",
+            "interface": "FocusEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/FocusEvent"
+        }
+    ],
+    "focusout": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/focusout",
+            "interface": "FocusEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/FocusEvent"
+        }
+    ],
+    "fullscreenchange": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/fullscreenchange",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "fullscreenerror": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/fullscreenerror",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "hashchange": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/hashchange",
+            "interface": "HashChangeEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/HashChangeEvent"
+        }
+    ],
+    "input": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/input",
+            "interface": "InputEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/InputEvent"
+        }
+    ],
+    "keydown": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/keydown",
+            "interface": "KeyboardEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent"
+        }
+    ],
+    "keypress": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/keypress",
+            "interface": "KeyboardEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent"
+        }
+    ],
+    "keyup": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/keyup",
+            "interface": "KeyboardEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent"
+        }
+    ],
+    "mousedown": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/mousedown",
+            "interface": "MouseEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent"
+        }
+    ],
+    "mousemove": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/mousemove",
+            "interface": "MouseEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent"
+        }
+    ],
+    "mouseout": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/mouseout",
+            "interface": "MouseEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent"
+        }
+    ],
+    "mouseover": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/mouseover",
+            "interface": "MouseEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent"
+        }
+    ],
+    "mouseup": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/mouseup",
+            "interface": "MouseEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent"
+        }
+    ],
+    "paste": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/paste",
+            "interface": "ClipboardEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/ClipboardEvent"
+        }
+    ],
+    "pointercancel": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/pointercancel",
+            "interface": "PointerEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent"
+        }
+    ],
+    "pointerdown": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/pointerdown",
+            "interface": "PointerEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent"
+        }
+    ],
+    "pointerlockchange": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/pointerlockchange",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "pointerlockerror": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/pointerlockerror",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "pointermove": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/pointermove",
+            "interface": "PointerEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent"
+        }
+    ],
+    "pointerout": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/pointerout",
+            "interface": "PointerEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent"
+        }
+    ],
+    "pointerover": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/pointerover",
+            "interface": "PointerEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent"
+        }
+    ],
+    "pointerup": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/pointerup",
+            "interface": "PointerEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent"
+        }
+    ],
+    "popstate": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/popstate",
+            "interface": "PopStateEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/PopStateEvent"
+        }
+    ],
+    "resourcetimingbufferfull": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/resourcetimingbufferfull",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "scroll": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/scroll",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "select": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/select",
+            "interface": "UIEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/UIEvent"
+        }
+    ],
+    "selectstart": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/selectstart",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "slotchange": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/slotchange",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "touchcancel": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/touchcancel",
+            "interface": "TouchEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/TouchEvent"
+        }
+    ],
+    "touchend": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/touchend",
+            "interface": "TouchEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/TouchEvent"
+        }
+    ],
+    "touchmove": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/touchmove",
+            "interface": "TouchEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/TouchEvent"
+        }
+    ],
+    "touchstart": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/touchstart",
+            "interface": "TouchEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/TouchEvent"
+        }
+    ],
+    "transitionend": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/transitionend",
+            "interface": "TransitionEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/TransitionEvent"
+        }
+    ],
+    "visibilitychange": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/visibilitychange",
+            "interface": "event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "wheel": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/wheel",
+            "interface": "WheelEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/WheelEvent"
+        }
+    ]
+}

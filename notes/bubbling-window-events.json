@@ -1,0 +1,100 @@
+{
+    "DOMContentLoaded": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/API/Window/DOMContentLoaded_event",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "animationcancel": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/API/Window/animationcancel_event",
+            "interface": "AnimationEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/AnimationEvent"
+        }
+    ],
+    "animationend": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/API/Window/animationend_event",
+            "interface": "AnimationEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/AnimationEvent"
+        }
+    ],
+    "animationiteration": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/API/Window/animationiteration_event",
+            "interface": "AnimationEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/AnimationEvent"
+        }
+    ],
+    "animationstart": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/API/Window/animationstart_event",
+            "interface": "AnimationEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/AnimationEvent"
+        }
+    ],
+    "copy": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/API/Window/copy_event",
+            "interface": "ClipboardEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/ClipboardEvent"
+        }
+    ],
+    "cut": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/API/Window/cut_event",
+            "interface": "ClipboardEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/ClipboardEvent"
+        }
+    ],
+    "hashchange": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/API/Window/hashchange_event",
+            "interface": "HashChangeEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/HashChangeEvent"
+        }
+    ],
+    "paste": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/API/Window/paste_event",
+            "interface": "ClipboardEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/ClipboardEvent"
+        }
+    ],
+    "popstate": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/API/Document/defaultView/popstate_event",
+            "interface": "PopStateEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/PopStateEvent"
+        }
+    ],
+    "transitioncancel": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/API/Window/transitioncancel_event",
+            "interface": "TransitionEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/TransitionEvent"
+        }
+    ],
+    "transitionend": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/API/Window/transitionend_event",
+            "interface": "TransitionEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/TransitionEvent"
+        }
+    ],
+    "transitionrun": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/API/Window/transitionrun_event",
+            "interface": "TransitionEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/TransitionEvent"
+        }
+    ],
+    "transitionstart": [
+        {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/API/Window/transitionstart_event",
+            "interface": "TransitionEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/TransitionEvent"
+        }
+    ]
+}

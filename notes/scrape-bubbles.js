@@ -17,12 +17,20 @@ function scrapeBubbling() {
                     let bubbles = Array.from(request.responseXML.querySelectorAll('table.properties tr'))
                         .filter(e => e.querySelector('th') !== null ? e.querySelector('th').innerText === 'Bubbles' : false)[0]
                         .querySelector('td').innerText === 'Yes';
+                    let interfaceLink = Array.from(request.responseXML.querySelectorAll('table.properties tr'))
+                        .filter(e => e.querySelector('th') !== null ? e.querySelector('th').innerText === 'Interface' : false)[0]
+                        .querySelector('td a');
                     console.log(a.innerText, bubbles);
                     let item = results[a.innerText];
                     if (typeof item === 'undefined') {
-                        item = {};
+                        item = [];
                     }
-                    item[a.href] = bubbles;
+                    item.push({
+                        bubbles: bubbles,
+                        docs: a.href,
+                        interface: interfaceLink.innerText,
+                        interfaceDocs: interfaceLink.href,
+                    });
                     results[a.innerText] = item;
                 } catch(err) {
                     errors[a.href] = a.innerText;
