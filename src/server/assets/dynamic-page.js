@@ -74,19 +74,6 @@ export function activate(initialSubscription, diff, debugMode) {
         }
     }
 
-    // Filter an object's properties for only primitives (removing null also)
-    function primitiveProperties(object) {
-        let result = {};
-        for (let key in object) {
-            let val = object[key];
-            let type = typeof(val);
-            if (type === 'boolean' || type === 'number' || type === 'string') {
-                result[key] = val;
-            }
-        };
-        return result;
-    }
-
     // NOTE: Why do we use separate workers for events and query results, but
     // only one worker for all events? Well, it matters that events arrive in
     // order so using one worker forces them to be linearized. And having a
@@ -97,11 +84,10 @@ export function activate(initialSubscription, diff, debugMode) {
     // Actually send an event back to the server
     let sendEventWorker = new Worker('/.myxine/assets/post.js');
 
-    function sendEvent(targetQuery, targetId, eventType, returnData) {
+    function sendEvent(eventType, target, returnData) {
         let url = window.location.href
             + "?event="  + encodeURIComponent(eventType)
-            + "&target=" + encodeURIComponent(targetQuery)
-            + "&id="     + encodeURIComponent(targetId);
+            + "&target=" + encodeURIComponent(targetQuery);
         sendEventWorker.postMessage({
             url: url,
             contentType: "application/json",
@@ -125,56 +111,6 @@ export function activate(initialSubscription, diff, debugMode) {
         });
     }
 
-    // Remove all event listeners we set, then set again from subscriptions
-    function updateSubscription() {
-        listeners.forEach(e => {
-            debug("Removing listener: " + e.eventTarget + ": " + e.eventType);
-            e.eventTarget.removeEventListener(e.eventType, e.eventListener, true);
-        });
-        listeners = [];
-        debug("Setting up new subscription: " + JSON.stringify(subscription));
-        Object.entries(subscription).forEach(([targetQuery, events]) => {
-            debug("Processing target path: " + targetQuery);
-            events.forEach(eventType => {
-                debug("Processing event type: " + eventType);
-                const targets = queryAll(targetQuery);
-                targets.forEach(eventTarget => {
-                    const eventListener = (function (event) {
-                        let returnData = primitiveProperties(event);
-                        // Keep track of the current target id, so the user can
-                        // make note of it if they want it. Potentially other
-                        // properties of the currentTarget could be put here in
-                        // the future, but we can't serialize the whole thing
-                        // because it might be huge! It's also unlikely to be
-                        // useful to put further info there, because the user
-                        // can use the id to look up more things.
-                        returnData.currentTarget = {};
-                        let targetId = event.currentTarget.id;
-                        if (typeof targetId !== 'string') {
-                            targetId = '';
-                        }
-                        if (typeof targetId === 'string') {
-                            returnData.currentTarget.id = targetId;
-                        }
-                        // Actually send the event
-                        sendEvent(targetQuery, targetId, eventType, returnData);
-                    });
-                    if (eventTarget !== null) {
-                        listeners.push({
-                            eventTarget: eventTarget,
-                            eventType: eventType,
-                            eventListener: eventListener,
-                        });
-                        debug("Adding event listener: " + eventTarget + ": " + eventType);
-                        eventTarget.addEventListener(eventType, eventListener, true);
-                    } else {
-                        debug("Could not look up target path: " + targetQuery);
-                    }
-                });
-            });
-        });
-    }
-
     // Set the body
     function setBodyTo(body) {
         // Cancel the previous animation frame, if any
@@ -184,7 +120,6 @@ export function activate(initialSubscription, diff, debugMode) {
         // Redraw the body before the next repaint (but not right now yet)
         animationId = window.requestAnimationFrame(timestamp => {
             diff.innerHTML(document.body, body);
-            updateSubscription();
         });
     }
 
@@ -192,7 +127,6 @@ export function activate(initialSubscription, diff, debugMode) {
     function subscribe(event) {
         debug("Received new subscription: " + event.data);
         subscription = JSON.parse(event.data);
-        updateSubscription();
     }
 
     // New body
@@ -203,7 +137,6 @@ export function activate(initialSubscription, diff, debugMode) {
     // New empty body
     function clearBody(event) {
         setBodyTo("");
-        updateSubscription();
     }
 
     // New title
@@ -221,6 +154,8 @@ export function activate(initialSubscription, diff, debugMode) {
     function refresh(event) {
         window.location.reload();
     }
+
+    // TODO: Replace query interface with eval (using Function())?
 
     // Query the page for a particular list of values
     function query(event) {
@@ -247,6 +182,82 @@ export function activate(initialSubscription, diff, debugMode) {
         sendQueryResults(id, results);
     }
 
+    const customJsonFormatters = {
+        // string: x => x,
+        // int: x => x,
+        // bool: x => x,
+        // double: x => x,
+        // Add more here if there's a need to support more complex object types
+    };
+
+    // Parse a description of events and interfaces, and return a mapping from
+    // event name to mappings from property name -> formatter for that property
+    function parseEventDescriptions(enabledEvents) {
+        let events = {};
+        enabledEvents.forEach(([eventName, interfaceName]) => {
+            events[eventName] = {};
+            while (true) {
+                const interface = enabledEvents.interfaces[interfaceName];
+                const properties = Object.keys(interface.properties);
+                for (let property in properties) {
+                    let formatter = customJsonFormatters[property];
+                    if (typeof formatter === 'undefined') {
+                        formatter = (x => x);
+                    }
+                    events[eventName][property] = formatter;
+                }
+                if (interface.inherits !== null) {
+                    interface = enabledEvents.interfaces[interface.inherits];
+                } else {
+                    break;
+                }
+            }
+        });
+        return events;
+    }
+
+    // Given a mapping from events -> mappings from properties -> formatters for
+    // those properties, set up listeners for all those events which send back
+    // the appropriately formatted results when they fire
+    function setupListeners(events) {
+        // Set up event handlers
+        events.forEach(([eventName, eventProperties]) => {
+            window.addEventListener(eventName, event => {
+                // Calculate the id path
+                const path =
+                      event.composedPath()
+                      .filter(t => t instanceof Element)
+                      .map(target => {
+                          const pathElement = { tagName: target.tagName };
+                          for (let i = target.attributes.length - 1; i >= 0; i--) {
+                              const attribute = target.attributes[i];
+                              const name = attribute.name;
+                              const value = attribute.value;
+                              pathElement[name] = value;
+                          }
+                          return pathElement;
+                      });
+
+                // Extract the relevant properties
+                const data = {};
+                events[eventName].forEach(([property, formatter]) => {
+                    data[property] = formatter(event[property]);
+                });
+                // Send the event back to the server
+                // TODO: implement batching
+                sendEvent(eventName, path, data);
+            });
+        });
+
+    }
+
+    // Fetch the description of the events we wish to support
+    const r = new XMLHttpRequest();
+    r.onerror = () => debug("Could not fetch list of enabled events!");
+    r.onload = () => setupListeners(JSON.parse(r.responseText));
+    r.open('GET', '/.myxine/assets/enabled-events.json');
+    r.send();
+
     // Actually set up SSE...
     let sse = new EventSource(window.location.href + "?updates");
     sse.addEventListener("body", setBody);
@@ -254,17 +265,5 @@ export function activate(initialSubscription, diff, debugMode) {
     sse.addEventListener("title", setTitle);
     sse.addEventListener("clear-title", clearTitle);
     sse.addEventListener("refresh", refresh);
-    sse.addEventListener("subscribe", subscribe);
     sse.addEventListener("queryAll", query);
-
-    // Make sure the subscription gets updated once the whole page is loaded
-    if (document.readyState === "loading") {
-        document.addEventListener('readystatechange', () => {
-            if (document.readyState === "interactive") {
-                updateSubscription();
-            }
-        });
-    } else {
-        updateSubscription();
-    }
 }

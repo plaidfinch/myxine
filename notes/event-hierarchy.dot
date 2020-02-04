@@ -8,18 +8,18 @@ digraph {
   {
     node [fillcolor="lightblue", fontcolor="blue", style="filled", fontsize="20pt"];
     MouseEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent"];
-    PointerEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent"];
+    // PointerEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent"];
     DragEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/DragEvent"];
     WheelEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/WheelEvent"];
     UIEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/UIEvent"];
-    ClipboardEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/ClipboardEvent"];
-    CompositionEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/CompositionEvent"];
+    // ClipboardEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/ClipboardEvent"];
+    // CompositionEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/CompositionEvent"];
     Event [href="https://developer.mozilla.org/en-US/docs/Web/API/Event"];
     FocusEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/FocusEvent"];
     HashChangeEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/HashChangeEvent"];
     InputEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/InputEvent"];
     KeyboardEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent"];
-    TouchEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/TouchEvent"];
+    // TouchEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/TouchEvent"];
   }
 
   {
@@ -27,12 +27,12 @@ digraph {
     InputEvent
     KeyboardEvent
     FocusEvent
-    CompositionEvent
-    PointerEvent
+    // CompositionEvent
+    // PointerEvent
     DragEvent
-    TouchEvent
+    // TouchEvent
     HashChangeEvent
-    ClipboardEvent
+    // ClipboardEvent
   }
 
   {
@@ -43,12 +43,12 @@ digraph {
     blur [fillcolor="yellow", href="https://developer.mozilla.org/en-US/docs/Web/Events/blur"];
     change [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/change"];
     click [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/click"];
-    compositionend [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/compositionend"];
-    compositionstart [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/compositionstart"];
-    compositionupdate [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/compositionupdate"];
+    // compositionend [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/compositionend"];
+    // compositionstart [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/compositionstart"];
+    // compositionupdate [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/compositionupdate"];
     contextmenu [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/contextmenu"];
-    copy [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/copy"];
-    cut [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/cut"];
+    // copy [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/copy"];
+    // cut [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/cut"];
     dblclick [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/dblclick"];
     drag [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/drag"];
     dragend [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/dragend"];
@@ -74,16 +74,13 @@ digraph {
     mouseout [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/mouseout"];
     mouseover [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/mouseover"];
     mouseup [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/mouseup"];
-    offline [fillcolor="yellow", href="https://developer.mozilla.org/en-US/docs/Web/Events/offline"];
-    online [fillcolor="yellow", href="https://developer.mozilla.org/en-US/docs/Web/Events/online"];
-    paste [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/paste"];
-    pointercancel [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/pointercancel"];
-    pointerdown [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/pointerdown"];
-    pointermove [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/pointermove"];
-    pointerout [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/pointerout"];
-    pointerover [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/pointerover"];
-    pointerup [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/pointerup"];
-    readystatechange [fillcolor="yellow", href="https://developer.mozilla.org/en-US/docs/Web/Events/readystatechange"];
+    // paste [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/paste"];
+    // pointercancel [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/pointercancel"];
+    // pointerdown [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/pointerdown"];
+    // pointermove [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/pointermove"];
+    // pointerout [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/pointerout"];
+    // pointerover [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/pointerover"];
+    // pointerup [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/pointerup"];
     reset [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/reset"];
     resize [fillcolor="yellow", href="https://developer.mozilla.org/en-US/docs/Web/Events/resize"];
     scroll [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/scroll"];
@@ -91,34 +88,39 @@ digraph {
     selectionchange [fillcolor="yellow", href="https://developer.mozilla.org/en-US/docs/Web/Events/selectionchange"];
     selectstart [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/selectstart"];
     submit [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/submit"];
-    touchcancel [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/touchcancel"];
-    touchend [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/touchend"];
-    touchmove [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/touchmove"];
-    touchstart [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/touchstart"];
+    // touchcancel [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/touchcancel"];
+    // touchend [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/touchend"];
+    // touchmove [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/touchmove"];
+    // touchstart [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/touchstart"];
     unload [fillcolor="yellow", href="https://developer.mozilla.org/en-US/docs/Web/Events/unload"];
     visibilitychange [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/visibilitychange"];
     wheel [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/wheel"];
   }
 
+  // Event class hierarchy:
+
   MouseEvent -> DragEvent;
-  MouseEvent -> PointerEvent;
+  // MouseEvent -> PointerEvent;
   MouseEvent -> WheelEvent;
-  UIEvent -> CompositionEvent;
+  // UIEvent -> CompositionEvent;
   UIEvent -> FocusEvent;
   UIEvent -> InputEvent;
   UIEvent -> KeyboardEvent;
   UIEvent -> MouseEvent;
   Event -> UIEvent;
-  Event -> ClipboardEvent;
+  // Event -> ClipboardEvent;
   Event -> HashChangeEvent;
-  Event -> TouchEvent;
+  // Event -> TouchEvent;
   Event -> DOMContentLoaded;
-  ClipboardEvent -> copy
-  ClipboardEvent -> cut
-  ClipboardEvent -> paste
-  CompositionEvent -> compositionend
-  CompositionEvent -> compositionstart
-  CompositionEvent -> compositionupdate
+
+  // Concrete event inheritance:
+
+  // ClipboardEvent -> copy
+  // ClipboardEvent -> cut
+  // ClipboardEvent -> paste
+  // CompositionEvent -> compositionend
+  // CompositionEvent -> compositionstart
+  // CompositionEvent -> compositionupdate
   DragEvent -> drag
   DragEvent -> dragend
   DragEvent -> dragenter
@@ -132,9 +134,6 @@ digraph {
   Event -> fullscreenerror
   Event -> languagechange
   Event -> load
-  Event -> offline
-  Event -> online
-  Event -> readystatechange
   Event -> reset
   Event -> scroll
   Event -> selectionchange
@@ -159,16 +158,16 @@ digraph {
   MouseEvent -> mouseout
   MouseEvent -> mouseover
   MouseEvent -> mouseup
-  PointerEvent -> pointercancel
-  PointerEvent -> pointerdown
-  PointerEvent -> pointermove
-  PointerEvent -> pointerout
-  PointerEvent -> pointerover
-  PointerEvent -> pointerup
-  TouchEvent -> touchcancel
-  TouchEvent -> touchend
-  TouchEvent -> touchmove
-  TouchEvent -> touchstart
+  // PointerEvent -> pointercancel
+  // PointerEvent -> pointerdown
+  // PointerEvent -> pointermove
+  // PointerEvent -> pointerout
+  // PointerEvent -> pointerover
+  // PointerEvent -> pointerup
+  // TouchEvent -> touchcancel
+  // TouchEvent -> touchend
+  // TouchEvent -> touchmove
+  // TouchEvent -> touchstart
   UIEvent -> resize
   UIEvent -> select
   WheelEvent -> wheel

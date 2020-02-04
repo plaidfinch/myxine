@@ -1,0 +1,130 @@
+{
+    "events": {
+        "DOMContentLoaded": "Event",
+        "beforeunload": "Event",
+        "blur": "FocusEvent",
+        "change": "Event",
+        "click": "MouseEvent",
+        "contextmenu": "MouseEvent",
+        "dblclick": "MouseEvent",
+        "drag": "DragEvent",
+        "dragend": "DragEvent",
+        "dragenter": "DragEvent",
+        "dragleave": "DragEvent",
+        "dragover": "DragEvent",
+        "dragstart": "DragEvent",
+        "drop": "DragEvent",
+        "focus": "FocusEvent",
+        "focusin": "FocusEvent",
+        "focusout": "FocusEvent",
+        "fullscreenchange": "Event",
+        "fullscreenerror": "Event",
+        "hashchange": "HashChangeEvent",
+        "input": "InputEvent",
+        "keydown": "KeyboardEvent",
+        "keypress": "KeyboardEvent",
+        "keyup": "KeyboardEvent",
+        "languagechange": "Event",
+        "load": "Event",
+        "mousedown": "MouseEvent",
+        "mousemove": "MouseEvent",
+        "mouseout": "MouseEvent",
+        "mouseover": "MouseEvent",
+        "mouseup": "MouseEvent",
+        "reset": "Event",
+        "resize": "UIEvent",
+        "scroll": "Event",
+        "select": "UIEvent",
+        "selectionchange": "Event",
+        "selectstart": "Event",
+        "submit": "Event",
+        "unload": "Event",
+        "visibilitychange": "event",
+        "wheel": "WheelEvent"
+    },
+
+    "interfaces": {
+        "DragEvent": {
+            "inherits": "MouseEvent",
+            "properties": {}
+        },
+        "WheelEvent": {
+            "inherits": "MouseEvent",
+            "properties": {
+                "deltaX": "double",
+                "deltaY": "double",
+                "deltaZ": "double",
+                "deltaMode": "int"
+            }
+        },
+        "MouseEvent": {
+            "inherits": "UIEvent",
+            "properties": {
+                "altKey": "bool",
+                "button": "int",
+                "buttons": "int",
+                "clientX": "double",
+                "clientY": "double",
+                "ctrlKey": "bool",
+                "metaKey": "bool",
+                "movementX": "double",
+                "movementY": "double",
+                "offsetX": "double",
+                "offsetY": "double",
+                "pageX": "double",
+                "pageY": "double",
+                "region": "string",
+                "screenX": "double",
+                "screenY": "double",
+                "shiftKey": "bool",
+                "x": "double",
+                "y": "double"
+            }
+        },
+        "FocusEvent": {
+            "inherits": "UIEvent",
+            "properties": {}
+        },
+        "InputEvent": {
+            "inherits": "UIEvent",
+            "properties": {
+                "data": "string",
+                "inputType": "string",
+                "isComposing": "bool"
+            }
+        },
+        "KeyboardEvent": {
+            "inherits": "UIEvent",
+            "properties": {
+                "altKey": "bool",
+                "code": "string",
+                "ctrlKey": "bool",
+                "isComposing": "bool",
+                "key": "string",
+                "locale": "string",
+                "location": "int",
+                "metaKey": "bool",
+                "repeat": "bool",
+                "shiftKey": "bool"
+            }
+        },
+        "UIEvent": {
+            "inherits": "Event",
+            "properties": {
+                "detail": "int",
+                "isChar": "bool"
+            }
+        },
+        "HashChangeEvent": {
+            "inherits": "Event",
+            "properties": {
+                "newURL": "string",
+                "oldURL": "string"
+            }
+        },
+        "Event": {
+            "inherits": null,
+            "properties": {}
+        }
+    }
+}
