@@ -161,5 +161,4 @@ digraph {
   UIEvent -> resize
   UIEvent -> select
   WheelEvent -> wheel
-
 }
