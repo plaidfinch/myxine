@@ -19,6 +19,7 @@ digraph {
     HashChangeEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/HashChangeEvent"];
     InputEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/InputEvent"];
     KeyboardEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent"];
+    TouchEvent [href="https://developer.mozilla.org/en-US/docs/Web/API/TouchEvent"];
   }
 
   {
@@ -29,6 +30,7 @@ digraph {
     CompositionEvent
     PointerEvent
     DragEvent
+    TouchEvent
     HashChangeEvent
     ClipboardEvent
   }
@@ -89,6 +91,10 @@ digraph {
     selectionchange [fillcolor="yellow", href="https://developer.mozilla.org/en-US/docs/Web/Events/selectionchange"];
     selectstart [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/selectstart"];
     submit [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/submit"];
+    touchcancel [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/touchcancel"];
+    touchend [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/touchend"];
+    touchmove [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/touchmove"];
+    touchstart [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/touchstart"];
     unload [fillcolor="yellow", href="https://developer.mozilla.org/en-US/docs/Web/Events/unload"];
     visibilitychange [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/visibilitychange"];
     wheel [fillcolor="lightgreen", href="https://developer.mozilla.org/en-US/docs/Web/Events/wheel"];
@@ -105,6 +111,7 @@ digraph {
   Event -> UIEvent;
   Event -> ClipboardEvent;
   Event -> HashChangeEvent;
+  Event -> TouchEvent;
   Event -> DOMContentLoaded;
   ClipboardEvent -> copy
   ClipboardEvent -> cut
@@ -158,6 +165,10 @@ digraph {
   PointerEvent -> pointerout
   PointerEvent -> pointerover
   PointerEvent -> pointerup
+  TouchEvent -> touchcancel
+  TouchEvent -> touchend
+  TouchEvent -> touchmove
+  TouchEvent -> touchstart
   UIEvent -> resize
   UIEvent -> select
   WheelEvent -> wheel
