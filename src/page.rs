@@ -50,7 +50,6 @@ impl Page {
 
                 write!(&mut bytes,
                        include_str!("page/dynamic.html"),
-                       subscription = subscription,
                        debug = debug,
                        title = title,
                        body = body)

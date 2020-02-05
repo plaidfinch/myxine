@@ -33,6 +33,7 @@ pub(crate) enum PostParams {
     DynamicPage{title: String},
     StaticPage,
     PageEvent,
+    Evaluate{expression: Option<String>},
 }
 
 impl PostParams {

@@ -321,6 +321,9 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                         }
                     }
                 }
+                Some(PostParams::Evaluate{expression}) => {
+                    todo!("Implement me!")
+                }
                 None => {
                     return Ok(response_with_status(
                         StatusCode::BAD_REQUEST,

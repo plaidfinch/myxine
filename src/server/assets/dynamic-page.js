@@ -1,13 +1,13 @@
-export function activate(initialSubscription, diff, debugMode) {
-
-    // The initial subscription at page load time
-    let subscription = JSON.parse(initialSubscription);
+export function activate(debugMode) {
 
     // The initial set of listeners is empty
-    let listeners = [];
+    let listeners = {};
 
     // Current animation frame callback ID, if any
     let animationId = null;
+
+    // The global list of all events and their properties
+    let allEventDescriptions;
 
     // Print debug info if in debug build mode
     function debug(string) {
@@ -67,9 +67,13 @@ export function activate(initialSubscription, diff, debugMode) {
     }
 
     // These are the handlers for SSE events...
-    function subscribe(event) {
+    function resubscribe(event) {
         debug("Received new subscription: " + event.data);
-        subscription = JSON.parse(event.data);
+        const subscription = JSON.parse(event.data);
+        Object.entries(listeners).forEach(([eventName, listener]) => {
+            window.removeEventListener(eventName, listener);
+        });
+        setupListeners(subscription, allEventDescriptions);
     }
 
     // New body
@@ -99,14 +103,18 @@ export function activate(initialSubscription, diff, debugMode) {
     }
 
     // Evaluate a JavaScript expression in the global environment
-    function evaluate(expression) {
+    function evaluate(expression, statementMode) {
         // TODO: LRU-limited memoization (using memoizee?)
-        return Function('return ' + expression)();
+        if (!statementMode) {
+            return Function('return (' + expression + ')')();
+        } else {
+            return Function(expression)();
+        }
     }
 
     // Evaluate a JavaScript expression and return the result
-    function evaluateAndRespond(event) {
-        const result = evaluate(event.data);
+    function evaluateAndRespond(statementMode, event) {
+        const result = evaluate(event.data, statementMode);
         sendEvalResult(event.id, result);
     }
 
@@ -155,10 +163,11 @@ export function activate(initialSubscription, diff, debugMode) {
     // Given a mapping from events -> mappings from properties -> formatters for
     // those properties, set up listeners for all those events which send back
     // the appropriately formatted results when they fire
-    function setupListeners(events) {
+    function setupListeners(subscription, events) {
         // Set up event handlers
-        Object.entries(events).forEach(([eventName, eventInfo]) => {
-            window.addEventListener(eventName, event => {
+        subscription.forEach(eventName => {
+            const event = events[eventName];
+            const listener = window.addEventListener(eventName, event => {
                 // Calculate the id path
                 const path =
                       event.composedPath()
@@ -186,6 +195,7 @@ export function activate(initialSubscription, diff, debugMode) {
                 // TODO: implement batching
                 sendEvent(eventName, path, data);
             });
+            listeners[eventName] = listener;
         });
 
     }
@@ -196,7 +206,7 @@ export function activate(initialSubscription, diff, debugMode) {
     r.onload = () => {
         const enabledEvents = JSON.parse(r.responseText);
         debug(enabledEvents);
-        setupListeners(parseEventDescriptions(enabledEvents));
+        allEventDescriptions = parseEventDescriptions(enabledEvents);
     };
     r.open('GET', '/.myxine/assets/enabled-events.json');
     r.send();
@@ -208,5 +218,7 @@ export function activate(initialSubscription, diff, debugMode) {
     sse.addEventListener("title", setTitle);
     sse.addEventListener("clear-title", clearTitle);
     sse.addEventListener("refresh", refresh);
-    sse.addEventListener("evaluate", evaluateAndRespond);
+    sse.addEventListener("subscribe", resubscribe);
+    sse.addEventListener("evaluate", event => evaluateAndRespond(false, event));
+    sse.addEventListener("run", event => evaluateAndRespond(true, event));
 }
