@@ -16,64 +16,6 @@ export function activate(initialSubscription, diff, debugMode) {
         }
     }
 
-    // Regular expression to determine if a string is the name of a standard
-    // html element -- defined by scraping the contents of the reference at
-    // https://developer.mozilla.org/en-US/docs/Web/HTML/Element, using this:
-    // Array.from(document.querySelectorAll('article table.standard-table td:first-child code'))
-    //     .map(e => e.innerText
-    //          .replace('<', '')
-    //          .replace('>', ''))
-    //     .toString()
-    //     .replace(/,/g, '|')
-    const htmlElement =
-          /^(html|base|head|link|meta|style|title|body|address|article|aside|footer|header|h1|h2|h3|h4|h5|h6|hgroup|main|nav|section|blockquote|dd|div|dl|dt|figcaption|figure|hr|li|main|ol|p|pre|ul|a|abbr|b|bdi|bdo|br|cite|code|data|dfn|em|i|kbd|mark|q|rb|rp|rt|rtc|ruby|s|samp|small|span|strong|sub|sup|time|u|var|wbr|area|audio|img|map|track|video|embed|iframe|object|param|picture|source|canvas|noscript|script|del|ins|caption|col|colgroup|table|tbody|td|tfoot|th|thead|tr|button|datalist|fieldset|form|input|label|legend|meter|optgroup|option|output|progress|select|textarea|details|dialog|menu|summary|slot|template|acronym|applet|basefont|bgsound|big|blink|center|command|content|dir|element|font|frame|frameset|image|isindex|keygen|listing|marquee|menuitem|multicol|nextid|nobr|noembed|noframes|plaintext|shadow|spacer|strike|tt|xmp)$/;
-
-    // Get a list of objects by CSS queryAll selector or a path in the DOM
-    // These should be unambiguous, provided that no top-level DOM object has a
-    // name which is the same as a valid HTML tag name -- and this is indeed the
-    // case in our pages
-    function queryAll(q, all) {
-        // Determine if we should match all, or just one
-        if (typeof all === 'undefined') {
-            all = true;
-        }
-        // Trim the query to remove spaces for matching below
-        q = q.trim();
-        // If the query starts with a valid HTML element or any non-word
-        // character, assume it's a CSS selector
-        if (/^\W/.test(q) || htmlElement.test(q.split(/\b/, 1)[0])) {
-            try {
-                if (all) {
-                    return Array.from(document.querySelectorAll(q));
-                } else {
-                    return document.querySelector(q);
-                }
-            } catch(err) {
-                debug("Selector lookup queryAll failed: '" + q + "': " + err);
-                return [];
-            }
-        // Otherwise, assume it's an object lookup
-        } else {
-            const segments = q.split(".");
-            let object = window;
-            segments.forEach(segment => object = object[segment]);
-            if (typeof object !== 'undefined') {
-                if (all) {
-                    return [object];
-                } else {
-                    return object;
-                }
-            } else {
-                debug("Object lookup queryAll failed: '" + q + "'");
-                if (all) {
-                    return [];
-                } else {
-                    return null;
-                }
-            }
-        }
-    }
-
     // NOTE: Why do we use separate workers for events and query results, but
     // only one worker for all events? Well, it matters that events arrive in
     // order so using one worker forces them to be linearized. And having a
@@ -84,30 +26,31 @@ export function activate(initialSubscription, diff, debugMode) {
     // Actually send an event back to the server
     let sendEventWorker = new Worker('/.myxine/assets/post.js');
 
-    function sendEvent(eventType, target, returnData) {
-        let url = window.location.href
-            + "?event="  + encodeURIComponent(eventType)
-            + "&target=" + encodeURIComponent(targetQuery);
+    function sendEvent(type, path, properties) {
+        let url = window.location.href + '?event';
+        let data = JSON.stringify({
+            event: type,
+            id: path,
+            data: properties,
+        });
+        debug("Sending event: " + data);
         sendEventWorker.postMessage({
             url: url,
             contentType: "application/json",
-            data: JSON.stringify(returnData),
+            data: data,
         });
     }
 
     // Actually send a query result back to the server
-    let sendQueryResultsWorker = new Worker('/.myxine/assets/post.js');
+    let sendEvalResultWorker = new Worker('/.myxine/assets/post.js');
 
-    function sendQueryResults(id, results) {
+    function sendEvalResult(id, result) {
         let url = window.location.href
-            + "?query="  + encodeURIComponent(id);
-        sendQueryResultsWorker.postMessage({
+            + "?result="  + encodeURIComponent(id);
+        sendEvalResultWorker.postMessage({
             url: url,
             contentType: "application/json",
-            data: JSON.stringify({
-                id: id,
-                results: results,
-            }),
+            data: JSON.stringify(result),
         });
     }
 
@@ -155,61 +98,54 @@ export function activate(initialSubscription, diff, debugMode) {
         window.location.reload();
     }
 
-    // TODO: Replace query interface with eval (using Function())?
-
-    // Query the page for a particular list of values
-    function query(event) {
-        const id = event.id;
-        const data = JSON.parse(event.data);
-        const results = {};
-        try {
-            data.forEach(([target, properties]) => {
-                results[target] = [];
-                const object = queryAll(target, false);  // get just one
-                properties.forEach(property => {
-                    let value = object[property];
-                    let type = typeof value;
-                    // If it's not a primitive type, don't return it
-                    if (!(type === 'boolean' || type === 'number' || type === 'string')) {
-                        value = null;
-                    }
-                    results[target].push(value);
-                });
-            });
-        } catch(err) {
-            debug("Could not query page properly: " + err);
-        }
-        sendQueryResults(id, results);
+    // Evaluate a JavaScript expression in the global environment
+    function evaluate(expression) {
+        // TODO: LRU-limited memoization (using memoizee?)
+        return Function('return ' + expression)();
     }
 
+    // Evaluate a JavaScript expression and return the result
+    function evaluateAndRespond(event) {
+        const result = evaluate(event.data);
+        sendEvalResult(event.id, result);
+    }
+
+    // Functions from JavaScript objects to serializable objects, keyed by the
+    // types of those objects as represented in the interface description
     const customJsonFormatters = {
-        // string: x => x,
-        // int: x => x,
-        // bool: x => x,
-        // double: x => x,
-        // Add more here if there's a need to support more complex object types
+        // Add here if there's a need to support more complex object types
     };
 
     // Parse a description of events and interfaces, and return a mapping from
     // event name to mappings from property name -> formatter for that property
     function parseEventDescriptions(enabledEvents) {
         let events = {};
-        enabledEvents.forEach(([eventName, interfaceName]) => {
+        Object.entries(enabledEvents.events).forEach(([eventName, eventInfo]) => {
+            // Accumulate the desired fields for the event into a map from field
+            // name to formatter for the objects in that field
+            debug(eventInfo);
+            let interfaceName = eventInfo['interface']; // most specific interface
+            let theInterface = enabledEvents.interfaces[interfaceName];
             events[eventName] = {};
             while (true) {
-                const interface = enabledEvents.interfaces[interfaceName];
-                const properties = Object.keys(interface.properties);
-                for (let property in properties) {
+                debug(theInterface);
+                const properties = Object.keys(theInterface.properties);
+                properties.forEach(property => {
                     let formatter = customJsonFormatters[property];
                     if (typeof formatter === 'undefined') {
-                        formatter = (x => x);
+                        formatter = (x => x); // Default formatter is identity
                     }
-                    events[eventName][property] = formatter;
-                }
-                if (interface.inherits !== null) {
-                    interface = enabledEvents.interfaces[interface.inherits];
+                    if (typeof events[eventName][property] === 'undefined') {
+                        events[eventName][property] = formatter;
+                    } else {
+                        debug("Duplicate property in " + eventName + ": " + property);
+                    }
+                });
+                if (theInterface.inherits !== null) {
+                    // Check ancestors for more fields to add
+                    theInterface = enabledEvents.interfaces[theInterface.inherits];
                 } else {
-                    break;
+                    break; // Top of interface hierarchy
                 }
             }
         });
@@ -221,26 +157,29 @@ export function activate(initialSubscription, diff, debugMode) {
     // the appropriately formatted results when they fire
     function setupListeners(events) {
         // Set up event handlers
-        events.forEach(([eventName, eventProperties]) => {
+        Object.entries(events).forEach(([eventName, eventInfo]) => {
             window.addEventListener(eventName, event => {
                 // Calculate the id path
                 const path =
                       event.composedPath()
                       .filter(t => t instanceof Element)
                       .map(target => {
-                          const pathElement = { tagName: target.tagName };
+                          const pathElement = {
+                              tagName: target.tagName,
+                              attributes: {},
+                          };
                           for (let i = target.attributes.length - 1; i >= 0; i--) {
                               const attribute = target.attributes[i];
                               const name = attribute.name;
                               const value = attribute.value;
-                              pathElement[name] = value;
+                              pathElement.attributes[name] = value;
                           }
                           return pathElement;
                       });
 
                 // Extract the relevant properties
                 const data = {};
-                events[eventName].forEach(([property, formatter]) => {
+                Object.entries(events[eventName]).forEach(([property, formatter]) => {
                     data[property] = formatter(event[property]);
                 });
                 // Send the event back to the server
@@ -254,7 +193,11 @@ export function activate(initialSubscription, diff, debugMode) {
     // Fetch the description of the events we wish to support
     const r = new XMLHttpRequest();
     r.onerror = () => debug("Could not fetch list of enabled events!");
-    r.onload = () => setupListeners(JSON.parse(r.responseText));
+    r.onload = () => {
+        const enabledEvents = JSON.parse(r.responseText);
+        debug(enabledEvents);
+        setupListeners(parseEventDescriptions(enabledEvents));
+    };
     r.open('GET', '/.myxine/assets/enabled-events.json');
     r.send();
 
@@ -265,5 +208,5 @@ export function activate(initialSubscription, diff, debugMode) {
     sse.addEventListener("title", setTitle);
     sse.addEventListener("clear-title", clearTitle);
     sse.addEventListener("refresh", refresh);
-    sse.addEventListener("queryAll", query);
+    sse.addEventListener("evaluate", evaluateAndRespond);
 }

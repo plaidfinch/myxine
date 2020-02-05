@@ -2,16 +2,14 @@ use hyper::Body;
 use hyper_usse::EventBuilder;
 use std::io::Write;
 use tokio::sync::Mutex;
-use std::collections::HashMap;
 use futures::join;
 use serde_json::Value;
-use uuid::Uuid;
 
 pub mod sse;
-pub mod events;
+pub mod subscription;
 mod content;
 
-use events::{Subscribers, Subscription, AggregateSubscription};
+use subscription::{Subscribers, Subscription, AggregateSubscription};
 use content::Content;
 
 /// A `Page` pairs some page `Content` (either dynamic or static) with a set of
@@ -67,12 +65,10 @@ impl Page {
 
     /// Subscribe another page event listener to this page, given a subscription
     /// specification for what events to listen to.
-    pub async fn event_stream(
-        &self, uuid: Option<Uuid>, subscription: Subscription,
-    ) -> Option<(Uuid, Body)> {
+    pub async fn event_stream(&self, subscription: Subscription) -> Body {
         let mut subscribers = self.subscribers.lock().await;
         let (total_subscription, new_details) =
-            subscribers.add_subscriber(uuid, subscription).await;
+            subscribers.add_subscriber(subscription).await;
         let content = &mut *self.content.lock().await;
         match content {
             Content::Static{..} => { },
@@ -86,14 +82,10 @@ impl Page {
     /// Send an event to all subscribers. This should only be called with events
     /// that have come from the corresponding page itself, or confusion will
     /// result!
-    pub async fn send_event(&self,
-                            event_type: &str,
-                            event_target: &str,
-                            event_id: &str,
-                            event_data: &HashMap<String, Value>) {
+    pub async fn send_event(&self, event: &str, id: &Value, data: &Value) {
         if let Some(total_subscription) =
             self.subscribers.lock().await
-            .send_event(event_type, event_target, event_id, event_data).await {
+            .send_event(event, id, data).await {
                 let content = &mut *self.content.lock().await;
                 match content {
                     Content::Static{..} => { },

@@ -17,7 +17,7 @@ use void::Void;
 mod params;
 mod heartbeat;
 
-use crate::page::Page;
+use crate::page::{Page, subscription::Event};
 use params::{GetParams, PostParams};
 
 lazy_static! {
@@ -110,6 +110,8 @@ fn process_special_request(
             static_asset!(false, "application/javascript", "server/assets/dynamic-page.js"),
         (Method::GET, "/assets/post.js") =>
             static_asset!(false, "application/javascript", "server/assets/post.js"),
+        (Method::GET, "/assets/enabled-events.json") =>
+            static_asset!(false, "application/json", "server/assets/enabled-events.json"),
         (Method::GET, _) =>
             Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap(),
         _ => Response::builder().status(StatusCode::METHOD_NOT_ALLOWED).body(Body::empty()).unwrap(),
@@ -197,11 +199,14 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                     builder.body(body).unwrap()
                 },
                 None => {
-                    return Ok(bad_request(if method == Method::GET {
-                        "Invalid query string in GET."
-                    } else {
-                        ""
-                    }));
+                    return Ok(response_with_status(
+                        StatusCode::BAD_REQUEST,
+                        if method == Method::GET {
+                            "Invalid query string in GET."
+                        } else {
+                            ""
+                        },
+                    ));
                 },
             }
         },
@@ -231,7 +236,10 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                             Some(content_type)
                         },
                     Some(Err(_)) =>
-                        return Ok(bad_request("Invalid ASCII in Content-Type header.")),
+                        return Ok(response_with_status(
+                            StatusCode::BAD_REQUEST,
+                            "Invalid ASCII in Content-Type header."
+                        )),
                 };
 
             // Determine if the endpoint is a "special" path, which cannot be
@@ -256,10 +264,10 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                         page.set_static(content_type.map(String::from), body_bytes).await;
                         Response::new(Body::empty())
                     } else {
-                        Response::builder()
-                            .status(StatusCode::FORBIDDEN)
-                            .body(Body::empty())
-                            .unwrap()
+                        response_with_status(
+                            StatusCode::FORBIDDEN,
+                            "Clients cannot set the contents of the dashboard page.",
+                        )
                     }
                 },
                 // Client wants to publish some HTML to a dynamic page:
@@ -275,53 +283,58 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                                 Response::new(Body::empty())
                             },
                             Err(_) =>
-                                return Ok(bad_request("Invalid UTF-8 in POST data (only UTF-8 is supported).")),
+                                return Ok(response_with_status(
+                                    StatusCode::BAD_REQUEST,
+                                    "Invalid UTF-8 in POST data (only UTF-8 is supported).",
+                                )),
                         }
                     } else {
-                        Response::builder()
-                            .status(StatusCode::FORBIDDEN)
-                            .body(Body::empty())
-                            .unwrap()
+                        response_with_status(
+                            StatusCode::FORBIDDEN,
+                            "Clients cannot set the contents of the dashboard page.",
+                        )
                     }
                 },
                 // Client wants to subscribe to interface events on this page:
-                Some(PostParams::SubscribeEvents{uuid}) => {
+                Some(PostParams::SubscribeEvents) => {
                     if let Ok(subscription) = serde_json::from_slice(&body_bytes) {
                         if cfg!(debug_assertions) {
                             eprintln!("\n{:?}", &subscription);
                         }
-                        if let Some((uuid, body)) =
-                            page.event_stream(uuid, subscription).await
-                        {
-                            let content_location =
-                                format!("{}?resubscribe={}", path, uuid.to_simple_ref());
-                            Response::builder()
-                                .header("Content-Type", "text/event-stream")
-                                .header("Cache-Control", "no-cache")
-                                .header("Access-Control-Allow-Origin", "*")
-                                .header("Content-Location", content_location)
-                                .body(body)
-                                .unwrap()
-                        } else {
-                            return Ok(bad_request("Invalid resubscription request: stream does not exist."))
-                        }
+                        let body = page.event_stream(subscription).await;
+                        Response::builder()
+                            .header("Content-Type", "text/event-stream")
+                            .header("Cache-Control", "no-cache")
+                            .header("Access-Control-Allow-Origin", "*")
+                            .body(body)
+                            .unwrap()
                     } else {
-                        return Ok(bad_request("Invalid subscription request."));
+                        return Ok(response_with_status(
+                            StatusCode::BAD_REQUEST,
+                            "Invalid subscription request.",
+                        ));
                     }
                 },
                 // Browser wants to notify client of an event
-                Some(PostParams::PageEvent{event, target, id}) => {
-                    if let Ok(event_data) = serde_json::from_slice(&body_bytes) {
-                        tokio::spawn(async move {
-                            page.send_event(&event, &target, &id, &event_data).await;
-                        });
-                        Response::new(Body::empty())
-                    } else {
-                        return Ok(bad_request("Invalid page event."));
+                Some(PostParams::PageEvent) => {
+                    match serde_json::from_slice(&body_bytes) {
+                        Ok(Event{event, id, data}) => {
+                            page.send_event(&event, &id, &data).await;
+                            Response::new(Body::empty())
+                        },
+                        Err(err) => {
+                            return Ok(response_with_status(
+                                StatusCode::BAD_REQUEST,
+                                format!("Invalid page event: {}.", err),
+                            ));
+                        }
                     }
                 }
                 None => {
-                    return Ok(bad_request("Invalid query string in POST."));
+                    return Ok(response_with_status(
+                        StatusCode::BAD_REQUEST,
+                        "Invalid query string in POST.",
+                    ));
                 }
             }
         },
@@ -329,7 +342,7 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
         Method::DELETE => {
             // This is equivalent to an empty-body POST with no query string
             if query != "" {
-                return Ok(bad_request("Invalid query string in DELETE."));
+                return Ok(response_with_status(StatusCode::BAD_REQUEST, "Invalid query string in DELETE."));
             }
             page.set_title("").await;
             page.set_body("").await;
@@ -345,12 +358,9 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
 
 // Some utilities for this module:
 
-/// Assemble a BAD_REQUEST response with the given message
-fn bad_request(message: impl Into<String>) -> Response<Body> {
-    Response::builder()
-        .status(StatusCode::BAD_REQUEST)
-        .body(Body::from(message.into()))
-        .unwrap()
+/// Construct a response with a given status code
+fn response_with_status(status: StatusCode, body: impl Into<Body>) -> Response<Body> {
+    Response::builder().status(status).body(body.into()).unwrap()
 }
 
 /// Print a header value to stderr, for debugging purposes

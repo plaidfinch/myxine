@@ -1,45 +1,165 @@
 {
     "events": {
-        "drag":             "DragEvent",
-        "dragend":          "DragEvent",
-        "dragenter":        "DragEvent",
-        "dragleave":        "DragEvent",
-        "dragover":         "DragEvent",
-        "dragstart":        "DragEvent",
-        "drop":             "DragEvent",
-        "beforeunload":     "Event",
-        "change":           "Event",
-        "fullscreenchange": "Event",
-        "fullscreenerror":  "Event",
-        "languagechange":   "Event",
-        "load":             "Event",
-        "reset":            "Event",
-        "scroll":           "Event",
-        "selectionchange":  "Event",
-        "selectstart":      "Event",
-        "submit":           "Event",
-        "unload":           "Event",
-        "visibilitychange": "Event",
-        "blur":             "FocusEvent",
-        "focus":            "FocusEvent",
-        "focusin":          "FocusEvent",
-        "focusout":         "FocusEvent",
-        "hashchange":       "HashChangeEvent",
-        "input":            "InputEvent",
-        "keydown":          "KeyboardEvent",
-        "keypress":         "KeyboardEvent",
-        "keyup":            "KeyboardEvent",
-        "click":            "MouseEvent",
-        "contextmenu":      "MouseEvent",
-        "dblclick":         "MouseEvent",
-        "mousedown":        "MouseEvent",
-        "mousemove":        "MouseEvent",
-        "mouseout":         "MouseEvent",
-        "mouseover":        "MouseEvent",
-        "mouseup":          "MouseEvent",
-        "resize":           "UIEvent",
-        "select":           "UIEvent",
-        "wheel":            "WheelEvent"
+        "drag": {
+            "interface": "DragEvent",
+            "nameWords": ["drag"]
+        },
+        "dragend": {
+            "interface": "DragEvent",
+            "nameWords": ["drag", "end"]
+        },
+        "dragenter": {
+            "interface": "DragEvent",
+            "nameWords": ["drag", "enter"]
+        },
+        "dragleave": {
+            "interface": "DragEvent",
+            "nameWords": ["drag", "leave"]
+        },
+        "dragover": {
+            "interface": "DragEvent",
+            "nameWords": ["drag", "over"]
+        },
+        "dragstart": {
+            "interface": "DragEvent",
+            "nameWords": ["drag", "start"]
+        },
+        "drop": {
+            "interface": "DragEvent",
+            "nameWords": ["drop"]
+        },
+        "beforeunload": {
+            "interface": "Event",
+            "nameWords": ["before", "unload"]
+        },
+        "change": {
+            "interface": "Event",
+            "nameWords": ["change"]
+        },
+        "fullscreenchange": {
+            "interface": "Event",
+            "nameWords": ["fullscreen", "change"]
+        },
+        "fullscreenerror": {
+            "interface": "Event",
+            "nameWords": ["fullscreen", "error"]
+        },
+        "languagechange": {
+            "interface": "Event",
+            "nameWords": ["language", "change"]
+        },
+        "load": {
+            "interface": "Event",
+            "nameWords": ["load"]
+        },
+        "reset": {
+            "interface": "Event",
+            "nameWords": ["reset"]
+        },
+        "scroll": {
+            "interface": "Event",
+            "nameWords": ["scroll"]
+        },
+        "selectionchange": {
+            "interface": "Event",
+            "nameWords": ["selection ", "change"]
+        },
+        "selectstart": {
+            "interface": "Event",
+            "nameWords": ["select", "start"]
+        },
+        "submit": {
+            "interface": "Event",
+            "nameWords": ["submit"]
+        },
+        "unload": {
+            "interface": "Event",
+            "nameWords": ["unload"]
+        },
+        "visibilitychange": {
+            "interface": "Event",
+            "nameWords": ["visibility", "change"]
+        },
+        "blur": {
+            "interface": "FocusEvent",
+            "nameWords": ["blur"]
+        },
+        "focus": {
+            "interface": "FocusEvent",
+            "nameWords": ["focus"]
+        },
+        "focusin": {
+            "interface": "FocusEvent",
+            "nameWords": ["focus", "in"]
+        },
+        "focusout": {
+            "interface": "FocusEvent",
+            "nameWords": ["focus", "out"]
+        },
+        "hashchange": {
+            "interface": "HashChangeEvent",
+            "nameWords": ["hash", "change"]
+        },
+        "input": {
+            "interface": "InputEvent",
+            "nameWords": ["input"]
+        },
+        "keydown": {
+            "interface": "KeyboardEvent",
+            "nameWords": ["key", "down"]
+        },
+        "keypress": {
+            "interface": "KeyboardEvent",
+            "nameWords": ["key", "press"]
+        },
+        "keyup": {
+            "interface": "KeyboardEvent",
+            "nameWords": ["key", "up"]
+        },
+        "click": {
+            "interface": "MouseEvent",
+            "nameWords": ["click"]
+        },
+        "contextmenu": {
+            "interface": "MouseEvent",
+            "nameWords": ["context", "menu"]
+        },
+        "dblclick": {
+            "interface": "MouseEvent",
+            "nameWords": ["double", "click"]
+        },
+        "mousedown": {
+            "interface": "MouseEvent",
+            "nameWords": ["mouse", "down"]
+        },
+        "mousemove": {
+            "interface": "MouseEvent",
+            "nameWords": ["mouse", "move"]
+        },
+        "mouseout": {
+            "interface": "MouseEvent",
+            "nameWords": ["mouse", "out"]
+        },
+        "mouseover": {
+            "interface": "MouseEvent",
+            "nameWords": ["mouse", "over"]
+        },
+        "mouseup": {
+            "interface": "MouseEvent",
+            "nameWords": ["mouse", "up"]
+        },
+        "resize": {
+            "interface": "UIEvent",
+            "nameWords": ["resize"]
+        },
+        "select": {
+            "interface": "UIEvent",
+            "nameWords": ["select"]
+        },
+        "wheel": {
+            "interface": "WheelEvent",
+            "nameWords": ["wheel"]
+        }
     },
 
     "interfaces": {
@@ -72,7 +192,7 @@
                 "offsetY": "f64",
                 "pageX": "f64",
                 "pageY": "f64",
-                "region": "string",
+                "region": "String",
                 "screenX": "f64",
                 "screenY": "f64",
                 "shiftKey": "bool",
@@ -87,8 +207,8 @@
         "InputEvent": {
             "inherits": "UIEvent",
             "properties": {
-                "data": "string",
-                "inputType": "string",
+                "data": "String",
+                "inputType": "String",
                 "isComposing": "bool"
             }
         },
@@ -96,11 +216,11 @@
             "inherits": "UIEvent",
             "properties": {
                 "altKey": "bool",
-                "code": "string",
+                "code": "String",
                 "ctrlKey": "bool",
                 "isComposing": "bool",
-                "key": "string",
-                "locale": "string",
+                "key": "String",
+                "locale": "String",
                 "location": "i64",
                 "metaKey": "bool",
                 "repeat": "bool",
@@ -117,8 +237,8 @@
         "HashChangeEvent": {
             "inherits": "Event",
             "properties": {
-                "newURL": "string",
-                "oldURL": "string"
+                "newURL": "String",
+                "oldURL": "String"
             }
         },
         "Event": {

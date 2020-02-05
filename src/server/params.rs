@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use percent_encoding::percent_decode;
 use std::borrow::Cow;
-use uuid::Uuid;
 
 /// Parsed parameters from a query string for a GET/HEAD request.
 pub(crate) enum GetParams {
@@ -28,8 +27,8 @@ impl GetParams {
 pub(crate) enum PostParams {
     DynamicPage{title: String},
     StaticPage,
-    SubscribeEvents{uuid: Option<Uuid>},
-    PageEvent{event: String, target: String, id: String},
+    SubscribeEvents,
+    PageEvent,
 }
 
 impl PostParams {
@@ -39,28 +38,15 @@ impl PostParams {
         if param_as_bool("subscribe", &params)?
             && constrained_to_keys(&params, &["subscribe"])
         {
-            return Some(PostParams::SubscribeEvents{uuid: None})
-        } else if let Some(uuid) =
-            param_as_str("resubscribe", &params)?.and_then(|s| Uuid::parse_str(s).ok()) {
-                if constrained_to_keys(&params, &["resubscribe"]) {
-                    return Some(PostParams::SubscribeEvents{uuid: Some(uuid)})
-                }
+            return Some(PostParams::SubscribeEvents)
         } else if param_as_bool("static", &params)?
             && constrained_to_keys(&params, &["static"])
         {
-                return Some(PostParams::StaticPage)
-        } else if let Some(event) =
-            param_as_str("event", &params)?.map(String::from)
+            return Some(PostParams::StaticPage)
+        } else if param_as_bool("event", &params)?
+            && constrained_to_keys(&params, &["event"])
         {
-            if let Some(target) = param_as_str("target", &params)?.map(String::from) {
-                if let Some(id) = param_as_str("id", &params)?.map(String::from) {
-                    if constrained_to_keys(&params, &["event", "target", "id"])
-                        && event != "" && target != ""
-                    {
-                        return Some(PostParams::PageEvent{event, target, id})
-                    }
-                }
-            }
+            return Some(PostParams::PageEvent)
         } else if constrained_to_keys(&params, &["title"]) {
             let title = param_as_str("title", &params)?.unwrap_or("").to_string();
             return Some(PostParams::DynamicPage{title})
