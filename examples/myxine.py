@@ -85,14 +85,14 @@ def page_url(path : str, port : int = MYXINE_DEFAULT_PORT) -> str:
     return 'http://localhost:' + str(port) + '/' + path
 
 def subscribe(path : str,
-              subscription : Dict[str, Dict[str, List[str]]],
+              subscription : List[str],
               port : int = MYXINE_DEFAULT_PORT) -> Iterator[PageEvent]:
     """Subscribe to a stream of page events from a myxine server, returning an
     iterator over the events returned by the stream as they become available.
     """
-    url = page_url(path, port) + '?subscribe'
+    url = page_url(path, port)
     try:
-        response = requests.post(url, stream=True, json=subscription)
+        response = requests.get(url, stream=True, params={'events': subscription})
         if response.encoding is None: response.encoding = 'utf-8'
         for event in parse_event_stream(response.iter_lines(decode_unicode=True)):
             if event.data is not '': # filter out heartbeat events
@@ -104,6 +104,7 @@ def update(path : str,
            body : str,
            title : Optional[str] = None,
            port : int = MYXINE_DEFAULT_PORT) -> None:
+
     """Set the contents of the page at the given path to a provided body and
     title. If body or title is not provided, clears those elements of the page.
     """

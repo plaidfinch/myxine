@@ -60,9 +60,7 @@ class State:
         return html
 
 # A description of the events we wish to monitor
-subscription = {
-    'window': ['resize', 'mousemove']
-}
+subscription = ['resize', 'mousemove']
 
 def main():
     try:
@@ -85,6 +83,5 @@ def main():
 
     # You can kill the program with a keyboard interrupt
     except KeyboardInterrupt: pass
-    except Exception as e: print('Exception: ', e)
 
 if __name__ == '__main__': main()
