@@ -23,8 +23,14 @@ pub struct Event {
 // Exterior interface is opaque type `Subscription` which can only be
 // constructed by deserializing it (i.e. from JSON)...
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Subscription(HashSet<String>);
+
+impl From<Vec<String>> for Subscription {
+    fn from(events: Vec<String>) -> Self {
+        Subscription(events.into_iter().collect())
+    }
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct AggregateSubscription<'a>(HashSet<&'a String>);

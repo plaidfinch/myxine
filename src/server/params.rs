@@ -6,17 +6,22 @@ use std::borrow::Cow;
 pub(crate) enum GetParams {
     FullPage,
     PageUpdates,
+    SubscribeEvents(Vec<String>),
 }
 
 impl GetParams {
     /// Parse a query string from a GET request.
     pub fn parse(query: &str) -> Option<GetParams> {
         let params = query_params(query)?;
-        if param_as_bool("updates", &params)?
-        && constrained_to_keys(&params, &["updates"]) {
-            Some(GetParams::PageUpdates)
-        } else if constrained_to_keys(&params, &[]) {
+        if constrained_to_keys(&params, &[]) {
             Some(GetParams::FullPage)
+        } else if param_as_bool("updates", &params)?
+            && constrained_to_keys(&params, &["updates"])
+        {
+            Some(GetParams::PageUpdates)
+        } else if constrained_to_keys(&params, &["events"]) {
+            let events = param_as_some_strings("events", &params)?;
+            Some(GetParams::SubscribeEvents(events))
         } else {
             None
         }
@@ -27,7 +32,6 @@ impl GetParams {
 pub(crate) enum PostParams {
     DynamicPage{title: String},
     StaticPage,
-    SubscribeEvents,
     PageEvent,
 }
 
@@ -35,23 +39,20 @@ impl PostParams {
     /// Parse a query string from a POST request.
     pub fn parse(query: &str) -> Option<PostParams> {
         let params = query_params(query)?;
-        if param_as_bool("subscribe", &params)?
-            && constrained_to_keys(&params, &["subscribe"])
-        {
-            return Some(PostParams::SubscribeEvents)
-        } else if param_as_bool("static", &params)?
+        if param_as_bool("static", &params)?
             && constrained_to_keys(&params, &["static"])
         {
-            return Some(PostParams::StaticPage)
+            Some(PostParams::StaticPage)
         } else if param_as_bool("event", &params)?
             && constrained_to_keys(&params, &["event"])
         {
-            return Some(PostParams::PageEvent)
+            Some(PostParams::PageEvent)
         } else if constrained_to_keys(&params, &["title"]) {
             let title = param_as_str("title", &params)?.unwrap_or("").to_string();
-            return Some(PostParams::DynamicPage{title})
+            Some(PostParams::DynamicPage{title})
+        } else {
+            None
         }
-        None
     }
 }
 
@@ -79,6 +80,23 @@ fn param_as_str<'a, 'b: 'a>(param: &'b str, params: &'a HashMap<&'a str, Vec<Cow
     }
 }
 
+fn param_as_some_strings<'a, 'b: 'a>(
+    param: &'b str,
+    params: &'a HashMap<&'a str, Vec<Cow<'a, str>>>
+) -> Option<Vec<String>> {
+    match params.get(param) {
+        Some(strings) if strings.is_empty() => None,
+        Some(strings) => {
+            let mut result = Vec::with_capacity(strings.len());
+            for string in strings {
+                result.push(string.to_string());
+            }
+            Some(result)
+        },
+        None => None,
+    }
+}
+
 /// Parse a query string into a mapping from key to list of values. The syntax
 /// expected for an individual key-value mapping is one of `k`, `k=`, `k=v`,
 /// `k=v1,v2`, etc., and mappings are concatenated by `&`, as in:
@@ -94,13 +112,13 @@ fn query_params<'a>(query: &'a str) -> Option<HashMap<&'a str, Vec<Cow<'a, str>>
                 if key == "" { return None }
                 for value in values.split(',') {
                     let value = value.trim();
-                    map.entry(key).or_insert_with(|| vec![])
+                    map.entry(key).or_insert_with(Vec::new)
                         .push(percent_decode(value.as_bytes()).decode_utf8_lossy());
                 }
             },
             [key] => {
                 let key = key.trim();
-                map.entry(key).or_insert_with(|| vec![]);
+                map.entry(key).or_insert_with(Vec::new);
             }
             _ => return None,
         }

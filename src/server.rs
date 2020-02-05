@@ -17,7 +17,7 @@ use void::Void;
 mod params;
 mod heartbeat;
 
-use crate::page::{Page, subscription::Event};
+use crate::page::{Page, subscription::{Subscription, Event}};
 use params::{GetParams, PostParams};
 
 lazy_static! {
@@ -177,6 +177,17 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                         .body(body)
                         .unwrap()
                 },
+                // Client wants to subscribe to interface events on this page:
+                Some(GetParams::SubscribeEvents(events)) => {
+                    let subscription = Subscription::from(events);
+                    let body = page.event_stream(subscription).await;
+                    Response::builder()
+                        .header("Content-Type", "text/event-stream")
+                        .header("Cache-Control", "no-cache")
+                        .header("Access-Control-Allow-Origin", "*")
+                        .body(body)
+                        .unwrap()
+                },
                 Some(GetParams::FullPage) => {
                     let mut builder = Response::builder()
                         .header("Access-Control-Allow-Origin", "*")
@@ -293,26 +304,6 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                             StatusCode::FORBIDDEN,
                             "Clients cannot set the contents of the dashboard page.",
                         )
-                    }
-                },
-                // Client wants to subscribe to interface events on this page:
-                Some(PostParams::SubscribeEvents) => {
-                    if let Ok(subscription) = serde_json::from_slice(&body_bytes) {
-                        if cfg!(debug_assertions) {
-                            eprintln!("\n{:?}", &subscription);
-                        }
-                        let body = page.event_stream(subscription).await;
-                        Response::builder()
-                            .header("Content-Type", "text/event-stream")
-                            .header("Cache-Control", "no-cache")
-                            .header("Access-Control-Allow-Origin", "*")
-                            .body(body)
-                            .unwrap()
-                    } else {
-                        return Ok(response_with_status(
-                            StatusCode::BAD_REQUEST,
-                            "Invalid subscription request.",
-                        ));
                     }
                 },
                 // Browser wants to notify client of an event
