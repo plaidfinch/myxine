@@ -100,6 +100,15 @@ def subscribe(path : str,
     except RequestException as e:
         raise ValueError("Connection issue with myxine server (is it running?):", e)
 
+def evaluate(path : str,
+             expression : str,
+             port : int = MYXINE_DEFAULT_PORT) -> None:
+    """Evaluate the given JavaScript code in the context of the page."""
+    url = page_url(path, port) + '?evaluate'
+    try: requests.post(url, data=expression.encode())
+    except RequestException as e:
+        raise ValueError("Connection issue with myxine server (is it running?):", e)
+
 def update(path : str,
            body : str,
            title : Optional[str] = None,
