@@ -1,0 +1,433 @@
+{
+    "events": {
+        "beforeunload": {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/beforeunload",
+            "interface": "Event",
+            "nameWords": [
+                "before",
+                "unload"
+            ]
+        },
+        "blur": {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/blur",
+            "interface": "FocusEvent",
+            "nameWords": [
+                "blur"
+            ]
+        },
+        "change": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/change",
+            "interface": "Event",
+            "nameWords": [
+                "change"
+            ]
+        },
+        "click": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/click",
+            "interface": "MouseEvent",
+            "nameWords": [
+                "click"
+            ]
+        },
+        "contextmenu": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/contextmenu",
+            "interface": "MouseEvent",
+            "nameWords": [
+                "context",
+                "menu"
+            ]
+        },
+        "dblclick": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/dblclick",
+            "interface": "MouseEvent",
+            "nameWords": [
+                "double",
+                "click"
+            ]
+        },
+        "drag": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/drag",
+            "interface": "DragEvent",
+            "nameWords": [
+                "drag"
+            ]
+        },
+        "dragend": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/dragend",
+            "interface": "DragEvent",
+            "nameWords": [
+                "drag",
+                "end"
+            ]
+        },
+        "dragenter": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/dragenter",
+            "interface": "DragEvent",
+            "nameWords": [
+                "drag",
+                "enter"
+            ]
+        },
+        "dragleave": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/dragleave",
+            "interface": "DragEvent",
+            "nameWords": [
+                "drag",
+                "leave"
+            ]
+        },
+        "dragover": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/dragover",
+            "interface": "DragEvent",
+            "nameWords": [
+                "drag",
+                "over"
+            ]
+        },
+        "dragstart": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/dragstart",
+            "interface": "DragEvent",
+            "nameWords": [
+                "drag",
+                "start"
+            ]
+        },
+        "drop": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/drop",
+            "interface": "DragEvent",
+            "nameWords": [
+                "drop"
+            ]
+        },
+        "focus": {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/focus",
+            "interface": "FocusEvent",
+            "nameWords": [
+                "focus"
+            ]
+        },
+        "focusin": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/focusin",
+            "interface": "FocusEvent",
+            "nameWords": [
+                "focus",
+                "in"
+            ]
+        },
+        "focusout": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/focusout",
+            "interface": "FocusEvent",
+            "nameWords": [
+                "focus",
+                "out"
+            ]
+        },
+        "fullscreenchange": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/fullscreenchange",
+            "interface": "Event",
+            "nameWords": [
+                "fullscreen",
+                "change"
+            ]
+        },
+        "fullscreenerror": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/fullscreenerror",
+            "interface": "Event",
+            "nameWords": [
+                "fullscreen",
+                "error"
+            ]
+        },
+        "hashchange": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/hashchange",
+            "interface": "HashChangeEvent",
+            "nameWords": [
+                "hash",
+                "change"
+            ]
+        },
+        "input": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/input",
+            "interface": "InputEvent",
+            "nameWords": [
+                "input"
+            ]
+        },
+        "keydown": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/keydown",
+            "interface": "KeyboardEvent",
+            "nameWords": [
+                "key",
+                "down"
+            ]
+        },
+        "keypress": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/keypress",
+            "interface": "KeyboardEvent",
+            "nameWords": [
+                "key",
+                "press"
+            ]
+        },
+        "keyup": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/keyup",
+            "interface": "KeyboardEvent",
+            "nameWords": [
+                "key",
+                "up"
+            ]
+        },
+        "languagechange": {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/languagechange",
+            "interface": "Event",
+            "nameWords": [
+                "language",
+                "change"
+            ]
+        },
+        "load": {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/load",
+            "interface": "Event",
+            "nameWords": [
+                "load"
+            ]
+        },
+        "mousedown": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/mousedown",
+            "interface": "MouseEvent",
+            "nameWords": [
+                "mouse",
+                "down"
+            ]
+        },
+        "mousemove": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/mousemove",
+            "interface": "MouseEvent",
+            "nameWords": [
+                "mouse",
+                "move"
+            ]
+        },
+        "mouseout": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/mouseout",
+            "interface": "MouseEvent",
+            "nameWords": [
+                "mouse",
+                "out"
+            ]
+        },
+        "mouseover": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/mouseover",
+            "interface": "MouseEvent",
+            "nameWords": [
+                "mouse",
+                "over"
+            ]
+        },
+        "mouseup": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/mouseup",
+            "interface": "MouseEvent",
+            "nameWords": [
+                "mouse",
+                "up"
+            ]
+        },
+        "reset": {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/reset",
+            "interface": "Event",
+            "nameWords": [
+                "reset"
+            ]
+        },
+        "resize": {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/resize",
+            "interface": "UIEvent",
+            "nameWords": [
+                "resize"
+            ]
+        },
+        "scroll": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/scroll",
+            "interface": "Event",
+            "nameWords": [
+                "scroll"
+            ]
+        },
+        "select": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/select",
+            "interface": "UIEvent",
+            "nameWords": [
+                "select"
+            ]
+        },
+        "selectionchange": {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/selectionchange",
+            "interface": "Event",
+            "nameWords": [
+                "selection",
+                "change"
+            ]
+        },
+        "selectstart": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/selectstart",
+            "interface": "Event",
+            "nameWords": [
+                "select",
+                "start"
+            ]
+        },
+        "submit": {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/submit",
+            "interface": "Event",
+            "nameWords": [
+                "submit"
+            ]
+        },
+        "unload": {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/unload",
+            "interface": "Event",
+            "nameWords": [
+                "unload"
+            ]
+        },
+        "visibilitychange": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/visibilitychange",
+            "interface": "Event",
+            "nameWords": [
+                "visibility",
+                "change"
+            ]
+        },
+        "wheel": {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/wheel",
+            "interface": "WheelEvent",
+            "nameWords": [
+                "wheel"
+            ]
+        }
+    },
+    "interfaces": {
+        "DragEvent": {
+            "inherits": "MouseEvent",
+            "properties": {}
+        },
+        "Event": {
+            "inherits": null,
+            "properties": {}
+        },
+        "FocusEvent": {
+            "inherits": "UIEvent",
+            "properties": {}
+        },
+        "HashChangeEvent": {
+            "inherits": "Event",
+            "properties": {
+                "newURL": "String",
+                "oldURL": "String"
+            }
+        },
+        "InputEvent": {
+            "inherits": "UIEvent",
+            "properties": {
+                "data": "String",
+                "inputType": "String",
+                "isComposing": "bool"
+            }
+        },
+        "KeyboardEvent": {
+            "inherits": "UIEvent",
+            "properties": {
+                "altKey": "bool",
+                "code": "String",
+                "ctrlKey": "bool",
+                "isComposing": "bool",
+                "key": "String",
+                "locale": "String",
+                "location": "i64",
+                "metaKey": "bool",
+                "repeat": "bool",
+                "shiftKey": "bool"
+            }
+        },
+        "MouseEvent": {
+            "inherits": "UIEvent",
+            "properties": {
+                "altKey": "bool",
+                "button": "i64",
+                "buttons": "i64",
+                "clientX": "f64",
+                "clientY": "f64",
+                "ctrlKey": "bool",
+                "metaKey": "bool",
+                "movementX": "f64",
+                "movementY": "f64",
+                "offsetX": "f64",
+                "offsetY": "f64",
+                "pageX": "f64",
+                "pageY": "f64",
+                "region": "String",
+                "screenX": "f64",
+                "screenY": "f64",
+                "shiftKey": "bool",
+                "x": "f64",
+                "y": "f64"
+            }
+        },
+        "UIEvent": {
+            "inherits": "Event",
+            "properties": {
+                "detail": "i64",
+                "isChar": "bool"
+            }
+        },
+        "WheelEvent": {
+            "inherits": "MouseEvent",
+            "properties": {
+                "deltaMode": "i64",
+                "deltaX": "f64",
+                "deltaY": "f64",
+                "deltaZ": "f64"
+            }
+        }
+    }
+}
