@@ -52,6 +52,7 @@ impl Page {
                        include_str!("page/dynamic.html"),
                        debug = debug,
                        title = title,
+                       subscription = subscription,
                        body = body)
                     .expect("Internal error: write!() failed on a Vec<u8>");
                 Body::from(bytes)
@@ -66,7 +67,7 @@ impl Page {
     /// specification for what events to listen to.
     pub async fn event_stream(&self, subscription: Subscription) -> Body {
         let mut subscribers = self.subscribers.lock().await;
-        let (total_subscription, new_details) =
+        let (total_subscription, event_stream) =
             subscribers.add_subscriber(subscription).await;
         let content = &mut *self.content.lock().await;
         match content {
@@ -75,7 +76,7 @@ impl Page {
                 set_subscriptions(updates, total_subscription).await;
             }
         }
-        new_details
+        event_stream
     }
 
     /// Send an event to all subscribers. This should only be called with events

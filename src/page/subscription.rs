@@ -5,7 +5,6 @@ use serde::{Serialize, Deserialize};
 use serde_json::Value;
 use hyper::Body;
 use futures::future;
-use std::string::ToString;
 
 use super::sse;
 
@@ -24,22 +23,35 @@ pub struct Event {
 // constructed by deserializing it (i.e. from JSON)...
 
 #[derive(Debug, Clone)]
-pub struct Subscription(HashSet<String>);
+pub enum Subscription {
+    Specific(HashSet<String>),
+    Universal,
+}
 
-impl From<Vec<String>> for Subscription {
-    fn from(events: Vec<String>) -> Self {
-        Subscription(events.into_iter().collect())
+impl Subscription {
+    /// Make a subscription from a collection of events
+    pub fn from_events(events: impl Into<HashSet<String>>) -> Self {
+        Subscription::Specific(events.into())
+    }
+
+    /// Make a universal subscription to all events
+    pub fn universal() -> Self {
+        Subscription::Universal
     }
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct AggregateSubscription<'a>(HashSet<&'a String>);
+#[serde(untagged)]
+pub enum AggregateSubscription<'a> {
+    Specific(HashSet<&'a String>),
+    Universal,
+}
 
 impl<'a> AggregateSubscription<'a> {
     /// Make an empty aggregate subscription (useful when specifying that a page
     /// should disconnect all open subscribers).
     pub fn empty() -> AggregateSubscription<'a> {
-        AggregateSubscription(HashSet::new())
+        AggregateSubscription::Specific(HashSet::new())
     }
 }
 
@@ -53,7 +65,8 @@ const EVENT_BUFFER_SIZE: usize = 10_000;
 #[derive(Debug)]
 pub struct Subscribers {
     servers: Vec<Arc<sse::BufferedServer>>,
-    routes: HashMap<String, Vec<Sink>>,
+    specific: HashMap<String, Vec<Sink>>,
+    universal: Vec<Sink>,
 }
 
 #[derive(Debug, Clone)]
@@ -65,7 +78,8 @@ impl Subscribers {
     /// Make a new empty set of subscribers.
     pub fn new() -> Subscribers {
         Subscribers {
-            routes: HashMap::new(),
+            specific: HashMap::new(),
+            universal: Vec::new(),
             servers: Vec::new(),
         }
     }
@@ -73,7 +87,7 @@ impl Subscribers {
     /// Returns `true` if there are no subscribers to any events in this set of
     /// subscribers, `false` otherwise.
     pub fn is_empty(&self) -> bool {
-        self.routes.is_empty() && self.servers.is_empty()
+        self.specific.is_empty() && self.servers.is_empty()
     }
 
     /// Add a new subscription to this set of subscribers, returning a streaming
@@ -90,10 +104,17 @@ impl Subscribers {
         let server = Arc::new(server);
         // Add a reference to the server, with the appropriate property filter,
         // to each place corresponding to its desired subscription.
-        for event in subscription.0 {
-            let existing_sinks =
-                self.routes.entry(event).or_insert_with(Vec::new);
-            existing_sinks.push(Sink{server: Arc::downgrade(&server)});
+        match subscription {
+            Subscription::Specific(events) => {
+                for event in events {
+                    let existing_sinks =
+                        self.specific.entry(event).or_insert_with(Vec::new);
+                    existing_sinks.push(Sink{server: Arc::downgrade(&server)});
+                }
+            },
+            Subscription::Universal => {
+                self.universal.push(Sink{server: Arc::downgrade(&server)});
+            },
         }
         // Add the server to the top-level list of server references
         self.servers.push(server);
@@ -107,36 +128,26 @@ impl Subscribers {
     /// returns the union of all now-current subscriptions.
     pub async fn send_event<'a>(&'a mut self, event: &str, id: &Value, data: &Value) -> Option<AggregateSubscription<'a>> {
         let mut subscription_changed = false;
-        if let Some(sinks) =
-            self.routes.get_mut(event) {
-                let mut sent = future::join_all(sinks.iter_mut().map(|sink| {
-                    // Serialize the fields to JSON
-                    let data = serde_json::to_string(&data)
-                        .expect("Serializing fields to a string shouldn't fail");
-                    // Build a text/event-stream message to send to subscriber
-                    let message =
-                        EventBuilder::new(&data)
-                        .id(&id.to_string())
-                        .event_type(event)
-                        .build();
-                    // Make a future for sending the message to the subscriber
-                    async move {
-                        if let Some(server) = sink.server.upgrade() {
-                            let remaining =
-                                server.send_to_clients(message).await.await;
-                            assert!(remaining <= 1, "Subscriber SSE exceeds 1 client");
-                            1 == remaining
-                        } else {
-                            false
-                        }
-                    }
-                })).await.into_iter();
-                // Remove all sinks that failed to send (client disconnected)
-                let previous_len = sinks.len();
-                sinks.retain(|_| sent.next().unwrap());
-                if sinks.len() != previous_len { subscription_changed = true }
-                if sinks.len() == 0 { self.routes.remove(event); }
+
+        // Sent the event to any specifically interested clients:
+        if let Some(specific) = self.specific.get_mut(event) {
+            let previous_len = specific.len();
+            send_to_all(specific, event, id, data).await;
+            if specific.len() != previous_len {
+                subscription_changed = true
             }
+            if specific.len() == 0 {
+                self.specific.remove(event);
+            }
+        }
+
+        // Send the event to all universally interested clients:
+        let previous_len = self.universal.len();
+        send_to_all(&mut self.universal, event, id, data).await;
+        if self.universal.len() != previous_len {
+            subscription_changed = true
+        }
+
         // Return a new aggregate subscription if things have changed
         if subscription_changed {
             Some(self.total_subscription())
@@ -149,32 +160,49 @@ impl Subscribers {
     /// Subscription representing the union of all subscriptions, if there have
     /// been any noticed changes, or `None` if every client is still connected.
     pub async fn send_heartbeat(&mut self) -> Option<AggregateSubscription<'_>> {
-        let mut sent = future::join_all(self.servers.iter_mut().map(|server| {
-            async move {
-                let remaining = server.send_heartbeat().await.await;
-                assert!(remaining <= 1, "Subscriber SSE exceeds 1 client");
-                1 == remaining
-            }
-        })).await.into_iter();
+        // Send a heartbeat message to every server (but only once each!)
+        let mut sent = future::join_all({
+            self.servers.iter_mut().map(|server| {
+                async move {
+                    let remaining = server.send_heartbeat().await.await;
+                    assert!(remaining <= 1, "Subscriber SSE exceeds 1 client");
+                    1 == remaining
+                }
+            })
+        }).await.into_iter();
+
         // Prune all servers for which heartbeat failed (since there's exactly
         // one Arc for each one of them, the corresponding Weaks within the
-        // routes will now return None on upgrade)
+        // specific will now return None on upgrade)
         self.servers.retain(|_| sent.next().unwrap());
-        // Prune all routes corresponding to the dropped servers
+
+        // Prune all specific subscribers corresponding to the dropped servers
         let mut subscription_changed = false;
-        self.routes.retain(|_, sinks| {
+        self.specific.retain(|_, sinks| {
             let previous_len = sinks.len();
             sinks.retain(|Sink{server, ..}| {
                 if server.upgrade().is_none() {
                     subscription_changed = true;
-                    false // prune this route
+                    false // prune this servers
                 } else {
-                    true // keep this route
+                    true // keep this server
                 }
             });
             sinks.shrink_to_fit();
             previous_len == sinks.len()
         });
+
+        // Prune all universal subscribers corresponding to the dropped servers
+        self.universal.retain(|Sink{server, ..}| {
+            if server.upgrade().is_none() {
+                subscription_changed = true;
+                false // prune this server
+            } else {
+                true // keep this server
+            }
+        });
+
+        // Report the changed subscription
         if subscription_changed {
             Some(self.total_subscription())
         } else {
@@ -184,7 +212,50 @@ impl Subscribers {
 
     /// Calculate the union of all subscriptions currently active
     pub fn total_subscription(&self) -> AggregateSubscription<'_> {
-        let subscription = self.routes.keys().collect();
-        AggregateSubscription(subscription)
+        if self.universal.is_empty() {
+            let events = self.specific.keys().collect();
+            AggregateSubscription::Specific(events)
+        } else {
+            AggregateSubscription::Universal
+        }
     }
+}
+
+async fn send_to_all<'a>(
+    sinks: &'a mut Vec<Sink>,
+    event: &'a str,
+    id: &'a Value,
+    data: &'a Value,
+) {
+
+    // Serialize the fields to JSON
+    let data = serde_json::to_string(data)
+        .expect("Serializing to a string shouldn't fail");
+
+    // Serialize the target path to JSON
+    let id = serde_json::to_string(id)
+        .expect("Serializing to a string shouldn't fail");
+
+    // The collection of futures for sending the event:
+    let send_futures = sinks.iter_mut().map(move |sink| {
+        // Build a text/event-stream message to send to subscriber
+        let message = EventBuilder::new(&data).id(&id).event_type(event).build();
+        // Make a future for sending the message to the subscriber
+        async move {
+            if let Some(server) = sink.server.upgrade() {
+                let remaining =
+                    server.send_to_clients(message).await.await;
+                assert!(remaining <= 1, "Subscriber SSE exceeds 1 client");
+                1 == remaining
+            } else {
+                false
+            }
+        }
+    });
+
+    // Actually send the event to everyone
+    let mut sent = future::join_all(send_futures).await.into_iter();
+
+    // Remove all sinks that failed to send (client disconnected)
+    sinks.retain(|_| sent.next().unwrap());
 }

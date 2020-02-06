@@ -175,8 +175,7 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                         .unwrap()
                 },
                 // Client wants to subscribe to events on this page:
-                Some(GetParams::SubscribeEvents{events}) => {
-                    let subscription = Subscription::from(events);
+                Some(GetParams::Subscribe(subscription)) => {
                     let body = page.event_stream(subscription).await;
                     Response::builder()
                         .header("Content-Type", "text/event-stream")

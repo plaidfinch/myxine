@@ -1,4 +1,4 @@
-export function activate(debugMode) {
+export function activate(initialSubscription, debugMode) {
 
     // The initial set of listeners is empty
     let listeners = {};
@@ -71,36 +71,28 @@ export function activate(debugMode) {
         debug("Received new subscription: " + event.data);
         const subscription = JSON.parse(event.data);
         Object.entries(listeners).forEach(([eventName, listener]) => {
+            debug("Removing listener: " + eventName);
             window.removeEventListener(eventName, listener);
         });
-        setupListeners(subscription, allEventDescriptions);
+        listeners = {};
+        setupListeners(subscription);
     }
 
     // New body
-    function setBody(event) {
-        setBodyTo(event.data);
-    }
+    function setBody(event) { setBodyTo(event.data); }
 
     // New empty body
-    function clearBody(event) {
-        setBodyTo("");
-    }
+    function clearBody(event) { setBodyTo(""); }
 
     // New title
-    function setTitle(event) {
-        document.title = event.data;
-    }
+    function setTitle(event) { document.title = event.data; }
 
     // New empty title
-    function clearTitle(event) {
-        document.title = "";
-    }
+    function clearTitle(event) { document.title = ""; }
 
     // Reload the *whole* page from the server
     // Called when transitioning to static page, among other situations
-    function refresh(event) {
-        window.location.reload();
-    }
+    function refresh(event) { window.location.reload(); }
 
     // Evaluate a JavaScript expression in the global environment
     function evaluate(expression, statementMode) {
@@ -131,12 +123,10 @@ export function activate(debugMode) {
         Object.entries(enabledEvents.events).forEach(([eventName, eventInfo]) => {
             // Accumulate the desired fields for the event into a map from field
             // name to formatter for the objects in that field
-            debug(eventInfo);
             let interfaceName = eventInfo['interface']; // most specific interface
             let theInterface = enabledEvents.interfaces[interfaceName];
             events[eventName] = {};
             while (true) {
-                debug(theInterface);
                 const properties = Object.keys(theInterface.properties);
                 properties.forEach(property => {
                     let formatter = customJsonFormatters[property];
@@ -163,11 +153,15 @@ export function activate(debugMode) {
     // Given a mapping from events -> mappings from properties -> formatters for
     // those properties, set up listeners for all those events which send back
     // the appropriately formatted results when they fire
-    function setupListeners(subscription, events) {
+    function setupListeners(subscription) {
+        if (subscription === null) {
+            // Client requested universal subscription, so turn on all events
+            subscription = Object.keys(allEventDescriptions);
+        }
         // Set up event handlers
         subscription.forEach(eventName => {
-            const event = events[eventName];
-            const listener = window.addEventListener(eventName, event => {
+            const event = allEventDescriptions[eventName];
+            const listener = event => {
                 // Calculate the id path
                 const path =
                       event.composedPath()
@@ -188,13 +182,16 @@ export function activate(debugMode) {
 
                 // Extract the relevant properties
                 const data = {};
-                Object.entries(events[eventName]).forEach(([property, formatter]) => {
-                    data[property] = formatter(event[property]);
-                });
+                Object.entries(allEventDescriptions[eventName])
+                    .forEach(([property, formatter]) => {
+                        data[property] = formatter(event[property]);
+                    });
                 // Send the event back to the server
                 // TODO: implement batching
                 sendEvent(eventName, path, data);
-            });
+            };
+            debug("Adding listener: " + eventName);
+            window.addEventListener(eventName, listener);
             listeners[eventName] = listener;
         });
 
@@ -207,12 +204,22 @@ export function activate(debugMode) {
         const enabledEvents = JSON.parse(r.responseText);
         debug(enabledEvents);
         allEventDescriptions = parseEventDescriptions(enabledEvents);
+        setupListeners(initialSubscription);
     };
     r.open('GET', '/.myxine/assets/enabled-events.json');
     r.send();
 
     // Actually set up SSE...
     let sse = new EventSource(window.location.href + "?updates");
+    sse.onerror = () => {
+        // When we disconnect from the server, stop trying to send it events
+        // until we reconnect and receive a new subscription
+        setupListeners([]);
+        // Set up retry interval to attempt reconnection
+        window.setTimeout(() => {
+            sse = new EventSource(window.location.href + "?updates");
+        }, 500); // half a second between retries
+    };
     sse.addEventListener("body", setBody);
     sse.addEventListener("clear-body", clearBody);
     sse.addEventListener("title", setTitle);
