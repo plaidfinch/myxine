@@ -17,7 +17,7 @@ use void::Void;
 mod params;
 mod heartbeat;
 
-use crate::page::{Page, subscription::{Subscription, Event}};
+use crate::page::{Page, subscription::Event};
 use params::{GetParams, PostParams};
 
 lazy_static! {
@@ -111,7 +111,7 @@ fn process_special_request(
         (Method::GET, "/assets/post.js") =>
             static_asset!(false, "application/javascript", "server/assets/post.js"),
         (Method::GET, "/assets/enabled-events.json") =>
-            static_asset!(false, "application/json", "server/assets/enabled-events.json"),
+            static_asset!(false, "application/json", "../enabled-events.json"),
         (Method::GET, _) =>
             response_with_status(StatusCode::NOT_FOUND, "Page not found."),
         _ => response_with_status(StatusCode::METHOD_NOT_ALLOWED, "Method not allowed."),
