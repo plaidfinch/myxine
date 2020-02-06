@@ -66,11 +66,6 @@ class State:
                                height: 100vh; width: 100vw;
                                overflow: hidden;">{content}</div>'''
 
-# A description of the events we wish to monitor
-subscription = {
-    'window': ['mousemove', 'mouseup', 'mousedown'],
-}
-
 def main():
     try:
         path = '/'
@@ -83,7 +78,7 @@ def main():
         myxine.update(path, state.draw())
 
         # Iterate over all page events, updating the page each time
-        for event in myxine.subscribe(path, subscription):
+        for event in myxine.subscribe(path):
             state.update(event)
             myxine.update(path, state.draw())
 
