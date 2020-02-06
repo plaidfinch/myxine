@@ -168,7 +168,7 @@ export function activate(initialSubscription, debugMode) {
                       .filter(t => t instanceof Element)
                       .map(target => {
                           const pathElement = {
-                              tagName: target.tagName,
+                              tagName: target.tagName.toLowerCase(),
                               attributes: {},
                           };
                           for (let i = target.attributes.length - 1; i >= 0; i--) {
