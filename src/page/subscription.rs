@@ -19,9 +19,8 @@ pub struct Event {
     pub data: Value,
 }
 
-// Exterior interface is opaque type `Subscription` which can only be
-// constructed by deserializing it (i.e. from JSON)...
-
+/// A subscription to events is either a `Universal` subscription to all events,
+/// or a `Specific` set of events to which the client wishes to subscribe.
 #[derive(Debug, Clone)]
 pub enum Subscription {
     Specific(HashSet<String>),
@@ -29,12 +28,12 @@ pub enum Subscription {
 }
 
 impl Subscription {
-    /// Make a subscription from a collection of events
+    /// Make a subscription from a collection of events.
     pub fn from_events(events: impl Into<HashSet<String>>) -> Self {
         Subscription::Specific(events.into())
     }
 
-    /// Make a universal subscription to all events
+    /// Make a universal subscription to all events.
     pub fn universal() -> Self {
         Subscription::Universal
     }
@@ -102,6 +101,7 @@ impl Subscribers {
         let (sender, body) = Body::channel();
         server.add_client(sender).await;
         let server = Arc::new(server);
+
         // Add a reference to the server, with the appropriate property filter,
         // to each place corresponding to its desired subscription.
         match subscription {
@@ -116,8 +116,10 @@ impl Subscribers {
                 self.universal.push(Sink{server: Arc::downgrade(&server)});
             },
         }
+
         // Add the server to the top-level list of server references
         self.servers.push(server);
+
         // Return the body, for sending to whoever subscribed
         (self.total_subscription(), body)
     }
@@ -221,13 +223,14 @@ impl Subscribers {
     }
 }
 
+/// Send an event to all the sinks in the given `Vec`, pruning the `Vec` to
+/// remove all those sinks which have become disconnected.
 async fn send_to_all<'a>(
     sinks: &'a mut Vec<Sink>,
     event: &'a str,
     id: &'a Value,
     data: &'a Value,
 ) {
-
     // Serialize the fields to JSON
     let data = serde_json::to_string(data)
         .expect("Serializing to a string shouldn't fail");
