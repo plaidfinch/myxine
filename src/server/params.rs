@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 use percent_encoding::percent_decode;
 use std::borrow::Cow;
+use uuid::Uuid;
 
 /// Parsed parameters from a query string for a GET/HEAD request.
 pub(crate) enum GetParams {
     FullPage,
     PageUpdates,
-    SubscribeEvents(Vec<String>),
+    SubscribeEvents{events: Vec<String>},
 }
 
 impl GetParams {
@@ -19,9 +20,14 @@ impl GetParams {
             && constrained_to_keys(&params, &["updates"])
         {
             Some(GetParams::PageUpdates)
-        } else if constrained_to_keys(&params, &["events"]) {
-            let events = param_as_some_strings("events", &params)?;
-            Some(GetParams::SubscribeEvents(events))
+        } else if constrained_to_keys(&params, &["events", "event"]) {
+            match (param_as_strs("events", &params),
+                   param_as_strs("event", &params)) {
+                (Some(e1), Some(e2)) => Some(e1.chain(e2).map(String::from).collect()),
+                (Some(e1), None) => Some(e1.map(String::from).collect()),
+                (None, Some(e2)) => Some(e2.map(String::from).collect()),
+                (None, None) => None,
+            }.map(|events| GetParams::SubscribeEvents{events})
         } else {
             None
         }
@@ -34,26 +40,36 @@ pub(crate) enum PostParams {
     StaticPage,
     PageEvent,
     Evaluate{expression: Option<String>},
+    EvalResult{id: Uuid},
 }
 
 impl PostParams {
     /// Parse a query string from a POST request.
     pub fn parse(query: &str) -> Option<PostParams> {
         let params = query_params(query)?;
-        if param_as_bool("static", &params)?
-            && constrained_to_keys(&params, &["static"])
-        {
-            Some(PostParams::StaticPage)
-        } else if param_as_bool("event", &params)?
-            && constrained_to_keys(&params, &["event"])
-        {
-            Some(PostParams::PageEvent)
+        if constrained_to_keys(&params, &["static"]) {
+            if param_as_bool("static", &params)? {
+                return Some(PostParams::StaticPage)
+            }
+        } else if constrained_to_keys(&params, &["result"]) {
+            let id = Uuid::parse_str(param_as_str("result", &params)?).ok()?;
+            return Some(PostParams::EvalResult{id})
+        } else if constrained_to_keys(&params, &["event"]) {
+            if param_as_bool("event", &params)? {
+                return Some(PostParams::PageEvent)
+            }
         } else if constrained_to_keys(&params, &["title"]) {
-            let title = param_as_str("title", &params)?.unwrap_or("").to_string();
-            Some(PostParams::DynamicPage{title})
-        } else {
-            None
-        }
+            let title = param_as_str("title", &params)?.to_string();
+            return Some(PostParams::DynamicPage{title})
+        } else if constrained_to_keys(&params, &["evaluate"]) {
+            let expression = if let Some(true) = param_as_bool("evaluate", &params) {
+                None
+            } else {
+                Some(param_as_str("evaluate", &params)?.to_string())
+            };
+            return Some(PostParams::Evaluate{expression})
+        };
+        None
     }
 }
 
@@ -71,29 +87,19 @@ fn param_as_bool<'a, 'b: 'a>(param: &'b str, params: &'a HashMap<&'a str, Vec<Co
 /// Parse a given parameter as a string, where its presence without a mapping
 /// (or its absence entirely) is interpreted as the empty string. If it is
 /// mapped to multiple values, retrun `None`.
-#[allow(clippy::option_option)]
-fn param_as_str<'a, 'b: 'a>(param: &'b str, params: &'a HashMap<&'a str, Vec<Cow<'a, str>>>) -> Option<Option<&'a str>> {
+fn param_as_str<'a, 'b: 'a>(param: &'b str, params: &'a HashMap<&'a str, Vec<Cow<'a, str>>>) -> Option<&'a str> {
     match params.get(param).map(Vec::as_slice) {
-        Some([string]) => Some(Some(string.as_ref())),
-        Some([]) => Some(Some("")),
-        None => Some(None),
+        Some([string]) => Some(string.as_ref()),
         _ => None,
     }
 }
 
-fn param_as_some_strings<'a, 'b: 'a>(
+fn param_as_strs<'a, 'b: 'a>(
     param: &'b str,
     params: &'a HashMap<&'a str, Vec<Cow<'a, str>>>
-) -> Option<Vec<String>> {
+) -> Option<impl Iterator<Item = &'a str>> {
     match params.get(param) {
-        Some(strings) if strings.is_empty() => None,
-        Some(strings) => {
-            let mut result = Vec::with_capacity(strings.len());
-            for string in strings {
-                result.push(string.to_string());
-            }
-            Some(result)
-        },
+        Some(strings) => Some(strings.into_iter().map(|string| string.as_ref())),
         None => None,
     }
 }

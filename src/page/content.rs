@@ -1,4 +1,5 @@
 use hyper::Body;
+use hyper::body::Bytes;
 use hyper_usse::EventBuilder;
 use std::mem;
 
@@ -21,7 +22,7 @@ pub enum Content {
     },
     Static {
         content_type: Option<String>,
-        raw_contents: Vec<u8>,
+        raw_contents: Bytes,
     }
 }
 
@@ -70,7 +71,7 @@ impl Content {
                     EventBuilder::new(".").event_type("clear-title")
                 }.build();
                 let body_event = if *body != "" {
-                    EventBuilder::new(&body).event_type("body")
+                    EventBuilder::new(body).event_type("body")
                 } else {
                     EventBuilder::new(".").event_type("clear-body")
                 }.build();
@@ -119,9 +120,9 @@ impl Content {
     /// itself until a client refreshes their page again).
     pub async fn set_static(&mut self,
                             content_type: Option<String>,
-                            raw_contents: impl Into<Vec<u8>>) {
+                            raw_contents: Bytes) {
         let mut page =
-            Content::Static{content_type, raw_contents: raw_contents.into()};
+            Content::Static{content_type, raw_contents};
         mem::swap(&mut page, self);
         page.refresh().await;
     }

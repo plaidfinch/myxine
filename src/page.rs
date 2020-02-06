@@ -1,4 +1,4 @@
-use hyper::Body;
+use hyper::body::{Body, Bytes};
 use hyper_usse::EventBuilder;
 use std::io::Write;
 use tokio::sync::Mutex;
@@ -33,7 +33,7 @@ impl Page {
     }
 
     /// Render a whole page as HTML (for first page load).
-    pub async fn render(&self) -> Vec<u8> {
+    pub async fn render(&self) -> Body {
         match &*self.content.lock().await {
             Content::Dynamic{title, body, ..} => {
                 let debug = cfg!(debug_assertions).to_string();
@@ -54,10 +54,10 @@ impl Page {
                        title = title,
                        body = body)
                     .expect("Internal error: write!() failed on a Vec<u8>");
-                bytes
+                Body::from(bytes)
             },
             Content::Static{raw_contents, ..} => {
-                raw_contents.clone()
+                raw_contents.clone().into()
             },
         }
     }
@@ -144,7 +144,7 @@ impl Page {
     /// itself until a client refreshes their page again).
     pub async fn set_static(&self,
                             content_type: Option<String>,
-                            raw_contents: impl Into<Vec<u8>>) {
+                            raw_contents: Bytes) {
         self.content.lock().await.set_static(content_type, raw_contents).await
     }
 

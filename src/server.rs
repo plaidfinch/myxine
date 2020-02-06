@@ -1,6 +1,7 @@
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, StatusCode};
 use hyper::server::conn::AddrStream;
+use hyper::body;
 use http::request::Parts;
 use http::header::{HeaderMap, HeaderValue};
 use lazy_static::lazy_static;
@@ -10,7 +11,6 @@ use std::net::SocketAddr;
 use tokio::sync::Mutex;
 use futures::future::FutureExt;
 use futures::{future, select, pin_mut};
-use futures::stream::StreamExt;
 use itertools::Itertools;
 use void::Void;
 
@@ -113,8 +113,8 @@ fn process_special_request(
         (Method::GET, "/assets/enabled-events.json") =>
             static_asset!(false, "application/json", "server/assets/enabled-events.json"),
         (Method::GET, _) =>
-            Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap(),
-        _ => Response::builder().status(StatusCode::METHOD_NOT_ALLOWED).body(Body::empty()).unwrap(),
+            response_with_status(StatusCode::NOT_FOUND, "Page not found."),
+        _ => response_with_status(StatusCode::METHOD_NOT_ALLOWED, "Method not allowed."),
     })
 }
 
@@ -125,7 +125,7 @@ const MYXINE_SPECIAL_PATH: &str = "/.myxine/";
 async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper::Error> {
 
     // Disassemble the request into the parts we care about
-    let (parts, mut body) = request.into_parts();
+    let (parts, body) = request.into_parts();
 
     // More disassembly
     let Parts{method, uri, headers, ..} = parts;
@@ -162,14 +162,11 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
     // Just one big dispatch on the HTTP method...
     Ok(match method {
 
-        Method::GET | Method::HEAD => {
-            let mut body = Body::empty();
+        Method::GET => {
             match GetParams::parse(query) {
-                // If client wants event stream of changes to page:
+                // Browser wants event stream of changes to page:
                 Some(GetParams::PageUpdates) => {
-                    if method == Method::GET {
-                        body = page.update_stream().await.unwrap_or_else(Body::empty);
-                    }
+                    let body = page.update_stream().await.unwrap_or_else(Body::empty);
                     Response::builder()
                         .header("Content-Type", "text/event-stream")
                         .header("Cache-Control", "no-cache")
@@ -177,8 +174,8 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                         .body(body)
                         .unwrap()
                 },
-                // Client wants to subscribe to interface events on this page:
-                Some(GetParams::SubscribeEvents(events)) => {
+                // Client wants to subscribe to events on this page:
+                Some(GetParams::SubscribeEvents{events}) => {
                     let subscription = Subscription::from(events);
                     let body = page.event_stream(subscription).await;
                     Response::builder()
@@ -188,6 +185,7 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                         .body(body)
                         .unwrap()
                 },
+                // Browser wants to load the full page
                 Some(GetParams::FullPage) => {
                     let mut builder = Response::builder()
                         .header("Access-Control-Allow-Origin", "*")
@@ -204,34 +202,19 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                         // 301 redirects can be cached, but nothing else can
                         builder = builder.header("Cache-Control", "no-cache");
                     }
-                    if method == Method::GET {
-                        body = page.render().await.into();
-                    }
+                    let body = page.render().await.into();
                     builder.body(body).unwrap()
                 },
                 None => {
                     return Ok(response_with_status(
                         StatusCode::BAD_REQUEST,
-                        if method == Method::GET {
-                            "Invalid query string in GET."
-                        } else {
-                            ""
-                        },
+                        "Invalid query string in GET.",
                     ));
                 },
             }
         },
 
         Method::POST => {
-            // Slurp the body into memory
-            // TODO: delay this until we need to do it by refactoring out into a
-            // separate function?
-            let mut body_bytes: Vec<u8> = Vec::new();
-            while let Some(chunk) = body.next().await {
-                let chunk = chunk?;
-                body_bytes.extend_from_slice(&chunk);
-            };
-
             let content_type: Option<&str> =
                 match headers.get("Content-Type").map(HeaderValue::to_str) {
                     None => None,
@@ -272,7 +255,8 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                 // Client wants to store a static file of a known Content-Type:
                 Some(PostParams::StaticPage) => {
                     if writeable_path {
-                        page.set_static(content_type.map(String::from), body_bytes).await;
+                        page.set_static(content_type.map(String::from),
+                                        body::to_bytes(body).await?).await;
                         Response::new(Body::empty())
                     } else {
                         response_with_status(
@@ -284,6 +268,7 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                 // Client wants to publish some HTML to a dynamic page:
                 Some(PostParams::DynamicPage{title}) => {
                     if writeable_path {
+                        let body_bytes = body::to_bytes(body).await?.as_ref().into();
                         match String::from_utf8(body_bytes) {
                             Ok(body) => {
                                 if cfg!(debug_assertions) {
@@ -293,11 +278,10 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                                 page.set_body(body).await;
                                 Response::new(Body::empty())
                             },
-                            Err(_) =>
-                                return Ok(response_with_status(
-                                    StatusCode::BAD_REQUEST,
-                                    "Invalid UTF-8 in POST data (only UTF-8 is supported).",
-                                )),
+                            Err(_) => return Ok(response_with_status(
+                                StatusCode::BAD_REQUEST,
+                                "Invalid UTF-8 in POST data (only UTF-8 is supported).",
+                            )),
                         }
                     } else {
                         response_with_status(
@@ -308,7 +292,7 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                 },
                 // Browser wants to notify client of an event
                 Some(PostParams::PageEvent) => {
-                    match serde_json::from_slice(&body_bytes) {
+                    match serde_json::from_slice(body::to_bytes(body).await?.as_ref()) {
                         Ok(Event{event, id, data}) => {
                             page.send_event(&event, &id, &data).await;
                             Response::new(Body::empty())
@@ -320,10 +304,19 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                             ));
                         }
                     }
-                }
+                },
+                // Client wants to evaluate a JavaScript expression in the
+                // context of the browser
                 Some(PostParams::Evaluate{expression}) => {
-                    todo!("Implement me!")
-                }
+                    if let Some(expression) = expression {
+                        todo!()
+                    } else {
+                        todo!()
+                    }
+                },
+                Some(PostParams::EvalResult{id}) => {
+                    todo!()
+                },
                 None => {
                     return Ok(response_with_status(
                         StatusCode::BAD_REQUEST,
