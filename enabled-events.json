@@ -348,18 +348,22 @@
     },
     "interfaces": {
         "DragEvent": {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/API/DragEvent",
             "inherits": "MouseEvent",
             "properties": {}
         },
         "Event": {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/API/Event",
             "inherits": null,
             "properties": {}
         },
         "FocusEvent": {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/API/FocusEvent",
             "inherits": "UIEvent",
             "properties": {}
         },
         "HashChangeEvent": {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/API/HashChangeEvent",
             "inherits": "Event",
             "properties": {
                 "newURL": "String",
@@ -367,6 +371,7 @@
             }
         },
         "InputEvent": {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/API/InputEvent",
             "inherits": "UIEvent",
             "properties": {
                 "data": "String",
@@ -375,6 +380,7 @@
             }
         },
         "KeyboardEvent": {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent",
             "inherits": "UIEvent",
             "properties": {
                 "altKey": "bool",
@@ -390,6 +396,7 @@
             }
         },
         "MouseEvent": {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent",
             "inherits": "UIEvent",
             "properties": {
                 "altKey": "bool",
@@ -414,6 +421,7 @@
             }
         },
         "UIEvent": {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/API/UIEvent",
             "inherits": "Event",
             "properties": {
                 "detail": "i64",
@@ -421,6 +429,7 @@
             }
         },
         "WheelEvent": {
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/API/WheelEvent",
             "inherits": "MouseEvent",
             "properties": {
                 "deltaMode": "i64",
