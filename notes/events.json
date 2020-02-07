@@ -993,7 +993,7 @@
     ],
     "reset": [
         {
-            "bubbles": false,
+            "bubbles": true,
             "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/reset",
             "interface": "Event",
             "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
@@ -1159,7 +1159,7 @@
     ],
     "submit": [
         {
-            "bubbles": false,
+            "bubbles": true,
             "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/submit",
             "interface": "Event",
             "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"

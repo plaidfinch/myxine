@@ -248,9 +248,11 @@ are one or more of:
   available as a developer
 
 The master list of supported events is programmatically defined in the JSON file
-[enabled-events.json](enabled-events.json). This file defines a subset of the
-[standardized DOM events](https://developer.mozilla.org/en-US/docs/Web/Events)
-in JavaScript, as well as the inheritance hierarchy for the interfaces of those
-events and the fields which are to be reported for each event interface. This
-list is intentionally conservative: if you are in need of support for another
-event or set of events, feel free to submit a PR with changes to this file.
+[enabled-events.json](enabled-events.json), and the hierarchy of events and
+their interfaces can be visualized in [enabled-events.svg](enabled-events.svg).
+This file defines a subset of the [standardized DOM
+events](https://developer.mozilla.org/en-US/docs/Web/Events) in JavaScript, as
+well as the inheritance hierarchy for the interfaces of those events and the
+fields which are to be reported for each event interface. This list is
+intentionally conservative: if you are in need of support for another event or
+set of events, feel free to submit a PR with changes to this file.

@@ -65,7 +65,8 @@ def generate(events, interfaces):
         lines.extend('    ' + s for s in interface_parameters)
         for interface in same_rank_interfaces:
             interface_info = interfaces[interface]
-            attributes = {'href': interface_info['docs']}
+            docs = "https://developer.mozilla.org/docs/Web/API/" + interface
+            attributes = {'href': docs}
             lines.append('    ' + generate_node(interface, attributes))
         lines.append('  }')
 
@@ -78,7 +79,7 @@ def generate(events, interfaces):
             attrs = {'fillcolor': 'lightgreen'}
         else:
             attrs = {'fillcolor': 'yellow'}
-        attrs['href'] = event_info['docs']
+        attrs['href'] = "https://developer.mozilla.org/docs/Web/Events/" + event
         lines.append('    ' + generate_node(event, attrs))
     lines.append('  }')
 
