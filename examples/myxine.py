@@ -127,7 +127,12 @@ def evaluate(path : str, *,
     else: raise ValueError('Input must be exactly one of a statement or an expression')
     if timeout is not None:
         params['timeout'] = timeout
-    try: return requests.post(url, data=data, params=params).json()
+    try:
+        r = requests.post(url, data=data, params=params)
+        if r.status_code == 200:
+            return r.json()
+        else:
+            return ValueError(r.text)
     except RequestException as e:
         raise ValueError("Connection issue with myxine server (is it running?):", e)
 
