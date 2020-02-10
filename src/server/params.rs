@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::time::Duration;
 use percent_encoding::percent_decode;
 use std::borrow::Cow;
 use uuid::Uuid;
@@ -43,9 +44,11 @@ impl GetParams {
 pub(crate) enum PostParams {
     DynamicPage{title: String},
     StaticPage,
-    PageEvent, // TODO: Add validation key to prevent MITM
-    Evaluate{expression: Option<String>},
+    Evaluate{expression: Option<String>, timeout: Option<Duration>},
+    // TODO: Add validation key to page-sent events to prevent MITM?
+    PageEvent,
     EvalResult{id: Uuid},
+    EvalError{id: Uuid},
 }
 
 impl PostParams {
@@ -64,17 +67,29 @@ impl PostParams {
         } else if constrained_to_keys(&params, &["result"]) {
             let id = Uuid::parse_str(param_as_str("result", &params)?).ok()?;
             return Some(PostParams::EvalResult{id})
+        } else if constrained_to_keys(&params, &["error"]) {
+            let id = Uuid::parse_str(param_as_str("error", &params)?).ok()?;
+            return Some(PostParams::EvalError{id})
         } else if constrained_to_keys(&params, &["event"]) {
             if param_as_bool("event", &params)? {
                 return Some(PostParams::PageEvent)
             }
-        } else if constrained_to_keys(&params, &["evaluate"]) {
+        } else if constrained_to_keys(&params, &["evaluate", "timeout"]) {
+            let timeout = if let Some(timeout_str) = param_as_str("timeout", &params) {
+                match timeout_str.parse() {
+                    // correctly parsed specified timeout
+                    Ok(timeout_millis) => Some(Duration::from_millis(timeout_millis)),
+                    Err(_) => return None, // failed to parse specified timeout
+                }
+            } else {
+                None // no specified timeout
+            };
             let expression = if let Some(true) = param_as_bool("evaluate", &params) {
                 None
             } else {
                 Some(param_as_str("evaluate", &params)?.to_string())
             };
-            return Some(PostParams::Evaluate{expression})
+            return Some(PostParams::Evaluate{expression, timeout})
         };
         None
     }

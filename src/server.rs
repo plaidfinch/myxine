@@ -205,10 +205,7 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                     builder.body(body).unwrap()
                 },
                 None => {
-                    return Ok(response_with_status(
-                        StatusCode::BAD_REQUEST,
-                        "Invalid query string in GET.",
-                    ));
+                    response_with_status(StatusCode::BAD_REQUEST, "Invalid query string in GET.")
                 },
             }
         },
@@ -277,10 +274,10 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                                 page.set_body(body).await;
                                 Response::new(Body::empty())
                             },
-                            Err(_) => return Ok(response_with_status(
+                            Err(_) => response_with_status(
                                 StatusCode::BAD_REQUEST,
                                 "Invalid UTF-8 in POST data (only UTF-8 is supported).",
-                            )),
+                            ),
                         }
                     } else {
                         response_with_status(
@@ -297,24 +294,70 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                             Response::new(Body::empty())
                         },
                         Err(err) => {
-                            return Ok(response_with_status(
+                            response_with_status(
                                 StatusCode::BAD_REQUEST,
                                 format!("Invalid page event: {}.", err),
-                            ));
+                            )
                         }
                     }
                 },
                 // Client wants to evaluate a JavaScript expression in the
                 // context of the browser
-                Some(PostParams::Evaluate{expression}) => {
-                    if let Some(expression) = expression {
-                        todo!()
+                Some(PostParams::Evaluate{expression, timeout}) => {
+                    let result = if let Some(expression) = expression {
+                        page.evaluate(&expression, false, timeout).await
                     } else {
-                        todo!()
+                        let body_bytes = body::to_bytes(body).await?.as_ref().into();
+                        match String::from_utf8(body_bytes) {
+                            Ok(statements) => {
+                                page.evaluate(&statements, true, timeout).await
+                            },
+                            Err(_) => return Ok(response_with_status(
+                                StatusCode::BAD_REQUEST,
+                                "Invalid UTF-8 in POST data (only UTF-8 is supported).",
+                            )),
+                        }
+                    };
+                    match result {
+                        Err(err) => {
+                            response_with_status(StatusCode::BAD_REQUEST, err)
+                        },
+                        Ok(value) => {
+                            Response::new(Body::from(
+                                serde_json::to_string(&value).expect("JSON encoding shouldn't fail")
+                            ))
+                        },
                     }
                 },
+                // Browser wants to notify client of successful evaluation result
                 Some(PostParams::EvalResult{id}) => {
-                    todo!()
+                    let body_bytes = body::to_bytes(body).await?;
+                    match serde_json::from_slice(body_bytes.as_ref()) {
+                        Ok(result) => {
+                            page.send_evaluate_result(id, Ok(result)).await;
+                            Response::new(Body::empty())
+                        },
+                        Err(err) => {
+                            let status = StatusCode::INTERNAL_SERVER_ERROR;
+                            let message = format!("Internal error: Invalid JSON in evaluation result from browser: {}", err);
+                            response_with_status(status, message)
+                        },
+                    }
+                },
+                // Browser wants to notify client of erroneous evaluation result
+                Some(PostParams::EvalError{id}) => {
+                    let body_bytes = body::to_bytes(body).await?.as_ref().into();
+                    match String::from_utf8(body_bytes) {
+                        Ok(error) => {
+                            page.send_evaluate_result(id, Err(error)).await;
+                            Response::new(Body::empty())
+                        },
+                        Err(_) => {
+                            let status = StatusCode::INTERNAL_SERVER_ERROR;
+                            let message = "Internal error: Invalid UTF-8 in evaluation error from browser";
+                            response_with_status(status, message)
+                        },
+                    }
                 },
                 None => {
                     return Ok(response_with_status(

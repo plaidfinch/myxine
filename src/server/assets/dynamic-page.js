@@ -54,6 +54,16 @@ export function activate(initialSubscription, debugMode) {
         });
     }
 
+    function sendEvalError(id, error) {
+        let url = window.location.href
+            + "?error="  + encodeURIComponent(id);
+        sendEvalResultWorker.postMessage({
+            url: url,
+            contentType: "text/plain",
+            data: error.toString()
+        });
+    }
+
     // Set the body
     function setBodyTo(body) {
         // Cancel the previous animation frame, if any
@@ -106,8 +116,20 @@ export function activate(initialSubscription, debugMode) {
 
     // Evaluate a JavaScript expression and return the result
     function evaluateAndRespond(statementMode, event) {
-        const result = evaluate(event.data, statementMode);
-        sendEvalResult(event.id, result);
+        debug("Evaluating expression '" + event.data + "'(id "
+              + event.lastEventId + ") as a"
+              + (statementMode ? " statement" : "n expression"));
+        try {
+            let result = evaluate(event.data, statementMode);
+            if (typeof result === 'undefined') {
+                result = null;
+            }
+            debug("Sending back result response (id " + event.lastEventId + "): " + result);
+            sendEvalResult(event.lastEventId, result);
+        } catch(err) {
+            debug("Sending back error response: (id " + event.lastEventId + ")" + err);
+            sendEvalError(event.lastEventId, err);
+        }
     }
 
     // Functions from JavaScript objects to serializable objects, keyed by the
