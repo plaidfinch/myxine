@@ -7,27 +7,34 @@ from typing import *
 graph_parameters = [
     'rankdir="LR";',
     'splines=false;',
-    'node [shape=box, fontname="Courier", fontsize="18pt", overlap=false, penwidth=2];',
-    'edge [arrowhead=none, overlap=false, concentrate=true, penwidth=2];',
-    'outputorder="edgesfirst";'
+    'node [shape=none, fontname="Courier", fontsize="18pt", overlap=false, penwidth=2];',
+    'edge [arrowtail=none, dir=both, overlap=false, concentrate=true, penwidth=2];',
+    'outputorder="edgesfirst";',
+    'target="_blank"',
 ]
 
 interface_parameters = [
-    'node [fillcolor="lightblue", fontcolor="blue", style="filled", fontsize="20pt"];'
+    'node [fontcolor="blue", fontsize="20pt", margin="-1"];'
 ]
 
 event_parameters = [
     'node [shape=ellipse, fontcolor="blue", style="filled"];'
 ]
 
-def generate_node(name, attributes):
+def generate_node(name, attributes, *, quotes=True):
     attr_list = []
+    if quotes: quote = '"'
+    else: quote = ''
     for attr, value in attributes.items():
-        attr_list.append(attr + '="' + value + '"')
+        attr_list.append(attr + '=' + quote + value + quote)
     return '"' + name + '" [' + ', '.join(attr_list) + '];'
 
-def generate_edge(start, end):
-    return '"' + start + '" -> "' + end + '";'
+def generate_edge(start, end, *, start_port=None, end_port=None):
+    if start_port is not None: start_port = ':' + start_port
+    else: start_port = ''
+    if end_port is not None: end_port = ':' + end_port
+    else: end_port = ''
+    return '"' + start + '"' + start_port + ' -> "' + end + '"' + end_port + ';'
 
 def get_interface_levels(events, interfaces):
     heights = {}
@@ -66,8 +73,19 @@ def generate(events, interfaces):
         for interface in same_rank_interfaces:
             interface_info = interfaces[interface]
             docs = "https://developer.mozilla.org/docs/Web/API/" + interface
-            attributes = {'href': docs}
-            lines.append('    ' + generate_node(interface, attributes))
+            properties = ''.join('<TR>' + \
+                                 f'<TD HREF="{docs + "/" + property}" BGCOLOR="white" ALIGN="LEFT">' + \
+                                 property + '<FONT COLOR="black">:</FONT></TD>' + \
+                                 '<TD BGCOLOR="white" ALIGN="LEFT"><FONT COLOR="black">' + \
+                                 type + '</FONT></TD>' + \
+                                 '</TR>' \
+                                 for property, type in interface_info['properties'].items())
+            label = f'<<TABLE BORDER="1" CELLPADDING="4" CELLSPACING="0">' \
+                  + f'<TR><TD COLSPAN="2" BGCOLOR="lightblue" PORT="interface" HREF="{docs}">{interface}</TD></TR>' \
+                  + properties \
+                  + '</TABLE>>'
+            attributes = {'label': label}
+            lines.append('    ' + generate_node(interface, attributes, quotes=False))
         lines.append('  }')
 
     # The event nodes
@@ -87,13 +105,15 @@ def generate(events, interfaces):
     for interface, interface_info in interfaces.items():
         inherits = interface_info['inherits']
         if inherits is not None:
-            lines.append('  ' + generate_edge(inherits, interface))
+            lines.append('  ' + generate_edge(inherits, interface,
+                                              start_port='interface:e',
+                                              end_port='interface:w'))
 
     # The event inheritance edges
     for event, event_info in events:
         interface = event_info['interface']
         if inherits is not None:
-            lines.append('  ' + generate_edge(interface, event))
+            lines.append('  ' + generate_edge(interface, event, start_port='interface:e'))
 
     lines.append('}')
     return '\n'.join(lines)
