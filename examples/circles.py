@@ -29,18 +29,18 @@ class State:
     rest = []        # The already-drawn circles
     (x, y) = (0, 0)  # The current mouse location
 
-    def update(self, e):
-        if e.event() == 'mousedown':
+    def update(self, event):
+        if event.type == 'mousedown':
             if self.current is not None:
                 self.rest.append(self.current)
             self.current = Circle(x = self.x, y = self.y, r = 0)
-        elif e.event() == 'mouseup':
+        elif event.type == 'mouseup':
             if self.current is not None:
                 self.rest.append(self.current)
             self.current = None
-        elif e.event() == 'mousemove':
-            self.x = e['.x']
-            self.y = e['.y']
+        elif event.type == 'mousemove':
+            self.x = event.x
+            self.y = event.y
             if self.current is not None:
                 self.current.r = sqrt((self.x - self.current.x)**2 +
                                       (self.y - self.current.y)**2)
@@ -66,15 +66,6 @@ class State:
                                height: 100vh; width: 100vw;
                                overflow: hidden;">{content}</div>'''
 
-# A description of the events we wish to monitor
-subscription = {
-    'window': {
-        'mousemove': ['.x', '.y'],
-        'mouseup': [],
-        'mousedown': [],
-    },
-}
-
 def main():
     try:
         path = '/'
@@ -87,7 +78,7 @@ def main():
         myxine.update(path, state.draw())
 
         # Iterate over all page events, updating the page each time
-        for event in myxine.subscribe(path, subscription):
+        for event in myxine.subscribe(path):
             state.update(event)
             myxine.update(path, state.draw())
 

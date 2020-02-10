@@ -1,0 +1,1304 @@
+{
+    "DOMContentLoaded": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/DOMContentLoaded",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "SVGAbort": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/SVGAbort",
+            "interface": "SVGEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/SVGEvent"
+        }
+    ],
+    "SVGError": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/SVGError",
+            "interface": "SVGEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/SVGEvent"
+        }
+    ],
+    "SVGLoad": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/SVGLoad",
+            "interface": "SVGEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/SVGEvent"
+        }
+    ],
+    "SVGResize": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/SVGResize",
+            "interface": "SVGEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/SVGEvent"
+        }
+    ],
+    "SVGScroll": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/SVGScroll",
+            "interface": "SVGEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/SVGEvent"
+        }
+    ],
+    "SVGUnload": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/SVGUnload",
+            "interface": "SVGEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/SVGEvent"
+        }
+    ],
+    "abort": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/abort",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        },
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/abort_indexedDB",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        },
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/abort_(ProgressEvent)",
+            "interface": "ProgressEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/ProgressEvent"
+        }
+    ],
+    "afterprint": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/afterprint",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "animationcancel": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/animationcancel",
+            "interface": "AnimationEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/AnimationEvent"
+        }
+    ],
+    "animationend": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/animationend",
+            "interface": "AnimationEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/AnimationEvent"
+        }
+    ],
+    "animationiteration": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/animationiteration",
+            "interface": "AnimationEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/AnimationEvent"
+        }
+    ],
+    "animationstart": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/animationstart",
+            "interface": "AnimationEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/AnimationEvent"
+        }
+    ],
+    "appinstalled": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/appinstalled",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "audioend": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/audioend",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "audioprocess": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/audioprocess",
+            "interface": "AudioProcessingEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/AudioProcessingEvent"
+        }
+    ],
+    "audiostart": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/audiostart",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "beforeprint": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/beforeprint",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "beforeunload": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/beforeunload",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "beginEvent": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/beginEvent",
+            "interface": "TimeEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/TimeEvent"
+        }
+    ],
+    "blocked": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/blocked_indexedDB",
+            "interface": "IDBVersionChangeEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/IDBVersionChangeEvent"
+        }
+    ],
+    "blur": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/blur",
+            "interface": "FocusEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/FocusEvent"
+        }
+    ],
+    "boundary": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/boundary",
+            "interface": "SpeechSynthesisEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisEvent"
+        }
+    ],
+    "canplay": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/canplay",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "canplaythrough": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/canplaythrough",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "change": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/change",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "click": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/click",
+            "interface": "MouseEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent"
+        }
+    ],
+    "close": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/close_websocket",
+            "interface": "CloseEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent"
+        }
+    ],
+    "complete": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/complete",
+            "interface": "OfflineAudioCompletionEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/OfflineAudioCompletionEvent"
+        },
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/complete_indexedDB",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "compositionend": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/compositionend",
+            "interface": "CompositionEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/CompositionEvent"
+        }
+    ],
+    "compositionstart": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/compositionstart",
+            "interface": "CompositionEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/CompositionEvent"
+        }
+    ],
+    "compositionupdate": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/compositionupdate",
+            "interface": "CompositionEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/CompositionEvent"
+        }
+    ],
+    "contextmenu": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/contextmenu",
+            "interface": "MouseEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent"
+        }
+    ],
+    "copy": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/copy",
+            "interface": "ClipboardEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/ClipboardEvent"
+        }
+    ],
+    "cut": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/cut",
+            "interface": "ClipboardEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/ClipboardEvent"
+        }
+    ],
+    "dblclick": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/dblclick",
+            "interface": "MouseEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent"
+        }
+    ],
+    "devicechange": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/devicechange",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "devicemotion": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/devicemotion",
+            "interface": "DeviceMotionEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/DeviceMotionEvent"
+        }
+    ],
+    "deviceorientation": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/deviceorientation",
+            "interface": "DeviceOrientationEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/DeviceOrientationEvent"
+        }
+    ],
+    "drag": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/drag",
+            "interface": "DragEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/DragEvent"
+        }
+    ],
+    "dragend": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/dragend",
+            "interface": "DragEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/DragEvent"
+        }
+    ],
+    "dragenter": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/dragenter",
+            "interface": "DragEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/DragEvent"
+        }
+    ],
+    "dragleave": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/dragleave",
+            "interface": "DragEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/DragEvent"
+        }
+    ],
+    "dragover": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/dragover",
+            "interface": "DragEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/DragEvent"
+        }
+    ],
+    "dragstart": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/dragstart",
+            "interface": "DragEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/DragEvent"
+        }
+    ],
+    "drop": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/drop",
+            "interface": "DragEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/DragEvent"
+        }
+    ],
+    "durationchange": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/durationchange",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "emptied": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/emptied",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "end": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/end_(SpeechSynthesis)",
+            "interface": "SpeechSynthesisEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisEvent"
+        },
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/end_(SpeechRecognition)",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "endEvent": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/endEvent",
+            "interface": "TimeEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/TimeEvent"
+        }
+    ],
+    "ended": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/ended",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        },
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/ended_(Web_Audio)",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "error": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/error",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        },
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/error",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        },
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/error",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        },
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/error_(SpeechRecognitionError)",
+            "interface": "SpeechRecognitionError",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognitionError"
+        },
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/error",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        },
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/error",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "focus": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/focus",
+            "interface": "FocusEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/FocusEvent"
+        }
+    ],
+    "focusin": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/focusin",
+            "interface": "FocusEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/FocusEvent"
+        }
+    ],
+    "focusout": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/focusout",
+            "interface": "FocusEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/FocusEvent"
+        }
+    ],
+    "fullscreenchange": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/fullscreenchange",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "fullscreenerror": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/fullscreenerror",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "gamepadconnected": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/gamepadconnected",
+            "interface": "GamepadEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/GamepadEvent"
+        }
+    ],
+    "gamepaddisconnected": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/gamepaddisconnected",
+            "interface": "GamepadEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/GamepadEvent"
+        }
+    ],
+    "gotpointercapture": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/gotpointercapture",
+            "interface": "PointerEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent"
+        }
+    ],
+    "hashchange": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/hashchange",
+            "interface": "HashChangeEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/HashChangeEvent"
+        }
+    ],
+    "input": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/input",
+            "interface": "InputEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/InputEvent"
+        }
+    ],
+    "invalid": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/invalid",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "keydown": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/keydown",
+            "interface": "KeyboardEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent"
+        }
+    ],
+    "keypress": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/keypress",
+            "interface": "KeyboardEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent"
+        }
+    ],
+    "keyup": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/keyup",
+            "interface": "KeyboardEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent"
+        }
+    ],
+    "languagechange": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/languagechange",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "load": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/load",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        },
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/load_(ProgressEvent)",
+            "interface": "ProgressEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/ProgressEvent"
+        }
+    ],
+    "loadeddata": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/loadeddata",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "loadedmetadata": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/loadedmetadata",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "loadend": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/loadend",
+            "interface": "ProgressEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/ProgressEvent"
+        }
+    ],
+    "loadstart": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/loadstart",
+            "interface": "ProgressEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/ProgressEvent"
+        }
+    ],
+    "lostpointercapture": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/lostpointercapture",
+            "interface": "PointerEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent"
+        }
+    ],
+    "mark": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/mark",
+            "interface": "SpeechSynthesisEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisEvent"
+        }
+    ],
+    "message": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/message_(ServiceWorker)",
+            "interface": "MessageEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/MessageEvent"
+        },
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/message_websocket",
+            "interface": "MessageEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/MessageEvent"
+        },
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/message_webworker",
+            "interface": "MessageEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/MessageEvent"
+        },
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/message_serversentevents",
+            "interface": "MessageEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/MessageEvent"
+        }
+    ],
+    "messageerror": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/messageerror",
+            "interface": "MessageEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/MessageEvent"
+        }
+    ],
+    "mousedown": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/mousedown",
+            "interface": "MouseEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent"
+        }
+    ],
+    "mouseenter": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/mouseenter",
+            "interface": "MouseEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent"
+        }
+    ],
+    "mouseleave": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/mouseleave",
+            "interface": "MouseEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent"
+        }
+    ],
+    "mousemove": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/mousemove",
+            "interface": "MouseEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent"
+        }
+    ],
+    "mouseout": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/mouseout",
+            "interface": "MouseEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent"
+        }
+    ],
+    "mouseover": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/mouseover",
+            "interface": "MouseEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent"
+        }
+    ],
+    "mouseup": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/mouseup",
+            "interface": "MouseEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent"
+        }
+    ],
+    "nomatch": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/nomatch",
+            "interface": "SpeechRecognitionEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognitionEvent"
+        }
+    ],
+    "notificationclick": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/notificationclick",
+            "interface": "NotificationEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/NotificationEvent"
+        }
+    ],
+    "offline": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/offline",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "online": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/online",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "open": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/open_websocket",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        },
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/open_serversentevents",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "orientationchange": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/orientationchange",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "pagehide": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/pagehide",
+            "interface": "PageTransitionEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/PageTransitionEvent"
+        }
+    ],
+    "pageshow": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/pageshow",
+            "interface": "PageTransitionEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/PageTransitionEvent"
+        }
+    ],
+    "paste": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/paste",
+            "interface": "ClipboardEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/ClipboardEvent"
+        }
+    ],
+    "pause": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/pause_(SpeechSynthesis)",
+            "interface": "SpeechSynthesisEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisEvent"
+        },
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/pause",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "play": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/play",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "playing": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/playing",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "pointercancel": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/pointercancel",
+            "interface": "PointerEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent"
+        }
+    ],
+    "pointerdown": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/pointerdown",
+            "interface": "PointerEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent"
+        }
+    ],
+    "pointerenter": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/pointerenter",
+            "interface": "PointerEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent"
+        }
+    ],
+    "pointerleave": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/pointerleave",
+            "interface": "PointerEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent"
+        }
+    ],
+    "pointerlockchange": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/pointerlockchange",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "pointerlockerror": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/pointerlockerror",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "pointermove": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/pointermove",
+            "interface": "PointerEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent"
+        }
+    ],
+    "pointerout": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/pointerout",
+            "interface": "PointerEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent"
+        }
+    ],
+    "pointerover": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/pointerover",
+            "interface": "PointerEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent"
+        }
+    ],
+    "pointerup": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/pointerup",
+            "interface": "PointerEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent"
+        }
+    ],
+    "popstate": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/popstate",
+            "interface": "PopStateEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/PopStateEvent"
+        }
+    ],
+    "progress": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/progress",
+            "interface": "ProgressEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/ProgressEvent"
+        }
+    ],
+    "push": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/push",
+            "interface": "PushEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/PushEvent"
+        }
+    ],
+    "pushsubscriptionchange": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/pushsubscriptionchange",
+            "interface": "PushSubscriptionChangeEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/PushSubscriptionChangeEvent"
+        }
+    ],
+    "ratechange": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/ratechange",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "readystatechange": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/readystatechange",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "repeatEvent": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/repeatEvent",
+            "interface": "TimeEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/TimeEvent"
+        }
+    ],
+    "reset": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/reset",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "resize": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/resize",
+            "interface": "UIEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/UIEvent"
+        }
+    ],
+    "resourcetimingbufferfull": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/resourcetimingbufferfull",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "result": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/result",
+            "interface": "SpeechRecognitionEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognitionEvent"
+        }
+    ],
+    "resume": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/resume",
+            "interface": "SpeechSynthesisEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisEvent"
+        }
+    ],
+    "scroll": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/scroll",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "seeked": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/seeked",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "seeking": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/seeking",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "select": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/select",
+            "interface": "UIEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/UIEvent"
+        }
+    ],
+    "selectionchange": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/selectionchange",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "selectstart": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/selectstart",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "show": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/show",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "slotchange": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/slotchange",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "soundend": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/soundend",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "soundstart": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/soundstart",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "speechend": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/speechend",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "speechstart": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/speechstart",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "stalled": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/stalled",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "start": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/start_(SpeechRecognition)",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        },
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/start_(SpeechSynthesis)",
+            "interface": "SpeechSynthesisEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisEvent"
+        }
+    ],
+    "storage": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/storage",
+            "interface": "StorageEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/StorageEvent"
+        }
+    ],
+    "submit": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/submit",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "success": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/success_indexedDB",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "suspend": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/suspend",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "timeupdate": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/timeupdate",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "touchcancel": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/touchcancel",
+            "interface": "TouchEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/TouchEvent"
+        }
+    ],
+    "touchend": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/touchend",
+            "interface": "TouchEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/TouchEvent"
+        }
+    ],
+    "touchmove": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/touchmove",
+            "interface": "TouchEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/TouchEvent"
+        }
+    ],
+    "touchstart": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/touchstart",
+            "interface": "TouchEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/TouchEvent"
+        }
+    ],
+    "transitionend": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/transitionend",
+            "interface": "TransitionEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/TransitionEvent"
+        }
+    ],
+    "unload": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/unload",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "upgradeneeded": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/upgradeneeded_indexedDB",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "userproximity": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/userproximity",
+            "interface": "UserProximityEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/UserProximityEvent"
+        }
+    ],
+    "versionchange": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Reference/Events/versionchange_indexedDB",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "visibilitychange": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/visibilitychange",
+            "interface": "event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "voiceschanged": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/voiceschanged",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "volumechange": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/volumechange",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "waiting": [
+        {
+            "bubbles": false,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/waiting",
+            "interface": "Event",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/Event"
+        }
+    ],
+    "wheel": [
+        {
+            "bubbles": true,
+            "docs": "https://developer.mozilla.org/en-US/docs/Web/Events/wheel",
+            "interface": "WheelEvent",
+            "interfaceDocs": "https://developer.mozilla.org/en-US/docs/Web/API/WheelEvent"
+        }
+    ]
+}

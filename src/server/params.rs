@@ -1,26 +1,39 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::time::Duration;
 use percent_encoding::percent_decode;
 use std::borrow::Cow;
-use std::convert::TryFrom;
 use uuid::Uuid;
-
-use crate::page::events::AbsolutePath;
+use crate::page::subscription::Subscription;
 
 /// Parsed parameters from a query string for a GET/HEAD request.
 pub(crate) enum GetParams {
     FullPage,
     PageUpdates,
+    Subscribe(Subscription)
 }
 
 impl GetParams {
     /// Parse a query string from a GET request.
     pub fn parse(query: &str) -> Option<GetParams> {
         let params = query_params(query)?;
-        if param_as_bool("updates", &params)?
-        && constrained_to_keys(&params, &["updates"]) {
-            Some(GetParams::PageUpdates)
-        } else if constrained_to_keys(&params, &[]) {
+        if constrained_to_keys(&params, &[]) {
             Some(GetParams::FullPage)
+        } else if param_as_bool("updates", &params)?
+            && constrained_to_keys(&params, &["updates"])
+        {
+            Some(GetParams::PageUpdates)
+        } else if constrained_to_keys(&params, &["events", "event"]) {
+            match (param_as_strs("events", &params),
+                   param_as_strs("event", &params)) {
+                (Some(e1), Some(e2)) => Some(e1.chain(e2).map(String::from).collect()),
+                (Some(e1), None) => Some(e1.map(String::from).collect()),
+                (None, Some(e2)) => Some(e2.map(String::from).collect()),
+                (None, None) => None,
+            }.map(|events: HashSet<String>| if events.is_empty() {
+                GetParams::Subscribe(Subscription::universal())
+            } else {
+                GetParams::Subscribe(Subscription::from_events(events))
+            })
         } else {
             None
         }
@@ -31,49 +44,53 @@ impl GetParams {
 pub(crate) enum PostParams {
     DynamicPage{title: String},
     StaticPage,
-    SubscribeEvents{uuid: Option<Uuid>},
-    PageEvent{event: String, path: AbsolutePath},
+    Evaluate{expression: Option<String>, timeout: Option<Duration>},
+    // TODO: Add validation key to page-sent events to prevent MITM?
+    PageEvent,
+    EvalResult{id: Uuid},
+    EvalError{id: Uuid},
 }
 
 impl PostParams {
     /// Parse a query string from a POST request.
     pub fn parse(query: &str) -> Option<PostParams> {
         let params = query_params(query)?;
-        if param_as_bool("subscribe", &params)?
-            && constrained_to_keys(&params, &["subscribe"])
-        {
-            return Some(PostParams::SubscribeEvents{uuid: None})
-        } else if let Some(uuid) =
-            param_as_str("resubscribe", &params)?.and_then(|s| Uuid::parse_str(s).ok()) {
-                if constrained_to_keys(&params, &["resubscribe"]) {
-                    return Some(PostParams::SubscribeEvents{uuid: Some(uuid)})
-                }
-        } else if param_as_bool("static", &params)?
-            && constrained_to_keys(&params, &["static"])
-        {
-                return Some(PostParams::StaticPage)
-        } else if let Some(event) =
-            param_as_str("event", &params)?.map(String::from)
-        {
-            if let Some(id) = param_as_str("id", &params)? {
-                if constrained_to_keys(&params, &["event", "id"])
-                    && event != "" && id != ""
-                {
-                    if let Ok(path) = AbsolutePath::try_from("#".to_string() + id) {
-                        return Some(PostParams::PageEvent{event, path});
-                    }
-                }
-            } else if let Some(path) = param_as_str("path", &params)? {
-                if constrained_to_keys(&params, &["event", "path"]) && event != "" {
-                    if let Ok(path) = AbsolutePath::try_from(path.to_string()) {
-                        return Some(PostParams::PageEvent{event, path});
-                    }
-                }
-            }
+        if constrained_to_keys(&params, &[]) {
+            return Some(PostParams::DynamicPage{title: "".to_string()})
         } else if constrained_to_keys(&params, &["title"]) {
-            let title = param_as_str("title", &params)?.unwrap_or("").to_string();
+            let title = param_as_str("title", &params)?.to_string();
             return Some(PostParams::DynamicPage{title})
-        }
+        } else if constrained_to_keys(&params, &["static"]) {
+            if param_as_bool("static", &params)? {
+                return Some(PostParams::StaticPage)
+            }
+        } else if constrained_to_keys(&params, &["result"]) {
+            let id = Uuid::parse_str(param_as_str("result", &params)?).ok()?;
+            return Some(PostParams::EvalResult{id})
+        } else if constrained_to_keys(&params, &["error"]) {
+            let id = Uuid::parse_str(param_as_str("error", &params)?).ok()?;
+            return Some(PostParams::EvalError{id})
+        } else if constrained_to_keys(&params, &["event"]) {
+            if param_as_bool("event", &params)? {
+                return Some(PostParams::PageEvent)
+            }
+        } else if constrained_to_keys(&params, &["evaluate", "timeout"]) {
+            let timeout = if let Some(timeout_str) = param_as_str("timeout", &params) {
+                match timeout_str.parse() {
+                    // correctly parsed specified timeout
+                    Ok(timeout_millis) => Some(Duration::from_millis(timeout_millis)),
+                    Err(_) => return None, // failed to parse specified timeout
+                }
+            } else {
+                None // no specified timeout
+            };
+            let expression = if let Some(true) = param_as_bool("evaluate", &params) {
+                None
+            } else {
+                Some(param_as_str("evaluate", &params)?.to_string())
+            };
+            return Some(PostParams::Evaluate{expression, timeout})
+        };
         None
     }
 }
@@ -92,13 +109,20 @@ fn param_as_bool<'a, 'b: 'a>(param: &'b str, params: &'a HashMap<&'a str, Vec<Co
 /// Parse a given parameter as a string, where its presence without a mapping
 /// (or its absence entirely) is interpreted as the empty string. If it is
 /// mapped to multiple values, retrun `None`.
-#[allow(clippy::option_option)]
-fn param_as_str<'a, 'b: 'a>(param: &'b str, params: &'a HashMap<&'a str, Vec<Cow<'a, str>>>) -> Option<Option<&'a str>> {
+fn param_as_str<'a, 'b: 'a>(param: &'b str, params: &'a HashMap<&'a str, Vec<Cow<'a, str>>>) -> Option<&'a str> {
     match params.get(param).map(Vec::as_slice) {
-        Some([string]) => Some(Some(string.as_ref())),
-        Some([]) => Some(Some("")),
-        None => Some(None),
+        Some([string]) => Some(string.as_ref()),
         _ => None,
+    }
+}
+
+fn param_as_strs<'a, 'b: 'a>(
+    param: &'b str,
+    params: &'a HashMap<&'a str, Vec<Cow<'a, str>>>
+) -> Option<impl Iterator<Item = &'a str>> {
+    match params.get(param) {
+        Some(strings) => Some(strings.into_iter().map(|string| string.as_ref())),
+        None => None,
     }
 }
 
@@ -117,13 +141,13 @@ fn query_params<'a>(query: &'a str) -> Option<HashMap<&'a str, Vec<Cow<'a, str>>
                 if key == "" { return None }
                 for value in values.split(',') {
                     let value = value.trim();
-                    map.entry(key).or_insert_with(|| vec![])
+                    map.entry(key).or_insert_with(Vec::new)
                         .push(percent_decode(value.as_bytes()).decode_utf8_lossy());
                 }
             },
             [key] => {
                 let key = key.trim();
-                map.entry(key).or_insert_with(|| vec![]);
+                map.entry(key).or_insert_with(Vec::new);
             }
             _ => return None,
         }

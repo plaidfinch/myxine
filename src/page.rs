@@ -1,17 +1,20 @@
-use hyper::Body;
+use hyper::body::{Body, Bytes};
 use hyper_usse::EventBuilder;
+use std::time::Duration;
 use std::io::Write;
 use tokio::sync::Mutex;
-use std::collections::HashMap;
 use futures::join;
 use serde_json::Value;
 use uuid::Uuid;
+use futures::{select, pin_mut, FutureExt};
 
 pub mod sse;
-pub mod events;
+pub mod subscription;
+pub mod query;
 mod content;
 
-use events::{Subscribers, Subscription, AggregateSubscription, AbsolutePath, Path};
+use subscription::{Subscribers, Subscription, AggregateSubscription};
+use query::{Queries};
 use content::Content;
 
 /// A `Page` pairs some page `Content` (either dynamic or static) with a set of
@@ -20,10 +23,15 @@ use content::Content;
 pub struct Page {
     content: Mutex<Content>,
     subscribers: Mutex<Subscribers>,
+    queries: Mutex<Queries<Result<Value, String>>>,
 }
 
 /// The size of the dynamic page template in bytes
 const TEMPLATE_SIZE: usize = include_str!("page/dynamic.html").len();
+
+/// The default timeout for evaluating JavaScript expressions in the page,
+/// measured in milliseconds
+const DEFAULT_EVAL_TIMEOUT_MILLIS: Duration = Duration::from_millis(1000);
 
 impl Page {
     /// Make a new empty (dynamic) page
@@ -31,11 +39,12 @@ impl Page {
         Page {
             content: Mutex::new(Content::new().await),
             subscribers: Mutex::new(Subscribers::new()),
+            queries: Mutex::new(Queries::new()),
         }
     }
 
     /// Render a whole page as HTML (for first page load).
-    pub async fn render(&self) -> Vec<u8> {
+    pub async fn render(&self) -> Body {
         match &*self.content.lock().await {
             Content::Dynamic{title, body, ..} => {
                 let debug = cfg!(debug_assertions).to_string();
@@ -52,27 +61,25 @@ impl Page {
 
                 write!(&mut bytes,
                        include_str!("page/dynamic.html"),
-                       subscription = subscription,
                        debug = debug,
                        title = title,
+                       subscription = subscription,
                        body = body)
                     .expect("Internal error: write!() failed on a Vec<u8>");
-                bytes
+                Body::from(bytes)
             },
             Content::Static{raw_contents, ..} => {
-                raw_contents.clone()
+                raw_contents.clone().into()
             },
         }
     }
 
     /// Subscribe another page event listener to this page, given a subscription
     /// specification for what events to listen to.
-    pub async fn event_stream(
-        &self, uuid: Option<Uuid>, subscription: Subscription,
-    ) -> Option<(Uuid, Body)> {
+    pub async fn event_stream(&self, subscription: Subscription) -> Body {
         let mut subscribers = self.subscribers.lock().await;
-        let (total_subscription, new_details) =
-            subscribers.add_subscriber(uuid, subscription).await;
+        let (total_subscription, event_stream) =
+            subscribers.add_subscriber(subscription).await;
         let content = &mut *self.content.lock().await;
         match content {
             Content::Static{..} => { },
@@ -80,19 +87,16 @@ impl Page {
                 set_subscriptions(updates, total_subscription).await;
             }
         }
-        new_details
+        event_stream
     }
 
     /// Send an event to all subscribers. This should only be called with events
     /// that have come from the corresponding page itself, or confusion will
     /// result!
-    pub async fn send_event(&self,
-                            event_type: &str,
-                            event_path: &AbsolutePath,
-                            event_data: &HashMap<Path, Value>) {
+    pub async fn send_event(&self, event: &str, id: &Value, data: &Value) {
         if let Some(total_subscription) =
             self.subscribers.lock().await
-            .send_event(event_type, event_path, event_data).await {
+            .send_event(event, id, data).await {
                 let content = &mut *self.content.lock().await;
                 match content {
                     Content::Static{..} => { },
@@ -129,14 +133,91 @@ impl Page {
         update_client_count
     }
 
+    /// Tell the page to evaluate a given piece of JavaScript, as either an
+    /// expression or a statement, with an optional explicit timeout (defaults
+    /// to the long-ish hardcoded timeout `DEFAULT_EVAL_TIMEOUT_MILLIS`).
+    pub async fn evaluate(
+        &self,
+        expression: &str,
+        statement_mode: bool,
+        timeout: Option<Duration>,
+    ) -> Result<Value, String> {
+        match *self.content.lock().await {
+            Content::Dynamic{ref mut updates, ..} => {
+                let (id, result) = self.queries.lock().await.request();
+                let id_string = id.to_simple_ref().to_string();
+                let event = EventBuilder::new(expression)
+                    .event_type(if statement_mode { "run" } else { "evaluate" })
+                    .id(&id_string);
+                let get_client_count = updates.send_to_clients(event.build()).await;
+                // All the below gets executed *after* the lock on content is
+                // released, because it's a returned async block that is
+                // .await-ed after the scope of the match closes.
+                async move {
+                    // If nobody's listening, give up now and report the issue
+                    if get_client_count.await == 0 {
+                        self.queries.lock().await.cancel(id);
+                        Err("Can't evaluate JavaScript when no browser is viewing the page.".to_string())
+                    } else {
+                        // Timeout for evaluation request
+                        let request_timeout = async move {
+                            let duration = timeout.unwrap_or(DEFAULT_EVAL_TIMEOUT_MILLIS);
+                            tokio::time::delay_for(duration).await;
+                            self.queries.lock().await.cancel(id);
+                            Err(match timeout {
+                                None => format!(
+                                    "Request timeout: default timeout of {}ms exceeded: \
+                                     for more time, use a custom ?timeout query parameter.",
+                                    DEFAULT_EVAL_TIMEOUT_MILLIS.as_millis()
+                                ),
+                                Some(timeout) => format!(
+                                    "Request timeout: specified timeout of {}ms exceeded: \
+                                     for more time, increase the ?timeout query parameter.",
+                                    timeout.as_millis())
+                            })
+                        }.fuse();
+
+                        // Wait for the result
+                        let wait_result = async {
+                            match result.await {
+                                None => Err("No response from page (handle dropped).".to_string()),
+                                Some(result) => result,
+                            }
+                        }.fuse();
+
+                        // Race the timeout against the wait for the result
+                        pin_mut!(request_timeout, wait_result);
+                        select! {
+                            result = request_timeout => result,
+                            result = wait_result => result,
+                        }
+                    }
+                }
+            },
+            Content::Static{..} => {
+                return Err("Can't evaluate JavaScript within a static page.".to_string());
+            },
+        }.await
+    }
+
+    /// Notify waiting clients of the result to some in-page JavaScript
+    /// evaluation they have requested, either with an error or a valid
+    /// response.
+    pub async fn send_evaluate_result(&self, id: Uuid, result: Result<Value, String>) {
+        self.queries.lock().await.respond(id, result).unwrap_or(())
+    }
+
     /// Test if this page is empty, where "empty" means that it is dynamic, with
     /// an empty title, empty body, and no subscribers waiting on its page
     /// events: that is, it's identical to `Page::new()`.
     pub async fn is_empty(&self) -> bool {
-        let (content_empty, subscribers_empty) =
-            join!(async { self.content.lock().await.is_empty().await },
-                  async { self.subscribers.lock().await.is_empty() });
-        content_empty && subscribers_empty
+        let (content_empty, subscribers_empty, queries_empty) =
+            join!(
+                async { self.content.lock().await.is_empty().await },
+                async { self.subscribers.lock().await.is_empty() },
+                async { self.queries.lock().await.is_empty() },
+            );
+        content_empty && subscribers_empty && queries_empty
     }
 
     /// Add a client to the dynamic content of a page, if it is dynamic. If it
@@ -152,7 +233,7 @@ impl Page {
     /// itself until a client refreshes their page again).
     pub async fn set_static(&self,
                             content_type: Option<String>,
-                            raw_contents: impl Into<Vec<u8>>) {
+                            raw_contents: Bytes) {
         self.content.lock().await.set_static(content_type, raw_contents).await
     }
 

@@ -51,12 +51,12 @@ $ cargo run --release
 And in another window, run:
 
 ```bash
-$ ./examples/angles.py
+$ ./examples/circles.py
 ```
 
 Then open up [http://localhost:1123/](http://localhost:1123/) in your web
 browser, and mouse around! See if you can figure out what's going on by reading
-[the Python source for this example](/examples/angles.py), or read on for [the
+[the Python source for this example](/examples/circles.py), or read on for [the
 full story...](#lets-play)
 
 ## Getting started
@@ -157,75 +157,62 @@ Some more things you can do:
 Interfaces are meant to be *interactive*: `myxine` lets you listen to events
 happening in the page without writing a lick of JavaScript.
 
-### Step 1: Say what you want
+### Listening to the event stream
 
-Write down a *subscription* consisting of some [JSON](https://www.json.org/)
-specifying which events you care about. The format should be a doubly-nested
-dictionary like this:
-
-```json
-{
-  "#some-id": {
-    "click": [".x", ".y"]
-  },
-  "window": {
-    "keydown": [".key"],
-    "keyup": [".key"]
-  },
-  "document.body": {
-    "scroll": ["window.scrollY"]
-  }
-}
-```
-
-The outer dictionary maps each *event target* of interest in the document to a
-dictionary which maps each *event name* of interest for that target to a list of
-desired *return values*. Targets are named either by HTML element `id`,
-specified using a preceding `#`, or by name within the page's environment of
-objects, as a sequence of field selections.
-
-When the event occurs on the target, `myxine` will look up and send back the
-value of all the return values you asked for. This list can contain global
-properties specified like `window.scrollY` or properties of the current event
-specified with a preceding `.` like `.key`.
-
-MDN web docs has [excellent documentation about browser
-events](https://developer.mozilla.org/en-US/docs/Web/Events), which I recommend
-as a reference for finding the names and properties of the browser events to
-which you can subscribe.
-
-### Step 2: Get what you wanted
-
-Now that you have a description of the events you
-want to listen for, send a **POST** request to the desired page path, with the
-subscription as the body of the request and `?subscribe` as the query string.
-With `curl`, this looks like:
+To listen to the events happening in a page, send a **GET** request to that
+page's URL, with the query string `?events`. Using `curl`, this might look like
+below (some data has been elided for brevity).
 
 ```bash
-$ curl 'localhost:1123/some/path?subscribe' -d '{ "window": "click": [".x", ".y"] }'
-id: window
-event: click
-data: {".x":638,".y":757}
+$ curl 'localhost:1123/some/path?events'
+id: [{"attributes":{},"tagName":"html"}]
+event: mousemove
+data: {"x":352,"y":237, ... }
 
-id: window
-event: click
-data: {".x":796,".y":1334}
+id: []
+event: blur
+data: {}
 
 :
 
-id: window
-event: click
-data: {".x":749,".y":523}
+id: []
+event: focus
+data: {}
+
+id: [{"attributes":{"style":"margin: 0px; padding: 0px"},"tagName":"body"},{"attributes":{},"tagName":"html"}]
+event: keydown
+data: {"altKey":false,"ctrlKey":false,"key":"f","metaKey":false,"shiftKey":false, ... }
 ```
 
 This will return an endless stream of events in the [`text/event-stream`
 format](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format),
-a line-based text format for streams of events with attached data. In `myxine`'s
-case, every event will have an `id`, an `event`, and some attached `data`
-formatted as a JSON dictionary mapping result fields you asked for to the value
-they had at the time the event occurred in the page. Occasionally, the stream
-will also contain an empty "heartbeat" message `:` which `myxine` uses to check
-that you're still listening—you can ignore these.
+a line-based text format for streams of events with attached data.
+
+### Understanding events
+
+In `myxine`'s case, every event will have:
+
+1. `id`: A JSON list of "target" objects identifying the path from the most
+   specific location of the event in the document to the least specific. Each
+   target object in this path has a `tagName` string identifying the HTML tag of
+   the corresponding element, and an `attributes` dictionary giving the value of
+   each attribute of that element. The list of targets may be empty, in which
+   case it corresponds to an event that fired directly on some top-level object
+   in the browser (as is the case for the `blur` and `focus` events in the above
+   example).
+2. `event`: The name of the JavaScript event to which this item corresponds.
+3. `data`: A JSON dictionary holding the properties of the event. Different
+   events have different sets of properties associated with them, so the
+   contents of this dictionary may vary depending on the event you are
+   examining.
+
+So, for instance, you click on an element `<div id="something", class="cool"></div>`, the corresponding event will look something like:
+
+```
+id: [{"tagName":"div","attributes":{"id":"something","class":"cool"}}, ... ]
+event: click
+data: {"x":352,"y":237, ... }
+```
 
 If your language doesn't implement a parser for this format, check out [the
 17-line Python implementation](/examples/myxine.py#L14-L36) as a reference. For
@@ -237,59 +224,35 @@ look at the sections for
 You can ignore everything about what to do "as a user-agent" because you are not
 a user-agent :)
 
-### Step 3: Interact!
-
-For an example of an interactive page using event subscriptions, check out [the
-`angles` example in Python](/examples/angles.py). Make sure `myxine` is running,
-then run:
+**Example:** For an example of an interactive page using event subscriptions,
+check out [the `circles` example in Python](/examples/circles.py). Make sure
+`myxine` is running, then run:
 
 ```bash
-$ ./examples/angles.py
+$ ./examples/circles.py
 ```
 
 Then load up [http://localhost:1123/](http://localhost:1123/) and mouse around!
 
-### (Optional) Step 4: Do it again
+### Supported events
 
-Sometimes, the things you care about change. When you want to listen to
-different events on the page, you *could* just stop listening and then
-immediately `?subscribe` again for different events. However, this runs the risk
-of missing any momentary events that happened in the meantime!
+There are many kinds of user-interface events which can happen in the browser.
+Most of them are supported by `myxine`, but not all. Those which aren't usually
+are one or more of:
 
-Myxine's got your back: every response to a valid subscription request comes
-with a `Content-Location` header that gives a uniquely generated URL that can be
-used for "re-subscribing" to an event stream. For example, here's the response
-we get when subscribing for the first time:
+- "non-bubbling" events which need to be attached to a specific element rather
+  than the document as a whole
+- high-frequency repeated events that fire continuously (and therefore would be
+  an automatic performance problem)
+- events which are difficult to test support for using the hardware I have
+  available as a developer
 
-```
-HTTP/1.1 200 OK
- .
- .
- .
-Content-Location: /some/path/?resubscribe=13659ef1d37f45b49b30a78a2d043af2
- .
- .
- .
-[other headers omitted]
-```
-
-Now, we can *re*-subscribe to different events on the page by doing something
-like:
-
-```
-$ curl 'localhost:1123/some/path?resubscribe=13659ef1d37f45b49b30a78a2d043af2' \
-       -d '{ "window": { "click": [] } }'
-```
-
-At that moment, `myxine` will stop adding new events to the original stream,
-close it, and start adding new (and possibly different) events to the response
-stream from the second request. You might still have a couple events waiting in
-the buffer for the original stream, so don't forget to process them first! But
-then, keep on sailing with the new events in the new stream.
-
-Keep in mind: every time you re-subscribe, the `Content-Location` you'll receive
-for re-subscribing *again* is different. If you use the same one again, you'll get
-an error response instead of a new stream. Though it might seem like slightly
-more bookkeeping to keep track of the new `Content-Location` every time, this
-token-passing scheme means no other process can guess (or accidentally cache)
-a `?resubscribe` URL, so nobody can cut your event stream out from under you!
+The master list of supported events is programmatically defined in the JSON file
+[enabled-events.json](enabled-events.json), and the hierarchy of events and
+their interfaces can be visualized in [enabled-events.svg](enabled-events.svg).
+This file defines a subset of the [standardized DOM
+events](https://developer.mozilla.org/en-US/docs/Web/Events) in JavaScript, as
+well as the inheritance hierarchy for the interfaces of those events and the
+fields which are to be reported for each event interface. This list is
+intentionally conservative: if you are in need of support for another event or
+set of events, feel free to submit a PR with changes to this file.

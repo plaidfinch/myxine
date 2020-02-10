@@ -1,6 +1,7 @@
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, StatusCode};
 use hyper::server::conn::AddrStream;
+use hyper::body;
 use http::request::Parts;
 use http::header::{HeaderMap, HeaderValue};
 use lazy_static::lazy_static;
@@ -10,14 +11,13 @@ use std::net::SocketAddr;
 use tokio::sync::Mutex;
 use futures::future::FutureExt;
 use futures::{future, select, pin_mut};
-use futures::stream::StreamExt;
 use itertools::Itertools;
 use void::Void;
 
 mod params;
 mod heartbeat;
 
-use crate::page::Page;
+use crate::page::{Page, subscription::Event};
 use params::{GetParams, PostParams};
 
 lazy_static! {
@@ -83,7 +83,7 @@ async fn get_page(path: &str) -> Arc<Page> {
 }
 
 /// The response for serving a particular file as a static asset with liberal
-/// cache policy and a particular content type.
+/// cache policy (if specified) and a particular content type.
 macro_rules! static_asset {
     ($cache:expr, $content_type:expr, $path:expr) => {
         {
@@ -108,18 +108,24 @@ fn process_special_request(
             static_asset!(true, "application/javascript", "server/assets/diffhtml.min.js"),
         (Method::GET, "/assets/dynamic-page.js") =>
             static_asset!(false, "application/javascript", "server/assets/dynamic-page.js"),
-        (Method::GET, "/assets/send-event.js") =>
-            static_asset!(false, "application/javascript", "server/assets/send-event.js"),
+        (Method::GET, "/assets/post.js") =>
+            static_asset!(false, "application/javascript", "server/assets/post.js"),
+        (Method::GET, "/assets/enabled-events.json") =>
+            static_asset!(false, "application/json", "../enabled-events.json"),
         (Method::GET, _) =>
-            Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap(),
-        _ => Response::builder().status(StatusCode::METHOD_NOT_ALLOWED).body(Body::empty()).unwrap(),
+            response_with_status(StatusCode::NOT_FOUND, "Page not found."),
+        _ => response_with_status(StatusCode::METHOD_NOT_ALLOWED, "Method not allowed."),
     })
 }
+
+// The location of the special path for myxine's assets
+// (this path and its subpaths cannot be treated as ordinary
+const MYXINE_SPECIAL_PATH: &str = "/.myxine/";
 
 async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper::Error> {
 
     // Disassemble the request into the parts we care about
-    let (parts, mut body) = request.into_parts();
+    let (parts, body) = request.into_parts();
 
     // More disassembly
     let Parts{method, uri, headers, ..} = parts;
@@ -145,8 +151,9 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
     }
 
     // Shortcut to special processing if the path is in our reserved namespace
-    if path.starts_with("/.myxine/") {
-        return process_special_request(method, &path[8..], query);
+    if path.starts_with(MYXINE_SPECIAL_PATH) {
+        let subpath = &path[MYXINE_SPECIAL_PATH.len() - 1 ..];
+        return process_special_request(method, subpath, query);
     }
 
     // Get the page at this path
@@ -155,14 +162,11 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
     // Just one big dispatch on the HTTP method...
     Ok(match method {
 
-        Method::GET | Method::HEAD => {
-            let mut body = Body::empty();
+        Method::GET => {
             match GetParams::parse(query) {
-                // If client wants event stream of changes to page:
+                // Browser wants event stream of changes to page:
                 Some(GetParams::PageUpdates) => {
-                    if method == Method::GET {
-                        body = page.update_stream().await.unwrap_or_else(Body::empty);
-                    }
+                    let body = page.update_stream().await.unwrap_or_else(Body::empty);
                     Response::builder()
                         .header("Content-Type", "text/event-stream")
                         .header("Cache-Control", "no-cache")
@@ -170,6 +174,17 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                         .body(body)
                         .unwrap()
                 },
+                // Client wants to subscribe to events on this page:
+                Some(GetParams::Subscribe(subscription)) => {
+                    let body = page.event_stream(subscription).await;
+                    Response::builder()
+                        .header("Content-Type", "text/event-stream")
+                        .header("Cache-Control", "no-cache")
+                        .header("Access-Control-Allow-Origin", "*")
+                        .body(body)
+                        .unwrap()
+                },
+                // Browser wants to load the full page
                 Some(GetParams::FullPage) => {
                     let mut builder = Response::builder()
                         .header("Access-Control-Allow-Origin", "*")
@@ -186,29 +201,16 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                         // 301 redirects can be cached, but nothing else can
                         builder = builder.header("Cache-Control", "no-cache");
                     }
-                    if method == Method::GET {
-                        body = page.render().await.into();
-                    }
+                    let body = page.render().await.into();
                     builder.body(body).unwrap()
                 },
                 None => {
-                    return Ok(bad_request(if method == Method::GET {
-                        "Invalid query string in GET."
-                    } else {
-                        ""
-                    }));
+                    response_with_status(StatusCode::BAD_REQUEST, "Invalid query string in GET.")
                 },
             }
         },
 
         Method::POST => {
-            // Slurp the body into memory
-            let mut body_bytes: Vec<u8> = Vec::new();
-            while let Some(chunk) = body.next().await {
-                let chunk = chunk?;
-                body_bytes.extend_from_slice(&chunk);
-            };
-
             let content_type: Option<&str> =
                 match headers.get("Content-Type").map(HeaderValue::to_str) {
                     None => None,
@@ -224,68 +226,144 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                             Some(content_type)
                         },
                     Some(Err(_)) =>
-                        return Ok(bad_request("Invalid ASCII in Content-Type header.")),
+                        return Ok(response_with_status(
+                            StatusCode::BAD_REQUEST,
+                            "Invalid ASCII in Content-Type header."
+                        )),
                 };
+
+            // Determine if the endpoint is a "special" path, which cannot be
+            // updated by the user
+
+            // TODO: implement dashboard at special path root. Instead of
+            // unilaterally banning updates to the path, we should allow them
+            // only if a query parameter matches a dynamically generated token
+            // which is never revealed outside the process, which means only we
+            // ourselves can update the page, but we can do so through the
+            // public-facing API using the client library, rather than fiddling
+            // with the Page contents directly. This also has the side-effect of
+            // forcing us to eat our own dogfood, to construct this page.
+            let writeable_path =
+                path != MYXINE_SPECIAL_PATH.trim_end_matches('/')
+                && !path.starts_with(MYXINE_SPECIAL_PATH);
 
             match PostParams::parse(query) {
                 // Client wants to store a static file of a known Content-Type:
                 Some(PostParams::StaticPage) => {
-                    page.set_static(content_type.map(String::from), body_bytes).await;
-                    Response::new(Body::empty())
+                    if writeable_path {
+                        page.set_static(content_type.map(String::from),
+                                        body::to_bytes(body).await?).await;
+                        Response::new(Body::empty())
+                    } else {
+                        response_with_status(
+                            StatusCode::FORBIDDEN,
+                            "Clients cannot set the contents of the dashboard page.",
+                        )
+                    }
                 },
                 // Client wants to publish some HTML to a dynamic page:
                 Some(PostParams::DynamicPage{title}) => {
-                    match String::from_utf8(body_bytes) {
-                        Ok(body) => {
-                            if cfg!(debug_assertions) {
-                                eprintln!("\n{}", body);
-                            }
-                            page.set_title(title).await;
-                            page.set_body(body).await;
-                            Response::new(Body::empty())
-                        },
-                        Err(_) =>
-                            return Ok(bad_request("Invalid UTF-8 in POST data (only UTF-8 is supported).")),
-                    }
-                },
-                // Client wants to subscribe to interface events on this page:
-                Some(PostParams::SubscribeEvents{uuid}) => {
-                    if let Ok(subscription) = serde_json::from_slice(&body_bytes) {
-                        if cfg!(debug_assertions) {
-                            eprintln!("\n{:?}", &subscription);
-                        }
-                        if let Some((uuid, body)) =
-                            page.event_stream(uuid, subscription).await
-                        {
-                            let content_location =
-                                format!("{}?resubscribe={}", path, uuid.to_simple_ref());
-                            Response::builder()
-                                .header("Content-Type", "text/event-stream")
-                                .header("Cache-Control", "no-cache")
-                                .header("Access-Control-Allow-Origin", "*")
-                                .header("Content-Location", content_location)
-                                .body(body)
-                                .unwrap()
-                        } else {
-                            return Ok(bad_request("Invalid resubscription request: stream does not exist."))
+                    if writeable_path {
+                        let body_bytes = body::to_bytes(body).await?.as_ref().into();
+                        match String::from_utf8(body_bytes) {
+                            Ok(body) => {
+                                if cfg!(debug_assertions) {
+                                    eprintln!("\n{}", body);
+                                }
+                                page.set_title(title).await;
+                                page.set_body(body).await;
+                                Response::new(Body::empty())
+                            },
+                            Err(_) => response_with_status(
+                                StatusCode::BAD_REQUEST,
+                                "Invalid UTF-8 in POST data (only UTF-8 is supported).",
+                            ),
                         }
                     } else {
-                        return Ok(bad_request("Invalid subscription request."));
+                        response_with_status(
+                            StatusCode::FORBIDDEN,
+                            "Clients cannot set the contents of the dashboard page.",
+                        )
                     }
                 },
                 // Browser wants to notify client of an event
-                Some(PostParams::PageEvent{event, path}) => {
-                    if let Ok(event_data) = serde_json::from_slice(&body_bytes) {
-                        tokio::spawn(async move {
-                            page.send_event(&event, &path, &event_data).await;
-                        });
-                        Response::new(Body::empty())
-                    } else {
-                        return Ok(bad_request("Invalid page event."));
+                Some(PostParams::PageEvent) => {
+                    match serde_json::from_slice(body::to_bytes(body).await?.as_ref()) {
+                        Ok(Event{event, id, data}) => {
+                            page.send_event(&event, &id, &data).await;
+                            Response::new(Body::empty())
+                        },
+                        Err(err) => {
+                            response_with_status(
+                                StatusCode::BAD_REQUEST,
+                                format!("Invalid page event: {}.", err),
+                            )
+                        }
                     }
-                }
+                },
+                // Client wants to evaluate a JavaScript expression in the
+                // context of the browser
+                Some(PostParams::Evaluate{expression, timeout}) => {
+                    let result = if let Some(expression) = expression {
+                        page.evaluate(&expression, false, timeout).await
+                    } else {
+                        let body_bytes = body::to_bytes(body).await?.as_ref().into();
+                        match String::from_utf8(body_bytes) {
+                            Ok(statements) => {
+                                page.evaluate(&statements, true, timeout).await
+                            },
+                            Err(_) => return Ok(response_with_status(
+                                StatusCode::BAD_REQUEST,
+                                "Invalid UTF-8 in POST data (only UTF-8 is supported).",
+                            )),
+                        }
+                    };
+                    match result {
+                        Err(err) => {
+                            response_with_status(StatusCode::BAD_REQUEST, err)
+                        },
+                        Ok(value) => {
+                            Response::new(Body::from(
+                                serde_json::to_string(&value).expect("JSON encoding shouldn't fail")
+                            ))
+                        },
+                    }
+                },
+                // Browser wants to notify client of successful evaluation result
+                Some(PostParams::EvalResult{id}) => {
+                    let body_bytes = body::to_bytes(body).await?;
+                    match serde_json::from_slice(body_bytes.as_ref()) {
+                        Ok(result) => {
+                            page.send_evaluate_result(id, Ok(result)).await;
+                            Response::new(Body::empty())
+                        },
+                        Err(err) => {
+                            let status = StatusCode::INTERNAL_SERVER_ERROR;
+                            let message = format!("Internal error: Invalid JSON in evaluation result from browser: {}", err);
+                            response_with_status(status, message)
+                        },
+                    }
+                },
+                // Browser wants to notify client of erroneous evaluation result
+                Some(PostParams::EvalError{id}) => {
+                    let body_bytes = body::to_bytes(body).await?.as_ref().into();
+                    match String::from_utf8(body_bytes) {
+                        Ok(error) => {
+                            page.send_evaluate_result(id, Err(error)).await;
+                            Response::new(Body::empty())
+                        },
+                        Err(_) => {
+                            let status = StatusCode::INTERNAL_SERVER_ERROR;
+                            let message = "Internal error: Invalid UTF-8 in evaluation error from browser";
+                            response_with_status(status, message)
+                        },
+                    }
+                },
                 None => {
-                    return Ok(bad_request("Invalid query string in POST."));
+                    return Ok(response_with_status(
+                        StatusCode::BAD_REQUEST,
+                        "Invalid query string in POST.",
+                    ));
                 }
             }
         },
@@ -293,7 +371,7 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
         Method::DELETE => {
             // This is equivalent to an empty-body POST with no query string
             if query != "" {
-                return Ok(bad_request("Invalid query string in DELETE."));
+                return Ok(response_with_status(StatusCode::BAD_REQUEST, "Invalid query string in DELETE."));
             }
             page.set_title("").await;
             page.set_body("").await;
@@ -309,12 +387,9 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
 
 // Some utilities for this module:
 
-/// Assemble a BAD_REQUEST response with the given message
-fn bad_request(message: impl Into<String>) -> Response<Body> {
-    Response::builder()
-        .status(StatusCode::BAD_REQUEST)
-        .body(Body::from(message.into()))
-        .unwrap()
+/// Construct a response with a given status code
+fn response_with_status(status: StatusCode, body: impl Into<Body>) -> Response<Body> {
+    Response::builder().status(status).body(body.into()).unwrap()
 }
 
 /// Print a header value to stderr, for debugging purposes

@@ -5,7 +5,7 @@ use tokio::time;
 #[tokio::main]
 async fn main() {
     let client = reqwest::Client::new();
-    let mut interval = time::interval(Duration::from_millis(16));
+    let mut interval = time::interval(Duration::from_millis(7));
     let mut ok = true;
     while ok {
         let start = Instant::now();

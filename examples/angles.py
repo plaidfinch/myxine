@@ -2,21 +2,25 @@
 from math import *
 import myxine
 
-class State:
-    # The dimensions of the browser window
-    (w, h) = (1, 1)
-    # The location of the cursor relative to the browser window
-    (x, y) = (0.5, 0.5 - 0.000001)
+class Page:
+    # Keep track of where the path is
+    def __init__(self, path):
+        self.path = path
+        self.w, self.h = 1, 1
+        self.x, self.y = 0.5, 0.5 - 0.000001
+        myxine.update(self.path, self.draw())
+        self.w, self.h = None, None
 
     def update(self, event):
-        w = event['window.innerWidth']
-        h = event['window.innerHeight']
-        x = event['.clientX']
-        y = event['.clientY']
-        if w is not None: self.w = w
-        if h is not None: self.h = h
-        if x is not None: self.x = x
-        if y is not None: self.y = y
+        if event.type == 'mousemove':
+            self.x = event.x
+            self.y = event.y
+            if self.w is None or self.h is None:
+                self.resize()
+            myxine.update(self.path, self.draw())
+        elif event.type == 'resize':
+            self.resize()
+            myxine.update(self.path, self.draw())
 
     def draw(self):
         angle = degrees(atan2(self.y - self.h/2,
@@ -61,46 +65,19 @@ class State:
         </div>'''
         return html
 
-# A description of the events we wish to monitor
-subscription = {
-    # Look for events on this element (id="container")
-    '#container': {
-        # Look for this event:
-        'mousemove': [
-            # Report these properties back when the event fires:
-            '.clientX', # Property of the event
-            '.clientY',
-            'window.innerHeight', # Sub-property of top-level object
-            'window.innerWidth'
-        ],
-    },
-    'window': {
-        'resize': [
-            'window.innerHeight',
-            'window.innerWidth'
-        ]
-    }
-}
+    def resize(self):
+        self.w, self.h = \
+            myxine.evaluate(self.path, expression='[window.innerWidth, window.innerHeight]')
+
+    def run(self):
+        for event in myxine.subscribe(self.path):
+            self.update(event)
 
 def main():
     try:
-        # The path we want to serve the page at
         path = '/'
         print('Running at:', myxine.page_url(path))
-
-        # Make a new state object
-        state = State()
-
-        # Draw the page for the first time
-        myxine.update(path, state.draw())
-
-        # Iterate over all page events, updating the page each time
-        for event in myxine.subscribe(path, subscription):
-            state.update(event)
-            myxine.update(path, state.draw())
-
-    # You can kill the program with a keyboard interrupt
+        Page(path).run()
     except KeyboardInterrupt: pass
-    except Exception as e: print('Exception: ', e)
 
 if __name__ == '__main__': main()
