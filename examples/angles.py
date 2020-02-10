@@ -6,17 +6,21 @@ class Page:
     # Keep track of where the path is
     def __init__(self, path):
         self.path = path
-        self.resize()
-        self.x, self.y = 0.5 * self.w, 0.5 * self.h - 0.000001
+        self.w, self.h = 1, 1
+        self.x, self.y = 0.5, 0.5 - 0.000001
         myxine.update(self.path, self.draw())
+        self.w, self.h = None, None
 
     def update(self, event):
         if event.type == 'mousemove':
             self.x = event.x
             self.y = event.y
+            if self.w is None or self.h is None:
+                self.resize()
+            myxine.update(self.path, self.draw())
         elif event.type == 'resize':
             self.resize()
-        myxine.update(self.path, self.draw())
+            myxine.update(self.path, self.draw())
 
     def draw(self):
         angle = degrees(atan2(self.y - self.h/2,
