@@ -2,19 +2,21 @@
 from math import *
 import myxine
 
-class State:
-    # The dimensions of the browser window
-    (w, h) = (500, 500)
-    # The location of the cursor relative to the browser window
-    (x, y) = (0.5, 0.5 - 0.000001)
+class Page:
+    # Keep track of where the path is
+    def __init__(self, path):
+        self.path = path
+        self.resize()
+        self.x, self.y = 0.5 * self.w, 0.5 * self.h - 0.000001
+        myxine.update(self.path, self.draw())
 
     def update(self, event):
         if event.type == 'mousemove':
             self.x = event.x
             self.y = event.y
         elif event.type == 'resize':
-            # TODO: Get window size by asking browser for it
-            pass
+            self.resize()
+        myxine.update(self.path, self.draw())
 
     def draw(self):
         angle = degrees(atan2(self.y - self.h/2,
@@ -59,29 +61,19 @@ class State:
         </div>'''
         return html
 
-# A description of the events we wish to monitor
-subscription = ['resize', 'mousemove']
+    def resize(self):
+        self.w, self.h = \
+            myxine.evaluate(self.path, expression='[window.innerWidth, window.innerHeight]')
+
+    def run(self):
+        for event in myxine.subscribe(self.path):
+            self.update(event)
 
 def main():
     try:
-        # The path we want to serve the page at
         path = '/'
         print('Running at:', myxine.page_url(path))
-
-        # Make a new state object
-        state = State()
-
-        # TODO: Ask the page for its size
-
-        # Draw the page for the first time
-        myxine.update(path, state.draw())
-
-        # Iterate over all page events, updating the page each time
-        for event in myxine.subscribe(path, subscription):
-            state.update(event)
-            myxine.update(path, state.draw())
-
-    # You can kill the program with a keyboard interrupt
+        Page(path).run()
     except KeyboardInterrupt: pass
 
 if __name__ == '__main__': main()

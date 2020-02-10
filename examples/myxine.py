@@ -84,6 +84,7 @@ def page_url(path : str, port : int = MYXINE_DEFAULT_PORT) -> str:
     if len(path) > 0 and path[0] == '/': path = path[1:]
     return 'http://localhost:' + str(port) + '/' + path
 
+# TODO: rename to events?
 def subscribe(path : str,
               subscription : Optional[List[str]] = None,
               port : int = MYXINE_DEFAULT_PORT) -> Iterator[PageEvent]:
@@ -105,12 +106,28 @@ def subscribe(path : str,
     except RequestException as e:
         raise ValueError("Connection issue with myxine server (is it running?):", e)
 
-def evaluate(path : str,
-             expression : str,
+def evaluate(path : str, *,
+             expression : Optional[str] = None,
+             statement : Optional[str] = None,
+             timeout : Optional[int] = None,
              port : int = MYXINE_DEFAULT_PORT) -> None:
     """Evaluate the given JavaScript code in the context of the page."""
-    url = page_url(path, port) + '?evaluate'
-    try: requests.post(url, data=expression.encode())
+    if expression is not None:
+        if statement is not None:
+            raise ValueError('Input must be exactly one of a statement or an expression')
+        url = page_url(path, port)
+        params = {'evaluate': expression}
+        data = expression.encode()
+    elif statement is not None:
+        if expression is not None:
+            raise ValueError('Input must be exactly one of a statement or an expression')
+        url = page_url(path, port) + '?evaluate'
+        params = {}
+        data = statement.encode()
+    else: raise ValueError('Input must be exactly one of a statement or an expression')
+    if timeout is not None:
+        params['timeout'] = timeout
+    try: return requests.post(url, data=data, params=params).json()
     except RequestException as e:
         raise ValueError("Connection issue with myxine server (is it running?):", e)
 
