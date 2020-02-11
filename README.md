@@ -249,7 +249,8 @@ are one or more of:
 
 The master list of supported events is programmatically defined in the JSON file
 [enabled-events.json](enabled-events.json), and the hierarchy of events and
-their interfaces can be visualized in [enabled-events.svg](enabled-events.svg).
+their interfaces can be visualized in [this clickable
+graphic](https://raw.githubusercontent.com/GaloisInc/myxine/master/enabled-events.svg?sanitize=true).
 This file defines a subset of the [standardized DOM
 events](https://developer.mozilla.org/en-US/docs/Web/Events) in JavaScript, as
 well as the inheritance hierarchy for the interfaces of those events and the
