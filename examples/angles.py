@@ -70,7 +70,7 @@ class Page:
             myxine.evaluate(self.path, expression='[window.innerWidth, window.innerHeight]')
 
     def run(self):
-        for event in myxine.subscribe(self.path):
+        for event in myxine.events(self.path):
             self.update(event)
 
 def main():

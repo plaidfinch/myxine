@@ -85,9 +85,9 @@ def page_url(path : str, port : int = MYXINE_DEFAULT_PORT) -> str:
     return 'http://localhost:' + str(port) + '/' + path
 
 # TODO: rename to events?
-def subscribe(path : str,
-              subscription : Optional[List[str]] = None,
-              port : int = MYXINE_DEFAULT_PORT) -> Iterator[PageEvent]:
+def events(path : str,
+           subscription : Optional[List[str]] = None,
+           port : int = MYXINE_DEFAULT_PORT) -> Iterator[PageEvent]:
     """Subscribe to a stream of page events from a myxine server, returning an
     iterator over the events returned by the stream as they become available.
     """

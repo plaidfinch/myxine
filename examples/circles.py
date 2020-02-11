@@ -78,7 +78,7 @@ def main():
         myxine.update(path, state.draw())
 
         # Iterate over all page events, updating the page each time
-        for event in myxine.subscribe(path):
+        for event in myxine.events(path):
             state.update(event)
             myxine.update(path, state.draw())
 
