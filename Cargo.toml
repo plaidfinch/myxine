@@ -16,19 +16,19 @@ maintenance = { status = "actively-developed" }
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-hyper = "0.13.1"
-http = "0.2.0"
-hyper-usse = "0.3.0"
-futures = "0.3.1"
-tokio = { version = "0.2.4", features = ["full"] }
-lazy_static = "1.4.0"
-percent-encoding = "2.1.0"
-itertools = "0.8.2"
+hyper = "0.13"
+http = "0.2"
+hyper-usse = "0.3"
+futures = "0.3"
+tokio = { version = "0.2", features = ["full"] }
+lazy_static = "1.4"
+percent-encoding = "2.1"
+itertools = "0.8"
 structopt = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-bytes = "0.5.3"
-uuid = { version = "0.8.1", features = ["v4"] }
+bytes = "0.5"
+uuid = { version = "0.8", features = ["v4"] }
 void = "1"
 
 [dev-dependencies]
