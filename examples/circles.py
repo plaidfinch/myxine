@@ -39,8 +39,8 @@ class State:
                 self.rest.append(self.current)
             self.current = None
         elif event.type == 'mousemove':
-            self.x = event.x
-            self.y = event.y
+            self.x = event.clientX
+            self.y = event.clientY
             if self.current is not None:
                 self.current.r = sqrt((self.x - self.current.x)**2 +
                                       (self.y - self.current.y)**2)

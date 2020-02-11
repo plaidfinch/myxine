@@ -329,9 +329,7 @@
                 "region": "String",
                 "screenX": "f64",
                 "screenY": "f64",
-                "shiftKey": "bool",
-                "x": "f64",
-                "y": "f64"
+                "shiftKey": "bool"
             }
         },
         "UIEvent": {

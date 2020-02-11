@@ -13,8 +13,8 @@ class Page:
 
     def update(self, event):
         if event.type == 'mousemove':
-            self.x = event.x
-            self.y = event.y
+            self.x = event.clientX
+            self.y = event.clientY
             if self.w is None or self.h is None:
                 self.resize()
             myxine.update(self.path, self.draw())
