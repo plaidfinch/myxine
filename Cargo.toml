@@ -1,35 +1,4 @@
-[package]
-name = "myxine"
-version = "0.1.0"
-description = "Get a GUI fast in any language under the sea"
-keywords = ["GUI", "web", "interface", "scripting", "tool"]
-categories = ["command-line-utilities", "graphics", "gui", "visualization", "web-programming"]
-authors = ["Kenny Foner <kwf@very.science>"]
-edition = "2018"
-homepage = "https://github.com/GaloisInc/myxine"
-readme = "README.md"
-license = "MIT"
-
-[badges]
-maintenance = { status = "actively-developed" }
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-hyper = "0.13"
-http = "0.2"
-hyper-usse = "0.3"
-futures = "0.3"
-tokio = { version = "0.2", features = ["full"] }
-lazy_static = "1.4"
-percent-encoding = "2.1"
-itertools = "0.8"
-structopt = "0.3"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-bytes = "0.5"
-uuid = { version = "0.8", features = ["v4"] }
-void = "1"
-
-[dev-dependencies]
-reqwest = { version = "0.10", features = ["json", "stream"] }
+[workspace]
+members = [
+    "myxine",
+]
