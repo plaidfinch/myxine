@@ -33,7 +33,7 @@
             "bubbles": true,
             "interface": "MouseEvent",
             "nameWords": [
-                "double",
+                "dbl",
                 "click"
             ]
         },

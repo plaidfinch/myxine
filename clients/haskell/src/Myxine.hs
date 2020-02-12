@@ -1,196 +1,101 @@
-{-# language GADTs, TypeFamilies, DataKinds, DuplicateRecordFields, RankNTypes,
-    TypeApplications, StrictData, ScopedTypeVariables, BlockArguments,
-    OverloadedLabels, PolyKinds, UndecidableInstances, UndecidableSuperClasses,
-    MultiParamTypeClasses, FlexibleInstances, TypeOperators, FlexibleContexts,
-    AllowAmbiguousTypes, ConstraintKinds, TemplateHaskell, OverloadedStrings #-}
+{-# language GADTs, DataKinds, DuplicateRecordFields, RankNTypes, StrictData,
+    ScopedTypeVariables, BlockArguments, KindSignatures, TemplateHaskell,
+    OverloadedStrings, DerivingStrategies, DerivingVia, StandaloneDeriving,
+    DeriveGeneric, DeriveAnyClass #-}
 
 module Myxine
-  ( Handlers(..)
-  , Properties
-  , onEvent
-  , dispatchEvent
+  ( Handlers
+  , on
+  , handler
+  , Target(..)
   ) where
 
 import Data.Text (Text)
-import Data.Kind
-import GHC.TypeLits
-import GHC.OverloadedLabels
-import GHC.Records
-import Data.Functor.Identity
-import Data.Functor.Const
 import qualified Data.Aeson as JSON
-import Data.Aeson (FromJSON)
-import Data.Aeson.TH
 import qualified Data.ByteString as ByteString
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
-import Data.Proxy
+import Data.Typeable
+import Data.GADT.Compare
+import Data.Dependent.Map (DMap, Some(..))
+import qualified Data.Dependent.Map as DMap
+import Data.Monoid
 
-onEvent ::
-  forall e m. (IsEvent e, Applicative m) =>
-  (Properties (Interface e) -> m ()) ->
-  Handlers m
-onEvent h =
-  runIdentity $ (handler @e) (\_ -> Identity h) mempty
+import Myxine.TH
 
-dispatchEvent ::
-  forall e m. (IsEvent e, Applicative m) =>
-  Properties (Interface e) ->
-  Handlers m ->
-  m ()
-dispatchEvent properties handlers =
-  (getConst $ (handler @e) Const handlers) properties
+-- TH deriving the things
 
-dispatchSomeEvent :: Applicative m => SomeEvent -> Handlers m -> m ()
-dispatchSomeEvent
-  (SomeEvent (Proxy :: Proxy e) (properties :: Properties (Interface e))) handlers =
-  dispatchEvent @e properties handlers
+mkInterface "MouseEvent"
+  [("clientX", "i64"), ("clientY", "i64")]
 
-data SomeEvent where
-  SomeEvent :: IsEvent e => Proxy e -> Properties (Interface e) -> SomeEvent
+mkInterface "InputEvent"
+  [("data", "i64"), ("inputType", "String")]
 
-parseEvent :: ByteString -> ByteString -> Maybe SomeEvent
-parseEvent name properties = do
-  parser <- HashMap.lookup name parsers
-  parser properties
+mkEventEnum "Event" [(["click"], ''MouseEvent), (["input"], ''InputEvent)]
+
+mkEnumGEqInstance ''Event
+
+-- The actual code
+
+on :: Event d -> (d -> [Target] -> a -> m b) -> Handlers m a b
+on event h = Handlers (DMap.singleton event (Handler h))
+
+handler :: Event d -> Handlers m a b -> Maybe (d -> [Target] -> a -> m b)
+handler event (Handlers handlers) = do
+  Handler h <- DMap.lookup event handlers
+  return h
+
+newtype Handlers m a b
+  = Handlers (DMap Event (Handler m a b))
+
+data Target = Target
+  { tagName :: Text
+  , attributes :: HashMap Text Text
+  } deriving (Eq, Ord, Show)
+
+newtype Handler m a b d
+  = Handler (d -> [Target] -> a -> m b)
+
+withEvent :: ByteString -> ByteString -> (forall d. Event d -> d -> r) -> Maybe r
+withEvent name properties k = do
+  Some e <- decodeSomeEvent name
+  k e <$> decodeProperties e properties
   where
-    parsers :: HashMap ByteString (ByteString -> Maybe SomeEvent)
-    parsers = HashMap.fromList eventParsers
+    decodeSomeEvent :: ByteString -> Maybe (Some Event)
+    decodeSomeEvent = flip HashMap.lookup allEvents
 
-parseEventNamed :: forall e. IsEvent e => ByteString -> Maybe SomeEvent
-parseEventNamed = fmap (SomeEvent (Proxy @e)) . JSON.decode
+deriving via (Dual (DMap Event (Handler m a b))) instance Semigroup (Handlers m a b)
+deriving via (Dual (DMap Event (Handler m a b))) instance Monoid (Handlers m a b)
+deriving instance Eq (Event d)
+deriving instance Ord (Event d)
+deriving instance Show (Event d)
 
-class IsInterface (Interface e) => IsEvent (e :: Symbol) where
-  type Interface e :: Symbol
-  -- This is a lens, but for what I need I don't need Control.Lens
-  handler :: forall f m.
-    Functor f =>
-    ((Properties (Interface e) -> m ()) ->
-     f (Properties (Interface e) -> m ())) ->
-    (Handlers m -> f (Handlers m))
+-- Everything below here isn't yet TH-ified
 
-class (FromJSON (Properties i)) => IsInterface (i :: Symbol) where
-  data Properties i :: Type
+instance GCompare Event where
+  gcompare e1 e2 =
+    case e1 of
+      Click -> case e2 of
+        Click -> GEQ
+        Input -> GLT
+        {- ... for every event ... -}
+      Input -> case e2 of
+        Click -> GGT
+        Input -> GEQ
+        {- ... for every event ... -}
+      {- ... for every event ... -}
 
--- Pretty error messages
-
-type family If (b :: Bool) (t :: k) (e :: k) :: k where
-  If 'True t  _ = t
-  If 'False _ f = f
-
-type family In (e :: k) (es :: [k]) :: Bool where
-  In _ '[]       = 'False
-  In e (e ': _)  = 'True
-  In e (_ ': es) = In e es
-
-type family ShowListOfTypes (ts :: [k]) :: ErrorMessage where
-  ShowListOfTypes '[] = 'Text ""
-  ShowListOfTypes '[t] = 'Text " ⚬ " ':<>: 'ShowType t
-  ShowListOfTypes (t ': ts) = 'Text " ⚬ " ':<>: 'ShowType t ':$$: ShowListOfTypes ts
-
-type family JoinErrMessage (between :: Symbol) (errs :: [ErrorMessage]) where
-  JoinErrMessage _ '[] = 'Text ""
-  JoinErrMessage _ '[e] = e
-  JoinErrMessage between (e ': es) =
-    e ':<>: 'Text between ':<>: JoinErrMessage between es
-
-type family AssertEqual (err :: ErrorMessage) (t :: k) (s :: l) :: Constraint where
-  AssertEqual _ t t = ()
-  AssertEqual err _ _ = TypeError err
-
-type PropertyOfType f i t s =
-  AssertEqual ('Text "Couldn't match expected type ‘" ':<>: 'ShowType t ':<>:
-               'Text "’ with actual type ‘" ':<>: 'ShowType s ':<>:
-               'Text "’" ':$$: 'Text "in property " ':<>: 'ShowType f ':<>:
-               'Text " of event interface " ':<>: 'ShowType i) t s
-
-instance {-# OVERLAPPABLE #-}
-  (TypeError (If (In i AllInterfaces)
-              ('Text "No property named " ':<>:
-               'ShowType f ':<>:
-               'Text " in the event interface " ':<>:
-               'ShowType i ':$$:
-                  ('Text "Did you mean any of: " ':$$:
-                   (ShowListOfTypes (PropertiesOf i))))
-               ('Text "No event interface named " ':<>: 'ShowType i ':$$:
-                'Text "Did you mean any of: " ':$$:
-                 ShowListOfTypes AllInterfaces))) =>
-  IsLabel f (Properties i -> t) where
-  fromLabel = error "unreachable"
-
--- Everything below here needs to get generated
-
-data Handlers m = Handlers
-  { onClick :: Properties "MouseEvent" -> m ()
-  , onInput :: Properties "InputEvent" -> m ()
+allEvents :: HashMap ByteString (Some Event)
+allEvents = HashMap.fromList
+  [ ("click", Some Click)
+  , ("input", Some Input)
   {- ... for every event ... -}
-  }
-
-instance Applicative m => Semigroup (Handlers m) where
-  Handlers a b {- ... for every event ... -}
-    <> Handlers a' b' {- ... for every event ... -}
-    = Handlers (a *> a') (b *> b') {- ... for every event ... -}
-
-instance Applicative m => Monoid (Handlers m) where
-  mempty =
-    Handlers u u {- ... for every event ... -}
-    where u = const (pure ())
-
-instance IsInterface "MouseEvent" where
-  data Properties "MouseEvent" = MouseEventProperties
-    { _clientX :: Int
-    , _clientY :: Int
-    {- ... for every (transitive) property of this interface ... -}
-    }
-
-instance IsInterface "InputEvent" where
-  data Properties "InputEvent" = InputEventProperties
-    { _data :: Text
-    , _inputType :: Text
-    {- ... for every (transitive) property of this interface ... -}
-    }
-
-{- ... for every interface ... -}
-
-instance IsEvent "click" where
-  type Interface "click" = "MouseEvent"
-  handler f handlers = fmap (\h -> handlers { onClick = h }) (f (onClick handlers))
-
-instance IsEvent "input" where
-  type Interface "input" = "InputEvent"
-  handler f handlers = fmap (\h -> handlers { onInput = h }) (f (onInput handlers))
-
-{- ... for every event ... -}
-
-instance (PropertyOfType "clientX" "MouseEvent" Int t, t ~ Int) => IsLabel "clientX" (Properties "MouseEvent" -> t) where
-  fromLabel = getField @"_clientX"
-
-instance (PropertyOfType "clientY" "MouseEvent" Int t, t ~ Int) => IsLabel "clientY" (Properties "MouseEvent" -> t) where
-  fromLabel = getField @"_clientY"
-
-instance (PropertyOfType "data" "InputEvent" Text t, t ~ Text) => IsLabel "data" (Properties "InputEvent" -> t) where
-  fromLabel = getField @"_data"
-
-instance (PropertyOfType "inputType" "InputEvent" Text t, t ~ Text) => IsLabel "inputType" (Properties "InputEvent" -> t) where
-  fromLabel = getField @"_inputType"
-
-{- ... for every interface, for every property ... -}
-
-type AllInterfaces =
-  '["MouseEvent", "InputEvent" {- ... for every interface, sorted ... -}]
-
-type family PropertiesOf (i :: Symbol) :: [Symbol] where
-  PropertiesOf "MouseEvent" = ["clientX", "clientY" {- ... for every property, sorted ... -} ]
-  PropertiesOf "InputEvent" = ["data", "inputType" {- ... for every property, sorted ... -} ]
-  {- ... for every interface ... -}
-
-eventParsers :: [(ByteString, (ByteString -> Maybe SomeEvent))]
-eventParsers =
-  [ ("click", parseEventNamed @"click")
-  , ("input", parseEventNamed @"input")
   ]
 
-$(deriveFromJSON defaultOptions{fieldLabelModifier = tail} 'MouseEventProperties)
-$(deriveFromJSON defaultOptions{fieldLabelModifier = tail} 'InputEventProperties)
-{- ... for every interface ... -}
+decodeProperties :: Event d -> ByteString -> Maybe d
+decodeProperties event =
+  case event of
+    Click -> JSON.decode
+    Input -> JSON.decode
+    {- ... for every event ... -}

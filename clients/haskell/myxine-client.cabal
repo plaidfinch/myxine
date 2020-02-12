@@ -17,17 +17,33 @@ copyright:           Copyright (c) 2020 Galois, Inc.
 category:            Graphics
 extra-source-files:  CHANGELOG.md
 
-library
-  exposed-modules:     Myxine
-  other-modules:
-  default-extensions:
+common options
+  ghc-options:         -Wall
+                       -Wincomplete-uni-patterns
+                       -Wincomplete-record-updates
+                       -Wcompat
+                       -Widentities
+                       -Wredundant-constraints
+                       -fhide-source-paths
+                       -Wpartial-fields
+
+common deps
   build-depends:       base ^>=4.13.0.0,
                        req,
                        aeson,
                        text,
                        transformers,
                        bytestring,
-                       unordered-containers
+                       unordered-containers,
+                       dependent-map,
+                       dependent-sum,
+                       template-haskell
+
+library
+  import:              deps, options
+  exposed-modules:     Myxine
+  other-modules:
+  default-extensions:
   hs-source-dirs:      src
   default-language:    Haskell2010
 
