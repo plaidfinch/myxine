@@ -1,12 +1,13 @@
 {-# language GADTs, DataKinds, DuplicateRecordFields, RankNTypes, StrictData,
     ScopedTypeVariables, BlockArguments, KindSignatures, TemplateHaskell,
     OverloadedStrings, DerivingStrategies, DerivingVia, StandaloneDeriving,
-    DeriveGeneric, DeriveAnyClass #-}
+    DeriveGeneric, DeriveAnyClass, GeneralizedNewtypeDeriving #-}
 
 module Myxine
   ( Handlers
+  , Event(..)
   , on
-  , handler
+  , handle
   , Target(..)
   ) where
 
@@ -21,33 +22,32 @@ import Data.GADT.Compare
 import Data.Dependent.Map (DMap, Some(..))
 import qualified Data.Dependent.Map as DMap
 import Data.Monoid
+import Data.Traversable
+import Data.Maybe
 
-import Myxine.TH
-
--- TH deriving the things
-
-mkInterface "MouseEvent"
-  [("clientX", "i64"), ("clientY", "i64")]
-
-mkInterface "InputEvent"
-  [("data", "i64"), ("inputType", "String")]
-
-mkEventEnum "Event" [(["click"], ''MouseEvent), (["input"], ''InputEvent)]
-
-mkEnumGEqInstance ''Event
+import Myxine.Event
 
 -- The actual code
 
 on :: Event d -> (d -> [Target] -> a -> m b) -> Handlers m a b
-on event h = Handlers (DMap.singleton event (Handler h))
+on event h = Handlers (DMap.singleton event (Handler [h]))
 
-handler :: Event d -> Handlers m a b -> Maybe (d -> [Target] -> a -> m b)
-handler event (Handlers handlers) = do
-  Handler h <- DMap.lookup event handlers
-  return h
+handle :: Applicative m => Event d -> Handlers m a b -> d -> [Target] -> a -> m [b]
+handle event (Handlers allHandlers) d path a =
+  let Handler handlers =
+        fromMaybe (Handler []) (DMap.lookup event allHandlers)
+  in for handlers \handler ->
+    handler d path a
 
 newtype Handlers m a b
   = Handlers (DMap Event (Handler m a b))
+
+instance Semigroup (Handlers m a b) where
+  Handlers hs <> Handlers hs' =
+    Handlers (DMap.unionWithKey (const (<>)) hs hs')
+
+instance Monoid (Handlers m a b) where
+  mempty = Handlers mempty
 
 data Target = Target
   { tagName :: Text
@@ -55,7 +55,8 @@ data Target = Target
   } deriving (Eq, Ord, Show)
 
 newtype Handler m a b d
-  = Handler (d -> [Target] -> a -> m b)
+  = Handler [d -> [Target] -> a -> m b]
+  deriving newtype (Semigroup, Monoid)
 
 withEvent :: ByteString -> ByteString -> (forall d. Event d -> d -> r) -> Maybe r
 withEvent name properties k = do
@@ -64,38 +65,3 @@ withEvent name properties k = do
   where
     decodeSomeEvent :: ByteString -> Maybe (Some Event)
     decodeSomeEvent = flip HashMap.lookup allEvents
-
-deriving via (Dual (DMap Event (Handler m a b))) instance Semigroup (Handlers m a b)
-deriving via (Dual (DMap Event (Handler m a b))) instance Monoid (Handlers m a b)
-deriving instance Eq (Event d)
-deriving instance Ord (Event d)
-deriving instance Show (Event d)
-
--- Everything below here isn't yet TH-ified
-
-instance GCompare Event where
-  gcompare e1 e2 =
-    case e1 of
-      Click -> case e2 of
-        Click -> GEQ
-        Input -> GLT
-        {- ... for every event ... -}
-      Input -> case e2 of
-        Click -> GGT
-        Input -> GEQ
-        {- ... for every event ... -}
-      {- ... for every event ... -}
-
-allEvents :: HashMap ByteString (Some Event)
-allEvents = HashMap.fromList
-  [ ("click", Some Click)
-  , ("input", Some Input)
-  {- ... for every event ... -}
-  ]
-
-decodeProperties :: Event d -> ByteString -> Maybe d
-decodeProperties event =
-  case event of
-    Click -> JSON.decode
-    Input -> JSON.decode
-    {- ... for every event ... -}
