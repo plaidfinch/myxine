@@ -1,6 +1,7 @@
 {-# language GADTs, DataKinds, DuplicateRecordFields, RankNTypes, StrictData,
     ScopedTypeVariables, BlockArguments, KindSignatures, TemplateHaskell,
-    OverloadedStrings, DerivingStrategies, DerivingVia, StandaloneDeriving #-}
+    OverloadedStrings, DerivingStrategies, DerivingVia, StandaloneDeriving,
+    DeriveGeneric, DeriveAnyClass #-}
 
 module Myxine.TH where
 
@@ -17,22 +18,64 @@ import qualified Data.Aeson.TH as JSON
 import qualified Data.Char as Char
 import qualified Data.Text as Text
 import Data.Text (Text)
-import qualified Data.HashMap.Strict as HashMap
-import Data.HashMap.Strict (HashMap)
+import qualified Data.HashMap.Lazy as HashMap
+import Data.HashMap.Lazy (HashMap)
 import Data.List
 import Data.GADT.Compare
+import Data.ByteString.Lazy (ByteString)
 
 -- Template Haskell to generate stuff
 
-mkEventEnum :: String -> [([String], Name)] -> Q [Dec]
-mkEventEnum typeName events = do
+eventTypeName :: Name
+eventTypeName = mkName "Event"
+
+interfaceTypes :: HashMap String Name
+interfaceTypes = HashMap.fromList
+  [ ("f64", ''Double)
+  , ("i64", ''Int)
+  , ("String", ''Text)
+  , ("bool", ''Bool)
+  ]
+
+data EnabledEvents name
+  = EnabledEvents
+  { events :: Events name
+  , interfaces :: Interfaces name
+  } deriving (Eq, Ord, Show, Generic.Generic, JSON.FromJSON)
+
+newtype Events name
+  = Events (HashMap name (EventInfo name))
+  deriving (Eq, Ord, Show, Generic.Generic, JSON.FromJSON)
+
+data EventInfo name
+  = EventInfo
+  { interface :: name
+  , nameWords :: [Text]
+  } deriving (Eq, Ord, Show, Generic.Generic, JSON.FromJSON)
+
+newtype Interfaces name
+  = Interfaces (HashMap Text (Interface name))
+  deriving (Eq, Ord, Show, Generic.Generic, JSON.FromJSON)
+
+data Interface name
+  = Interface
+  { inherits :: Maybe name
+  , properties :: Properties name
+  } deriving (Eq, Ord, Show, Generic.Generic, JSON.FromJSON)
+
+newtype Properties name
+  = Properties (HashMap name name)
+  deriving (Eq, Ord, Show, Generic.Generic, JSON.FromJSON)
+
+mkEventEnum :: [([String], Name)] -> Q [Dec]
+mkEventEnum events = do
   cons <- for events \(conNameWords, indexName) -> do
     let conName = concatMap (onFirst Char.toUpper) conNameWords
     pure $ gadtC [mkName conName] []
-      (appT (conT (mkName typeName))
+      (appT (conT eventTypeName)
         (conT indexName))
   starArrowStar <- [t|Data.Kind.Type -> Data.Kind.Type|]
-  pure <$> dataD (pure []) (mkName typeName) [] (Just starArrowStar) cons []
+  pure <$> dataD (pure []) eventTypeName [] (Just starArrowStar) cons []
 
 mkInterface :: String -> [(String, String)] -> Q [Dec]
 mkInterface interface properties =
@@ -72,8 +115,30 @@ mkEnumGEqInstance name = do
   pure [dec]
 
 mkEnumGCompareInstance :: Name -> Q [Dec]
-mkEnumGCompareInstance = undefined
--- TODO: use diagonalize here to derive per-left-hand-constructor ordering
+mkEnumGCompareInstance name = do
+  TyConI (DataD _ _ _ _ cons _) <- reify name
+  lt <- [|GLT|]
+  eq <- [|GEQ|]
+  gt <- [|GGT|]
+  let clauses = flip concatMap (diagonalize cons)
+        \(less, GadtC [con] _ _, greater) ->
+          map (\(GadtC [l] _ _) -> Clause [ConP l [], ConP con []] (NormalB lt) []) less
+          <> [Clause [ConP con [], ConP con []] (NormalB eq) []]
+          <> map (\(GadtC [g] _ _) -> Clause [ConP g [], ConP con []] (NormalB gt) []) greater
+  dec <- instanceD (pure []) [t|GCompare $(conT name)|]
+    [pure (FunD 'gcompare clauses)]
+  pure [dec]
+
+mkDecodeProperties :: Name -> Q [Dec]
+mkDecodeProperties function = do
+  TyConI (DataD _ _ _ _ cons _) <- reify eventTypeName
+  decode <- [|JSON.decode|]
+  let event = pure (ConT  eventTypeName)
+  let clauses = flip map cons \(GadtC [con] _ _) ->
+        Clause [ConP con []] (NormalB decode) []
+  sig <- SigD function <$> [t| forall d. $event d -> ByteString -> Maybe d|]
+  let dec = FunD function clauses
+  pure [sig, dec]
 
 avoidKeywordProp :: String -> String -> String
 avoidKeywordProp interface propName
@@ -93,6 +158,7 @@ onFirst _ [] = []
 onFirst f (c:cs) = f c : cs
 
 diagonalize :: [a] -> [([a], a, [a])]
+diagonalize [] = error "Diagonalize: empty list"
 diagonalize (a : as) = go ([], a, as)
   where
     go :: ([a], a, [a]) -> [([a], a, [a])]
@@ -110,11 +176,3 @@ keywords = HashSet.fromList
    "group", "by", "using", "foreign", "export", "label", "dynamic", "safe",
    "interruptible", "unsafe", "stdcall", "ccall", "capi", "prim", "javascript",
    "unit", "dependency", "signature", "rec", "proc"]
-
-interfaceTypes :: HashMap String Name
-interfaceTypes = HashMap.fromList
-  [ ("f64", ''Double)
-  , ("i64", ''Int)
-  , ("String", ''Text)
-  , ("bool", ''Bool)
-  ]
