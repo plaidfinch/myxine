@@ -70,7 +70,7 @@ import GHC.Generics
 
 import Myxine.Event
 import qualified Myxine.Event as Event
-  hiding (decodeSomeEventType, decodeEventProperties, EventType(..))
+  hiding (decodeSomeEventType, decodeEventProperties, encodeEventType, EventType(..))
 
 -- | Create a handler for a specific event type by specifying the type of event
 -- and the monadic callback to be invoked when the event occurs. The provided
@@ -90,6 +90,7 @@ handle (Handlers allHandlers) event d path a =
         fromMaybe (Handler (const (const (const (pure a)))))
                   (DMap.lookup event allHandlers)
   in handler d path a
+{-# INLINE handle #-}
 
 -- | A set of handlers for events, possibly empty. Create new 'Handlers' using
 -- 'on', and combine 'Handlers' together using their 'Semigroup' instance.
@@ -114,11 +115,13 @@ data Target = Target
 -- | Get the value, if any, of some named attribute of a 'Target'.
 attribute :: Text -> Target -> Maybe Text
 attribute name Target{targetAttributes} = HashMap.lookup name targetAttributes
+{-# INLINE attribute #-}
 
 -- | Get the name of the HTML tag for this 'Target'. Note that unlike in the
 -- browser itself, Myxine returns tag names in lower case, rather than upper.
 tagName :: Target -> Text
 tagName Target{targetTagName} = targetTagName
+{-# INLINE tagName #-}
 
 -- | A handler for a single event type, which may consist of one or more event
 -- handlers for that particular event.

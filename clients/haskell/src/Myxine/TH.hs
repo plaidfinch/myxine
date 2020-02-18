@@ -138,7 +138,7 @@ mkEvents (Events events) = do
   showInstance <- deriveEvent [t|Show|]
   geqInstance           <- mkEnumGEqInstance eventTypeName (map snd cons)
   gcompareInstance      <- mkEnumGCompareInstance eventTypeName (map snd cons)
-  encodeEventType       <- mkEncodeEvent cons
+  encodeEventType       <- mkEncodeEventType cons
   decodeSomeEventType   <- mkDecodeSomeEventType cons
   decodeEventProperties <- mkDecodeEventProperties (map snd cons)
   pure $ decodeSomeEventType <> decodeEventProperties <> encodeEventType <>
@@ -225,8 +225,8 @@ mkEnumGCompareInstance name cons = do
                      (normalB (caseE (varE arg1) (pure <$> cases))) []]]
   pure dec
 
-mkEncodeEvent :: [(String, Con)] -> Q [Dec]
-mkEncodeEvent cons = do
+mkEncodeEventType :: [(String, Con)] -> Q [Dec]
+mkEncodeEventType cons = do
   sig <- sigD encodeEventNameType [t|forall d. $(conT eventTypeName) d -> ByteString|]
   dec <- funD encodeEventNameType
     [ clause [conP con []] (normalB (litE (stringL string))) []
