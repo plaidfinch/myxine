@@ -1,7 +1,7 @@
 {-# language GADTs, DataKinds, DuplicateRecordFields, RankNTypes, StrictData,
     ScopedTypeVariables, BlockArguments, KindSignatures, TemplateHaskell,
     OverloadedStrings, DerivingStrategies, DerivingVia, StandaloneDeriving,
-    DeriveGeneric, DeriveAnyClass #-}
+    DeriveGeneric, DeriveAnyClass, NamedFieldPuns, GeneralizedNewtypeDeriving #-}
 
 module Myxine.TH where
 
@@ -23,6 +23,8 @@ import Data.HashMap.Lazy (HashMap)
 import Data.List
 import Data.GADT.Compare
 import Data.ByteString.Lazy (ByteString)
+import Data.Hashable
+import Data.Maybe
 
 -- Template Haskell to generate stuff
 
@@ -45,17 +47,19 @@ data EnabledEvents name
 
 newtype Events name
   = Events (HashMap name (EventInfo name))
-  deriving (Eq, Ord, Show, Generic.Generic, JSON.FromJSON)
+  deriving (Eq, Ord, Show)
+  deriving newtype (JSON.FromJSON)
 
 data EventInfo name
   = EventInfo
   { interface :: name
-  , nameWords :: [Text]
+  , nameWords :: [String]
   } deriving (Eq, Ord, Show, Generic.Generic, JSON.FromJSON)
 
 newtype Interfaces name
-  = Interfaces (HashMap Text (Interface name))
-  deriving (Eq, Ord, Show, Generic.Generic, JSON.FromJSON)
+  = Interfaces (HashMap name (Interface name))
+  deriving (Eq, Ord, Show, Generic.Generic)
+  deriving newtype (JSON.FromJSON)
 
 data Interface name
   = Interface
@@ -65,7 +69,25 @@ data Interface name
 
 newtype Properties name
   = Properties (HashMap name name)
-  deriving (Eq, Ord, Show, Generic.Generic, JSON.FromJSON)
+  deriving (Eq, Ord, Show, Generic.Generic)
+  deriving newtype (Semigroup, Monoid, JSON.FromJSON)
+
+allInterfaceProperties ::
+  (Hashable name, Eq name) =>
+  Interfaces name -> name -> Maybe (Properties name)
+allInterfaceProperties interfaces@(Interfaces i) name = do
+  Interface{inherits, properties} <- HashMap.lookup name i
+  rest <- maybe mempty (allInterfaceProperties interfaces) inherits
+  pure (properties <> rest)
+
+fillInterfaceProperties ::
+  forall name. (Hashable name, Eq name) => Interfaces name -> Interfaces name
+fillInterfaceProperties i@(Interfaces interfaces) =
+  Interfaces . HashMap.fromList
+  . map (\(name, Interface{inherits}) ->
+          (name, Interface{inherits, properties =
+                              fromJust $ allInterfaceProperties i name}))
+  $ HashMap.toList interfaces
 
 mkEventEnum :: [([String], Name)] -> Q [Dec]
 mkEventEnum events = do
@@ -77,26 +99,33 @@ mkEventEnum events = do
   starArrowStar <- [t|Data.Kind.Type -> Data.Kind.Type|]
   pure <$> dataD (pure []) eventTypeName [] (Just starArrowStar) cons []
 
-mkInterface :: String -> [(String, String)] -> Q [Dec]
-mkInterface interface properties =
-  let badFields =
-        filter (not . (flip HashMap.member interfaceTypes) . snd) properties
+mkInterfaces :: Interfaces String -> Q [Dec]
+mkInterfaces interfaces = do
+  let Interfaces filledInterfaces = fillInterfaceProperties interfaces
+  concat <$> for (HashMap.toList filledInterfaces) \(name, interface) ->
+    mkInterface name interface
+
+mkInterface :: String -> Interface String -> Q [Dec]
+mkInterface interfaceName Interface{properties = Properties properties} =
+  let propertyList = HashMap.toList properties
+      badFields =
+        filter (not . (flip HashMap.member interfaceTypes) . snd) propertyList
   in if badFields == []
   then do
     fields <- sequence
-      [ pure (mkName (avoidKeywordProp interface propName),
+      [ pure (mkName (avoidKeywordProp interfaceName propName),
               Bang NoSourceUnpackedness SourceLazy,
               ConT (interfaceTypes HashMap.! propType))
-      | (propName, propType) <- properties ]
-    dec <- dataD (pure []) (mkName interface) [] Nothing
-      [recC (mkName interface) (pure <$> fields)]
+      | (propName, propType) <- propertyList ]
+    dec <- dataD (pure []) (mkName interfaceName) [] Nothing
+      [recC (mkName interfaceName) (pure <$> fields)]
       [derivClause Nothing [[t|Eq|], [t|Ord|], [t|Show|], [t|Generic.Generic|], [t|JSON.FromJSON|]]]
     pure [dec]
   else do
     for_ badFields \(propName, propType) ->
       reportError $
         "Unrecognized type \"" <> propType <> "\" for event interface property \""
-        <> propName <> "\" of interface \"" <> interface <> "\""
+        <> propName <> "\" of interface \"" <> interfaceName <> "\""
         <>": must be one of ["
         <> intercalate ", " (map show (HashMap.keys interfaceTypes))
         <> "]"
