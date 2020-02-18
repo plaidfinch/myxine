@@ -1,12 +1,14 @@
 {-# language GADTs, DataKinds, DuplicateRecordFields, RankNTypes, StrictData,
     ScopedTypeVariables, BlockArguments, KindSignatures, TemplateHaskell,
     OverloadedStrings, DerivingStrategies, DerivingVia, StandaloneDeriving,
-    DeriveGeneric, DeriveAnyClass, NamedFieldPuns, GeneralizedNewtypeDeriving #-}
+    DeriveGeneric, DeriveAnyClass, NamedFieldPuns, GeneralizedNewtypeDeriving,
+    TupleSections, LambdaCase #-}
+{-# options_ghc -Wno-incomplete-uni-patterns #-}
 
-module Myxine.TH where
+module Myxine.TH (mkEventsAndInterfaces) where
 
 import Language.Haskell.TH
-import Language.Haskell.TH.Lib
+import Language.Haskell.TH.Syntax
 import Data.Traversable
 import Data.Foldable
 import qualified Data.HashSet as HashSet
@@ -14,22 +16,24 @@ import Data.HashSet (HashSet)
 import qualified GHC.Generics as Generic
 import qualified Data.Kind
 import qualified Data.Aeson as JSON
-import qualified Data.Aeson.TH as JSON
 import qualified Data.Char as Char
-import qualified Data.Text as Text
 import Data.Text (Text)
 import qualified Data.HashMap.Lazy as HashMap
 import Data.HashMap.Lazy (HashMap)
 import Data.List
 import Data.GADT.Compare
 import Data.ByteString.Lazy (ByteString)
-import Data.Hashable
-import Data.Maybe
+import Data.Bifunctor
+import Data.Either
+import Data.Dependent.Map (Some(..))
+import System.Directory (canonicalizePath)
 
--- Template Haskell to generate stuff
+import Paths_myxine_client (getDataFileName)
 
-eventTypeName :: Name
-eventTypeName = mkName "Event"
+eventTypeName, decodeEventPropertiesName, decodeSomeEventName :: Name
+eventTypeName             = mkName "EventType"
+decodeEventPropertiesName = mkName "decodeEventProperties"
+decodeSomeEventName       = mkName "decodeSomeEvent"
 
 interfaceTypes :: HashMap String Name
 interfaceTypes = HashMap.fromList
@@ -39,73 +43,135 @@ interfaceTypes = HashMap.fromList
   , ("bool", ''Bool)
   ]
 
-data EnabledEvents name
+mkEventsAndInterfaces :: FilePath -> Q [Dec]
+mkEventsAndInterfaces path = do
+  actualPath <- runIO (canonicalizePath =<< getDataFileName path)
+  addDependentFile actualPath
+  runIO (JSON.eitherDecodeFileStrict' actualPath) >>= \case
+    Right EnabledEvents{events, interfaces} -> do
+      interfaceDecs <- mkInterfaces interfaces
+      eventDecs <- mkEvents events
+      pure $ interfaceDecs <> eventDecs
+    Left err -> do
+      reportError err
+      pure []
+
+data EnabledEvents
   = EnabledEvents
-  { events :: Events name
-  , interfaces :: Interfaces name
+  { events :: Events
+  , interfaces :: Interfaces
   } deriving (Eq, Ord, Show, Generic.Generic, JSON.FromJSON)
 
-newtype Events name
-  = Events (HashMap name (EventInfo name))
+newtype Events
+  = Events (HashMap String EventInfo)
   deriving (Eq, Ord, Show)
   deriving newtype (JSON.FromJSON)
 
-data EventInfo name
+data EventInfo
   = EventInfo
-  { interface :: name
+  { interface :: String
   , nameWords :: [String]
   } deriving (Eq, Ord, Show, Generic.Generic, JSON.FromJSON)
 
-newtype Interfaces name
-  = Interfaces (HashMap name (Interface name))
+newtype Interfaces
+  = Interfaces (HashMap String Interface)
   deriving (Eq, Ord, Show, Generic.Generic)
   deriving newtype (JSON.FromJSON)
 
-data Interface name
+data Interface
   = Interface
-  { inherits :: Maybe name
-  , properties :: Properties name
+  { inherits :: Maybe String
+  , properties :: Properties
   } deriving (Eq, Ord, Show, Generic.Generic, JSON.FromJSON)
 
-newtype Properties name
-  = Properties (HashMap name name)
+newtype Properties
+  = Properties (HashMap String String)
   deriving (Eq, Ord, Show, Generic.Generic)
   deriving newtype (Semigroup, Monoid, JSON.FromJSON)
 
-allInterfaceProperties ::
-  (Hashable name, Eq name) =>
-  Interfaces name -> name -> Maybe (Properties name)
-allInterfaceProperties interfaces@(Interfaces i) name = do
-  Interface{inherits, properties} <- HashMap.lookup name i
-  rest <- maybe mempty (allInterfaceProperties interfaces) inherits
-  pure (properties <> rest)
+allInterfaceProperties :: Interfaces -> String -> Either (Either (Maybe String) [String]) Properties
+allInterfaceProperties (Interfaces interfaces) = go HashSet.empty []
+  where
+    go :: HashSet String -> [String] -> String -> Either (Either (Maybe String) [String]) Properties
+    go seen seenList name
+      | HashSet.member name seen = Left (Right (name : seenList))
+      | otherwise = do
+        Interface{inherits, properties} <-
+          maybe (Left (Left (if length seenList <= 1 then Just name else Nothing)))
+                Right
+                (HashMap.lookup name interfaces)
+        rest <- maybe (pure mempty) (go (HashSet.insert name seen) (name : seenList)) inherits
+        pure (properties <> rest)
 
-fillInterfaceProperties ::
-  forall name. (Hashable name, Eq name) => Interfaces name -> Interfaces name
+fillInterfaceProperties :: Interfaces -> Either [(String, Either (Maybe String) [String])] Interfaces
 fillInterfaceProperties i@(Interfaces interfaces) =
-  Interfaces . HashMap.fromList
-  . map (\(name, Interface{inherits}) ->
-          (name, Interface{inherits, properties =
-                              fromJust $ allInterfaceProperties i name}))
-  $ HashMap.toList interfaces
+  if bad == []
+  then (Right good)
+  else (Left bad)
+  where
+    good :: Interfaces
+    bad :: [(String, Either (Maybe String) [String])]
+    (bad, good) =
+      second (Interfaces . HashMap.fromList)
+      . partitionEithers
+      . map (\(name, maybeInterface) ->
+               either (Left . (name,)) (Right . (name,)) maybeInterface)
+      $ results
 
-mkEventEnum :: [([String], Name)] -> Q [Dec]
-mkEventEnum events = do
-  cons <- for events \(conNameWords, indexName) -> do
-    let conName = concatMap (onFirst Char.toUpper) conNameWords
-    pure $ gadtC [mkName conName] []
-      (appT (conT eventTypeName)
-        (conT indexName))
+    results :: [(String, Either (Either (Maybe String) [String]) Interface)]
+    results = map (\(name, Interface{inherits}) ->
+                      (name, (\properties -> Interface{inherits, properties})
+                             <$> allInterfaceProperties i name))
+              (HashMap.toList interfaces)
+
+mkEvents :: Events -> Q [Dec]
+mkEvents (Events events) = do
+  cons <- sortOn snd <$> for (HashMap.toList events)
+    \(eventName, EventInfo{interface, nameWords}) -> do
+      let conName = concatMap (onFirst Char.toUpper) nameWords
+      (eventName,) <$>
+       gadtC [mkName conName] []
+        (appT (conT eventTypeName)
+          (conT (mkName interface)))
   starArrowStar <- [t|Data.Kind.Type -> Data.Kind.Type|]
-  pure <$> dataD (pure []) eventTypeName [] (Just starArrowStar) cons []
+  dec <- dataD (pure []) eventTypeName [] (Just starArrowStar) (pure <$> map snd cons) []
+  eqInstance <- deriveEvent [t|Eq|]
+  ordInstance <- deriveEvent [t|Ord|]
+  showInstance <- deriveEvent [t|Show|]
+  geqInstance <- mkEnumGEqInstance eventTypeName (map snd cons)
+  gcompareInstance <- mkEnumGCompareInstance eventTypeName (map snd cons)
+  decodeSomeEventType <- mkDecodeSomeEventType cons
+  decodeEventProperties <- mkDecodeEventProperties (map snd cons)
+  pure $ [ dec
+         , eqInstance
+         , ordInstance
+         , showInstance
+         , geqInstance
+         , gcompareInstance
+         ] <> decodeSomeEventType <> decodeEventProperties
+  where
+    deriveEvent typeclass =
+      standaloneDerivD (pure []) [t|forall d. $typeclass ($(pure (ConT eventTypeName)) d)|]
 
-mkInterfaces :: Interfaces String -> Q [Dec]
-mkInterfaces interfaces = do
-  let Interfaces filledInterfaces = fillInterfaceProperties interfaces
-  concat <$> for (HashMap.toList filledInterfaces) \(name, interface) ->
-    mkInterface name interface
+mkInterfaces :: Interfaces -> Q [Dec]
+mkInterfaces interfaces =
+  case fillInterfaceProperties interfaces of
+    Right (Interfaces filledInterfaces) ->
+      concat <$> for (HashMap.toList filledInterfaces) \(name, interface) ->
+        mkInterface name interface
+    Left wrong -> do
+      for_ wrong \(interface, err) ->
+        case err of
+          Left Nothing -> pure ()
+          Left (Just directUnknown) ->
+            reportError $ "Unknown interface \"" <> directUnknown
+                          <> "\" inherited by \"" <> interface <> "\""
+          Right cyclic ->
+            reportError $ "Cycle in interface inheritance: "
+                          <> intercalate " <: " (reverse cyclic)
+      pure []
 
-mkInterface :: String -> Interface String -> Q [Dec]
+mkInterface :: String -> Interface -> Q [Dec]
 mkInterface interfaceName Interface{properties = Properties properties} =
   let propertyList = HashMap.toList properties
       badFields =
@@ -114,11 +180,11 @@ mkInterface interfaceName Interface{properties = Properties properties} =
   then do
     fields <- sequence
       [ pure (mkName (avoidKeywordProp interfaceName propName),
-              Bang NoSourceUnpackedness SourceLazy,
+              Bang NoSourceUnpackedness SourceStrict,
               ConT (interfaceTypes HashMap.! propType))
       | (propName, propType) <- propertyList ]
     dec <- dataD (pure []) (mkName interfaceName) [] Nothing
-      [recC (mkName interfaceName) (pure <$> fields)]
+      [recC (mkName interfaceName) (pure <$> sort fields)]
       [derivClause Nothing [[t|Eq|], [t|Ord|], [t|Show|], [t|Generic.Generic|], [t|JSON.FromJSON|]]]
     pure [dec]
   else do
@@ -131,9 +197,8 @@ mkInterface interfaceName Interface{properties = Properties properties} =
         <> "]"
     pure []
 
-mkEnumGEqInstance :: Name -> Q [Dec]
-mkEnumGEqInstance name = do
-  TyConI (DataD _ _ _ _ cons _) <- reify name
+mkEnumGEqInstance :: Name -> [Con] -> Q Dec
+mkEnumGEqInstance name cons = do
   true <- [|Just Refl|]
   false <- [|Nothing|]
   clauses <- for cons \(GadtC [con] _ _) ->
@@ -141,34 +206,52 @@ mkEnumGEqInstance name = do
   let defaultClause = Clause [WildP, WildP] (NormalB false) []
   dec <- instanceD (pure []) [t|GEq $(conT name)|]
     [pure (FunD 'geq (clauses <> [defaultClause]))]
-  pure [dec]
+  pure dec
 
-mkEnumGCompareInstance :: Name -> Q [Dec]
-mkEnumGCompareInstance name = do
-  TyConI (DataD _ _ _ _ cons _) <- reify name
-  lt <- [|GLT|]
-  eq <- [|GEQ|]
-  gt <- [|GGT|]
-  let clauses = flip concatMap (diagonalize cons)
+mkEnumGCompareInstance :: Name -> [Con] -> Q Dec
+mkEnumGCompareInstance name cons = do
+  let cases = flip concatMap (diagonalize cons)
         \(less, GadtC [con] _ _, greater) ->
-          map (\(GadtC [l] _ _) -> Clause [ConP l [], ConP con []] (NormalB lt) []) less
-          <> [Clause [ConP con [], ConP con []] (NormalB eq) []]
-          <> map (\(GadtC [g] _ _) -> Clause [ConP g [], ConP con []] (NormalB gt) []) greater
+          map (\(GadtC [l] _ _) -> match [p|($(conP l []), $(conP con []))|] (normalB [|GLT|]) []) less
+          <> [match [p|($(conP con []), $(conP con []))|] (normalB [|GEQ|]) []]
+          <> map (\(GadtC [g] _ _) -> match [p|($(conP g []), $(conP con []))|] (normalB [|GGT|]) []) greater
+  arg1 <- newName "a"
+  arg2 <- newName "b"
   dec <- instanceD (pure []) [t|GCompare $(conT name)|]
-    [pure (FunD 'gcompare clauses)]
-  pure [dec]
+    [funD 'gcompare [clause [varP arg1, varP arg2]
+                     (normalB (caseE [|($(varE arg1), $(varE arg2))|] cases)) []]]
+  pure dec
 
-mkDecodeProperties :: Name -> Q [Dec]
-mkDecodeProperties function = do
-  TyConI (DataD _ _ _ _ cons _) <- reify eventTypeName
-  decode <- [|JSON.decode|]
-  let event = pure (ConT  eventTypeName)
-  let clauses = flip map cons \(GadtC [con] _ _) ->
-        Clause [ConP con []] (NormalB decode) []
-  sig <- SigD function <$> [t| forall d. $event d -> ByteString -> Maybe d|]
-  let dec = FunD function clauses
+-- | Make the @decodeEventProperties@ function
+mkDecodeEventProperties :: [Con] -> Q [Dec]
+mkDecodeEventProperties cons = do
+  let event = pure (ConT eventTypeName)
+  let cases = flip map cons \(GadtC [con] _ _) ->
+        match (conP con []) (normalB [|JSON.decode|]) []
+  sig <- sigD decodeEventPropertiesName [t| forall d. $event d -> ByteString -> Maybe d|]
+  arg <- newName "event"
+  dec <- funD decodeEventPropertiesName
+           [clause [varP arg] (normalB (caseE (varE arg) cases)) []]
+  let prag = PragmaD (InlineP decodeEventPropertiesName Inline FunLike AllPhases)
+  pure [sig, dec, prag]
+
+mkDecodeSomeEventType :: [(String, Con)] -> Q [Dec]
+mkDecodeSomeEventType cons = do
+  allEvents <- newName "allEvents"
+  let list =
+        [ [|($(litE (stringL string)), Some $(conE con))|]
+        | (string, GadtC [con] _ _) <- cons ]
+  allEventsSig <- sigD allEvents [t|HashMap ByteString (Some $(conT eventTypeName))|]
+  allEventsDec <- funD allEvents [clause [] (normalB [|HashMap.fromList $(listE list)|]) []]
+  sig <- sigD decodeSomeEventName
+    [t| ByteString -> Maybe (Some $(conT eventTypeName))|]
+  dec <- funD decodeSomeEventName
+    [clause [] (normalB [|flip HashMap.lookup $(varE allEvents)|])
+      [pure allEventsSig, pure allEventsDec]]
   pure [sig, dec]
 
+-- | Given an interface and a property for it, rename that property if necessary
+-- to avoid clashing with reserved Haskell keywords
 avoidKeywordProp :: String -> String -> String
 avoidKeywordProp interface propName
   | HashSet.member propName keywords =
@@ -182,19 +265,21 @@ avoidKeywordProp interface propName
       then reverse (drop (length m) reversed)
       else i
 
+-- | Apply a function to the first element of a list
 onFirst :: (a -> a) -> [a] -> [a]
 onFirst _ [] = []
 onFirst f (c:cs) = f c : cs
 
+-- | Get all zipper positions into a list
 diagonalize :: [a] -> [([a], a, [a])]
-diagonalize [] = error "Diagonalize: empty list"
+diagonalize [] = []
 diagonalize (a : as) = go ([], a, as)
   where
     go :: ([a], a, [a]) -> [([a], a, [a])]
     go (l, c, []) = [(l, c, [])]
     go current@(l, c, r:rs) = current : go (c:l, r, rs)
 
--- All reserved keywords in Haskell, including all extensions
+-- | All reserved keywords in Haskell, including all extensions
 -- Source: https://github.com/ghc/ghc/blob/master/compiler/parser/Lexer.x#L875-L934
 keywords :: HashSet String
 keywords = HashSet.fromList
