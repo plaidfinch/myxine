@@ -27,10 +27,10 @@ import Data.Bifunctor
 import Data.Either
 import Data.Dependent.Map (Some(..))
 
-eventTypeName, decodeEventPropertiesName, decodeSomeEventName :: Name
+eventTypeName, decodeEventPropertiesName, decodeSomeEventTypeName :: Name
 eventTypeName             = mkName "EventType"
 decodeEventPropertiesName = mkName "decodeEventProperties"
-decodeSomeEventName       = mkName "decodeSomeEvent"
+decodeSomeEventTypeName   = mkName "decodeSomeEventType"
 
 interfaceTypes :: HashMap String Name
 interfaceTypes = HashMap.fromList
@@ -137,13 +137,14 @@ mkEvents (Events events) = do
   gcompareInstance <- mkEnumGCompareInstance eventTypeName (map snd cons)
   decodeSomeEventType <- mkDecodeSomeEventType cons
   decodeEventProperties <- mkDecodeEventProperties (map snd cons)
-  pure $ [ dec
+  pure $ decodeSomeEventType <> decodeEventProperties <>
+         [ dec
          , eqInstance
          , ordInstance
          , showInstance
          , geqInstance
          , gcompareInstance
-         ] <> decodeSomeEventType <> decodeEventProperties
+         ]
   where
     deriveEvent typeclass =
       standaloneDerivD (pure []) [t|forall d. $typeclass ($(pure (ConT eventTypeName)) d)|]
@@ -180,7 +181,8 @@ mkInterface interfaceName Interface{properties = Properties properties} =
       | (propName, propType) <- propertyList ]
     dec <- dataD (pure []) (mkName interfaceName) [] Nothing
       [recC (mkName interfaceName) (pure <$> sort fields)]
-      [derivClause Nothing [[t|Eq|], [t|Ord|], [t|Show|], [t|Generic.Generic|], [t|JSON.FromJSON|]]]
+      [derivClause Nothing [[t|Eq|], [t|Ord|], [t|Show|], [t|Generic.Generic|],
+                            [t|JSON.FromJSON|], [t|JSON.ToJSON|]]]
     pure [dec]
   else do
     for_ badFields \(propName, propType) ->
@@ -239,9 +241,9 @@ mkDecodeSomeEventType cons = do
         | (string, GadtC [con] _ _) <- cons ]
   allEventsSig <- sigD allEvents [t|HashMap ByteString (Some $(conT eventTypeName))|]
   allEventsDec <- funD allEvents [clause [] (normalB [|HashMap.fromList $(listE list)|]) []]
-  sig <- sigD decodeSomeEventName
+  sig <- sigD decodeSomeEventTypeName
     [t| ByteString -> Maybe (Some $(conT eventTypeName))|]
-  dec <- funD decodeSomeEventName
+  dec <- funD decodeSomeEventTypeName
     [clause [] (normalB [|flip HashMap.lookup $(varE allEvents)|])
       [pure allEventsSig, pure allEventsDec]]
   pure [sig, dec]

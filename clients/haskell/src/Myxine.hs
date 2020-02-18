@@ -9,8 +9,10 @@ module Myxine
   , on
   , handle
   , withEvent
+  , decodeSomeEventType
+  , decodeEventProperties
   , Target(..)
-  , module Myxine.Event
+  , module Event
   ) where
 
 import Data.Text (Text)
@@ -25,6 +27,8 @@ import Data.Maybe
 import GHC.Generics
 
 import Myxine.Event
+import qualified Myxine.Event as Event
+  hiding (decodeSomeEventType, decodeEventProperties, EventType(..))
 
 -- The actual code
 
@@ -59,5 +63,5 @@ newtype Handler m a b d
 
 withEvent :: ByteString -> ByteString -> (forall d. EventType d -> d -> r) -> Maybe r
 withEvent name properties k = do
-  Some e <- decodeSomeEvent name
+  Some e <- decodeSomeEventType name
   k e <$> decodeEventProperties e properties
