@@ -26,11 +26,13 @@ import qualified Data.ByteString as ByteString.Strict
 import Data.Bifunctor
 import Data.Either
 import Data.Dependent.Map (Some(..))
+import Data.Ord
 
-eventTypeName, decodeEventPropertiesName, decodeSomeEventTypeName :: Name
+eventTypeName, decodeEventPropertiesName, decodeSomeEventTypeName, encodeEventNameType :: Name
 eventTypeName             = mkName "EventType"
 decodeEventPropertiesName = mkName "decodeEventProperties"
 decodeSomeEventTypeName   = mkName "decodeSomeEventType"
+encodeEventNameType       = mkName "encodeEventType"
 
 interfaceTypes :: HashMap String Name
 interfaceTypes = HashMap.fromList
@@ -121,7 +123,8 @@ fillInterfaceProperties i@(Interfaces interfaces) =
 
 mkEvents :: Events -> Q [Dec]
 mkEvents (Events events) = do
-  cons <- sortOn snd <$> for (HashMap.toList events)
+  cons <- for (sortBy (comparing (interface . snd) <> comparing fst) $
+               HashMap.toList events)
     \(eventName, EventInfo{interface, nameWords}) -> do
       let conName = concatMap (onFirst Char.toUpper) nameWords
       (eventName,) <$>
@@ -130,14 +133,15 @@ mkEvents (Events events) = do
           (conT (mkName interface)))
   starArrowStar <- [t|Data.Kind.Type -> Data.Kind.Type|]
   dec <- dataD (pure []) eventTypeName [] (Just starArrowStar) (pure <$> map snd cons) []
-  eqInstance <- deriveEvent [t|Eq|]
-  ordInstance <- deriveEvent [t|Ord|]
+  eqInstance   <- deriveEvent [t|Eq|]
+  ordInstance  <- deriveEvent [t|Ord|]
   showInstance <- deriveEvent [t|Show|]
-  geqInstance <- mkEnumGEqInstance eventTypeName (map snd cons)
-  gcompareInstance <- mkEnumGCompareInstance eventTypeName (map snd cons)
-  decodeSomeEventType <- mkDecodeSomeEventType cons
+  geqInstance           <- mkEnumGEqInstance eventTypeName (map snd cons)
+  gcompareInstance      <- mkEnumGCompareInstance eventTypeName (map snd cons)
+  encodeEventType       <- mkEncodeEvent cons
+  decodeSomeEventType   <- mkDecodeSomeEventType cons
   decodeEventProperties <- mkDecodeEventProperties (map snd cons)
-  pure $ decodeSomeEventType <> decodeEventProperties <>
+  pure $ decodeSomeEventType <> decodeEventProperties <> encodeEventType <>
          [ dec
          , eqInstance
          , ordInstance
@@ -153,8 +157,9 @@ mkInterfaces :: Interfaces -> Q [Dec]
 mkInterfaces interfaces =
   case fillInterfaceProperties interfaces of
     Right (Interfaces filledInterfaces) ->
-      concat <$> for (HashMap.toList filledInterfaces) \(name, interface) ->
-        mkInterface name interface
+      concat <$> for (reverse . sortOn fst $ HashMap.toList filledInterfaces)
+        \(name, interface) ->
+          mkInterface name interface
     Left wrong -> do
       for_ wrong \(interface, err) ->
         case err of
@@ -219,6 +224,14 @@ mkEnumGCompareInstance name cons = do
     [funD 'gcompare [clause [varP arg1, varP arg2]
                      (normalB (caseE (varE arg1) (pure <$> cases))) []]]
   pure dec
+
+mkEncodeEvent :: [(String, Con)] -> Q [Dec]
+mkEncodeEvent cons = do
+  sig <- sigD encodeEventNameType [t|forall d. $(conT eventTypeName) d -> ByteString|]
+  dec <- funD encodeEventNameType
+    [ clause [conP con []] (normalB (litE (stringL string))) []
+    | (string, GadtC [con] _ _) <- cons ]
+  pure [sig, dec]
 
 -- | Make the @decodeEventProperties@ function
 mkDecodeEventProperties :: [Con] -> Q [Dec]
