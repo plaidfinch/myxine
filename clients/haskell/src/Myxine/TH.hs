@@ -8,7 +8,6 @@
 module Myxine.TH (mkEventsAndInterfaces) where
 
 import Language.Haskell.TH
-import Language.Haskell.TH.Syntax
 import Data.Traversable
 import Data.Foldable
 import qualified Data.HashSet as HashSet
@@ -23,12 +22,10 @@ import Data.HashMap.Lazy (HashMap)
 import Data.List
 import Data.GADT.Compare
 import Data.ByteString.Lazy (ByteString)
+import qualified Data.ByteString as ByteString.Strict
 import Data.Bifunctor
 import Data.Either
 import Data.Dependent.Map (Some(..))
-import System.Directory (canonicalizePath)
-
-import Paths_myxine_client (getDataFileName)
 
 eventTypeName, decodeEventPropertiesName, decodeSomeEventName :: Name
 eventTypeName             = mkName "EventType"
@@ -43,11 +40,9 @@ interfaceTypes = HashMap.fromList
   , ("bool", ''Bool)
   ]
 
-mkEventsAndInterfaces :: FilePath -> Q [Dec]
-mkEventsAndInterfaces path = do
-  actualPath <- runIO (canonicalizePath =<< getDataFileName path)
-  addDependentFile actualPath
-  runIO (JSON.eitherDecodeFileStrict' actualPath) >>= \case
+mkEventsAndInterfaces :: ByteString.Strict.ByteString -> Q [Dec]
+mkEventsAndInterfaces enabledEventsByteString =
+  case JSON.eitherDecodeStrict' enabledEventsByteString of
     Right EnabledEvents{events, interfaces} -> do
       interfaceDecs <- mkInterfaces interfaces
       eventDecs <- mkEvents events
@@ -210,16 +205,17 @@ mkEnumGEqInstance name cons = do
 
 mkEnumGCompareInstance :: Name -> [Con] -> Q Dec
 mkEnumGCompareInstance name cons = do
-  let cases = flip concatMap (diagonalize cons)
-        \(less, GadtC [con] _ _, greater) ->
-          map (\(GadtC [l] _ _) -> match [p|($(conP l []), $(conP con []))|] (normalB [|GLT|]) []) less
-          <> [match [p|($(conP con []), $(conP con []))|] (normalB [|GEQ|]) []]
-          <> map (\(GadtC [g] _ _) -> match [p|($(conP g []), $(conP con []))|] (normalB [|GGT|]) []) greater
   arg1 <- newName "a"
   arg2 <- newName "b"
+  cases <- for (diagonalize cons)
+        \(less, GadtC [con] _ _, greater) ->
+          match (conP con []) (normalB (caseE (varE arg2)
+          (concat [ map (\(GadtC [l] _ _) -> match (conP l   []) (normalB [|GLT|]) []) less
+                  ,                        [ match (conP con []) (normalB [|GEQ|]) [] ]
+                  , map (\(GadtC [g] _ _) -> match (conP g   []) (normalB [|GGT|]) []) greater ]))) []
   dec <- instanceD (pure []) [t|GCompare $(conT name)|]
     [funD 'gcompare [clause [varP arg1, varP arg2]
-                     (normalB (caseE [|($(varE arg1), $(varE arg2))|] cases)) []]]
+                     (normalB (caseE (varE arg1) (pure <$> cases))) []]]
   pure dec
 
 -- | Make the @decodeEventProperties@ function

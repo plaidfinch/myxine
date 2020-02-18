@@ -1,10 +1,10 @@
 {-# language TemplateHaskell, StrictData, DeriveGeneric, DeriveAnyClass, GADTs,
     KindSignatures, StandaloneDeriving, OverloadedStrings, EmptyCase,
     DuplicateRecordFields #-}
-{-# OPTIONS_GHC -ddump-splices #-}
 
 module Myxine.Event where
 
+import Data.FileEmbed
 import Myxine.TH
 
-mkEventsAndInterfaces "enabled-events.json"
+mkEventsAndInterfaces $(embedFile "enabled-events.json")

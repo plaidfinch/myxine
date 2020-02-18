@@ -1,4 +1,4 @@
-cabal-version:       3.0
+cabal-version:       2.4
 name:                myxine-client
 version:             0.1.0.0
 synopsis:            A thin Haskell client for the Myxine GUI server
@@ -11,8 +11,7 @@ author:              Kenny Foner
 maintainer:          kwf@galois.com
 copyright:           Copyright (c) 2020 Galois, Inc.
 category:            Graphics
-extra-source-files:  CHANGELOG.md
-data-files:          enabled-events.json
+extra-source-files:  CHANGELOG.md, enabled-events.json
 
 common options
   ghc-options:         -Wall
@@ -36,7 +35,7 @@ common deps
                        dependent-sum,
                        template-haskell,
                        hashable,
-                       directory
+                       file-embed
 
 library
   import:              deps, options
