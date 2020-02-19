@@ -16,9 +16,9 @@ data ClientEvent m a
   | Action (a -> m a)
   | Shutdown
 
-requestEvents :: Url scheme -> Option scheme -> Req (IO (Maybe StreamEvent))
+requestEvents :: Url scheme -> Option scheme -> IO (IO (Maybe StreamEvent))
 requestEvents url options =
-  reqBr GET url NoReqBody options \response ->
+  runReq defaultHttpConfig $ reqBr GET url NoReqBody options \response ->
     if responseStatus response /= ok200
     then pure (pure Nothing)
     else do
