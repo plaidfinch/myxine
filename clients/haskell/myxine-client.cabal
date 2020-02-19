@@ -35,7 +35,8 @@ common deps
                        dependent-sum,
                        template-haskell,
                        hashable,
-                       file-embed
+                       file-embed,
+                       http-client
 
 library
   import:              deps, options

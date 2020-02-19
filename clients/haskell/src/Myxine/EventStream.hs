@@ -1,10 +1,11 @@
 {-# language ScopedTypeVariables, BlockArguments, OverloadedStrings,
   FlexibleInstances, TypeApplications, ViewPatterns, LambdaCase #-}
 
-module Myxine.EventStream where
-  -- ( StreamEvent(..)
-  -- , withEventStream
-  -- ) where
+module Myxine.EventStream
+  ( StreamEvent(..)
+  , eventsFromLines
+  , linesFromChunks
+  ) where
 
 import Data.Maybe
 import Data.Monoid
@@ -12,12 +13,10 @@ import Data.ByteString.Lazy.Char8 (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as ByteString
 import qualified Data.ByteString.Lazy.Builder as ByteString
 import Data.List.NonEmpty (NonEmpty(..))
-import qualified Data.List.NonEmpty as NonEmpty
-import Network.HTTP.Req (reqBr)
 import Data.IORef
 
-data StreamEvent =
-  StreamEvent
+data StreamEvent
+  = StreamEvent
     { eventId   :: ByteString
     , eventType :: ByteString
     , eventData :: ByteString
