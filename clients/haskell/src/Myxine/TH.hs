@@ -7,26 +7,26 @@
 
 module Myxine.TH (mkEventsAndInterfaces) where
 
-import Language.Haskell.TH
-import Data.Traversable
-import Data.Foldable
-import qualified Data.HashSet as HashSet
-import Data.HashSet (HashSet)
-import qualified GHC.Generics as Generic
+import qualified Data.Aeson           as JSON
+import           Data.Bifunctor
+import qualified Data.ByteString      as ByteString.Strict
+import           Data.ByteString.Lazy (ByteString)
+import qualified Data.Char            as Char
+import           Data.Dependent.Map   (Some(..))
+import           Data.Either
+import           Data.Foldable
+import           Data.GADT.Compare
+import           Data.HashMap.Lazy    (HashMap)
+import qualified Data.HashMap.Lazy    as HashMap
+import           Data.HashSet         (HashSet)
+import qualified Data.HashSet         as HashSet
 import qualified Data.Kind
-import qualified Data.Aeson as JSON
-import qualified Data.Char as Char
-import Data.Text (Text)
-import qualified Data.HashMap.Lazy as HashMap
-import Data.HashMap.Lazy (HashMap)
-import Data.List
-import Data.GADT.Compare
-import Data.ByteString.Lazy (ByteString)
-import qualified Data.ByteString as ByteString.Strict
-import Data.Bifunctor
-import Data.Either
-import Data.Dependent.Map (Some(..))
-import Data.Ord
+import           Data.List
+import           Data.Ord
+import           Data.Text            (Text)
+import           Data.Traversable
+import qualified GHC.Generics         as Generic
+import           Language.Haskell.TH
 
 eventTypeName, decodeEventPropertiesName, decodeSomeEventTypeName, encodeEventNameType :: Name
 eventTypeName             = mkName "EventType"

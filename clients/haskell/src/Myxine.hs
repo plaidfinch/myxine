@@ -70,7 +70,7 @@ import GHC.Generics
 
 import Myxine.Event
 import qualified Myxine.Event as Event
-  hiding (decodeSomeEventType, decodeEventProperties, encodeEventType, EventType(..))
+  hiding (decodeSomeEventType, decodeEventProperties, EventType(..))
 
 -- | Create a handler for a specific event type by specifying the type of event
 -- and the monadic callback to be invoked when the event occurs. The provided
