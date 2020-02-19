@@ -36,13 +36,17 @@ common deps
                        template-haskell,
                        hashable,
                        file-embed,
-                       http-client
+                       http-client,
+                       http-types
 
 library
   import:              deps, options
   exposed-modules:     Myxine
-  other-modules:       Myxine.Event
+                       Myxine.Target
+                       Myxine.Handlers
                        Myxine.EventStream
+                       Myxine.EventLoop
+  other-modules:       Myxine.Event
                        Myxine.TH
                        Paths_myxine_client
   default-extensions:
