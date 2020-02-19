@@ -41,6 +41,7 @@ library
   import:              deps, options
   exposed-modules:     Myxine
   other-modules:       Myxine.Event
+                       Myxine.EventStream
                        Myxine.TH
                        Paths_myxine_client
   default-extensions:
