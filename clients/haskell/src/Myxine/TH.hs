@@ -202,6 +202,7 @@ mkInterface interfaceName Interface{properties = Properties properties} =
             parseJSON (JSON.Object $(varP o)) =
               $(doE $ [ let name' = avoidKeywordProp interfaceName name
                             get = case ty of
+                              -- This lets Maybe fields really be optional
                               AppT c _ | c == preludeMaybe -> [|(JSON..:?)|]
                               _ -> [|(JSON..:)|]
                         in bindS (varP (mkName name')) [|$get $(varE o) $(litE (stringL name))|]

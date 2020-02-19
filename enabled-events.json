@@ -291,8 +291,8 @@
             "inherits": "UIEvent",
             "properties": {
                 "data": "Option<String>",
-                "inputType": "String",
-                "isComposing": "bool"
+                "inputType": "Option<String>",
+                "isComposing": "Option<bool>"
             }
         },
         "KeyboardEvent": {
