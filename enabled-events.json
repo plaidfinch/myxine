@@ -290,7 +290,7 @@
         "InputEvent": {
             "inherits": "UIEvent",
             "properties": {
-                "data": "String",
+                "data": "Option<String>",
                 "inputType": "String",
                 "isComposing": "bool"
             }
@@ -303,8 +303,6 @@
                 "ctrlKey": "bool",
                 "isComposing": "bool",
                 "key": "String",
-                "locale": "String",
-                "location": "i64",
                 "metaKey": "bool",
                 "repeat": "bool",
                 "shiftKey": "bool"
@@ -335,8 +333,7 @@
         "UIEvent": {
             "inherits": "Event",
             "properties": {
-                "detail": "i64",
-                "isChar": "bool"
+                "detail": "Option<i64>"
             }
         },
         "WheelEvent": {

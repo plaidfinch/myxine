@@ -8,6 +8,7 @@
 module Myxine.TH (mkEventsAndInterfaces) where
 
 import qualified Data.Aeson           as JSON
+import qualified Data.Aeson.Types     as JSON
 import           Data.Bifunctor
 import qualified Data.ByteString      as ByteString.Strict
 import           Data.ByteString.Lazy (ByteString)
@@ -28,18 +29,22 @@ import           Data.Traversable
 import qualified GHC.Generics         as Generic
 import           Language.Haskell.TH
 
-eventTypeName, decodeEventPropertiesName, decodeSomeEventTypeName, encodeEventNameType :: Name
+eventTypeName, decodeEventPropertiesName, decodeSomeEventTypeName, encodeEventTypeName :: Name
 eventTypeName             = mkName "EventType"
 decodeEventPropertiesName = mkName "decodeEventProperties"
 decodeSomeEventTypeName   = mkName "decodeSomeEventType"
-encodeEventNameType       = mkName "encodeEventType"
+encodeEventTypeName       = mkName "encodeEventType"
 
-interfaceTypes :: HashMap String Name
+interfaceTypes :: HashMap String (Q Type)
 interfaceTypes = HashMap.fromList
-  [ ("f64", ''Double)
-  , ("i64", ''Int)
-  , ("String", ''Text)
-  , ("bool", ''Bool)
+  [ ("f64",            [t|Double|])
+  , ("i64",            [t|Int|])
+  , ("String",         [t|Text|])
+  , ("bool",           [t|Bool|])
+  , ("Option<f64>",    [t|Maybe Double|])
+  , ("Option<i64>",    [t|Maybe Int|])
+  , ("Option<String>", [t|Maybe Text|])
+  , ("Option<bool>",   [t|Maybe Bool|])
   ]
 
 mkEventsAndInterfaces :: ByteString.Strict.ByteString -> Q [Dec]
@@ -180,15 +185,36 @@ mkInterface interfaceName Interface{properties = Properties properties} =
   in if badFields == []
   then do
     fields <- sequence
-      [ pure (mkName (avoidKeywordProp interfaceName propName),
-              Bang NoSourceUnpackedness SourceStrict,
-              ConT (interfaceTypes HashMap.! propType))
+      [ (propName, Bang NoSourceUnpackedness SourceStrict,)
+          <$> interfaceTypes HashMap.! propType
       | (propName, propType) <- propertyList ]
     dec <- dataD (pure []) (mkName interfaceName) [] Nothing
-      [recC (mkName interfaceName) (pure <$> sort fields)]
-      [derivClause Nothing [[t|Eq|], [t|Ord|], [t|Show|], [t|Generic.Generic|],
-                            [t|JSON.FromJSON|], [t|JSON.ToJSON|]]]
-    pure [dec]
+      [recC (mkName interfaceName) $
+       pure . (\(n,s,t) -> (mkName (avoidKeywordProp interfaceName n), s, t)) <$> sort fields]
+      [derivClause Nothing [[t|Eq|], [t|Ord|], [t|Show|]]]
+    -- This "manually" derived FromJSON instance is necessary because Aeson
+    -- doesn't guarantee stability of encoding. In particular, unit-like things
+    -- are currently serialized as [] and not {}, even if they are record-like.
+    preludeMaybe <- [t|Maybe|]
+    o <- newName "o"
+    fromJSON <-
+      [d| instance JSON.FromJSON $(conT (mkName interfaceName)) where
+            parseJSON (JSON.Object $(varP o)) =
+              $(doE $ [ let name' = avoidKeywordProp interfaceName name
+                            get = case ty of
+                              AppT c _ | c == preludeMaybe -> [|(JSON..:?)|]
+                              _ -> [|(JSON..:)|]
+                        in bindS (varP (mkName name')) [|$get $(varE o) $(litE (stringL name))|]
+                      | (name, _, ty) <- fields ]
+                      <> [ noBindS [|pure $(recConE (mkName interfaceName)
+                                            [ let name' = avoidKeywordProp interfaceName name
+                                              in pure (mkName name', VarE (mkName name'))
+                                            | (name, _, _) <- fields ]) |] ])
+            parseJSON invalid =
+              JSON.prependFailure $(litE (stringL ("parsing " <> interfaceName <> " failed, ")))
+                (JSON.typeMismatch "Object" invalid)
+        |]
+    pure $ [dec] <> fromJSON
   else do
     for_ badFields \(propName, propType) ->
       reportError $
@@ -227,19 +253,20 @@ mkEnumGCompareInstance name cons = do
 
 mkEncodeEventType :: [(String, Con)] -> Q [Dec]
 mkEncodeEventType cons = do
-  sig <- sigD encodeEventNameType [t|forall d. $(conT eventTypeName) d -> ByteString|]
-  dec <- funD encodeEventNameType
+  sig <- sigD encodeEventTypeName [t|forall d. $(conT eventTypeName) d -> ByteString|]
+  dec <- funD encodeEventTypeName
     [ clause [conP con []] (normalB (litE (stringL string))) []
     | (string, GadtC [con] _ _) <- cons ]
-  pure [sig, dec]
+  let prag = PragmaD (InlineP encodeEventTypeName Inline FunLike AllPhases)
+  pure [sig, dec, prag]
 
 -- | Make the @decodeEventProperties@ function
 mkDecodeEventProperties :: [Con] -> Q [Dec]
 mkDecodeEventProperties cons = do
   let event = pure (ConT eventTypeName)
   let cases = flip map cons \(GadtC [con] _ _) ->
-        match (conP con []) (normalB [|JSON.decode|]) []
-  sig <- sigD decodeEventPropertiesName [t| forall d. $event d -> ByteString -> Maybe d|]
+        match (conP con []) (normalB [|JSON.eitherDecode|]) []
+  sig <- sigD decodeEventPropertiesName [t| forall d. $event d -> ByteString -> Either String d|]
   arg <- newName "event"
   dec <- funD decodeEventPropertiesName
            [clause [varP arg] (normalB (caseE (varE arg) cases)) []]
