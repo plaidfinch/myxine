@@ -324,7 +324,7 @@
                 "offsetY": "f64",
                 "pageX": "f64",
                 "pageY": "f64",
-                "region": "String",
+                "region": "Option<String>",
                 "screenX": "f64",
                 "screenY": "f64",
                 "shiftKey": "bool"
