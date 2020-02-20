@@ -9,8 +9,8 @@ import qualified Data.HashMap.Lazy as HashMap
 import GHC.Generics
 
 -- | A 'Target' is a description of a single element node in the browser. You
--- can query the value of any of an 'attribute', or you can ask for its
--- 'tagName'.
+-- can query the value of any of an 'attribute', or you can ask for the 'tag' of
+-- that element.
 data Target = Target
   { tagName :: Text
   , attributes :: HashMap Text Text
