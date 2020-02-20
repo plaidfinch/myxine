@@ -4,8 +4,10 @@
 module Myxine.Page where
 
 import Data.Monoid
+import Control.Monad
+import Data.IORef
 import Data.Maybe
-import Control.Exception (Exception, SomeException)
+import Control.Exception (Exception, SomeException, throwIO)
 import qualified Control.Exception as Exception
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -50,44 +52,91 @@ instance Monoid PageLocation where
 
 data Page state
   = Page
-    { pageActions  :: Chan (Maybe (state -> IO state))
-    , pageFinished :: MVar (Maybe SomeException)
-    , pageLocation :: PageLocation }
+    { pageActions     :: !(Chan (Maybe (state -> IO state)))
+    , pageFinished    :: !(MVar (Either SomeException state))
+    , pageLocation    :: !PageLocation }
 
+-- | Run an interactive page, returning a handle 'Page' through which it can be
+-- interacted. This function takes four arguments: a 'PageLocation' describing
+-- which path and/or local port to connect to; an initial @state@ for the model
+-- of the page; a set of 'Handlers' describing how to effectfully update the
+-- state upon events that happen in the browser; and a view function which
+-- renders a @state@ as an HTML 'ByteString' (how you do this is up to you) and
+-- optionally a page title.
+--
+-- This function itself is non-blocking: it immediately kicks off threads to
+-- start running the page. It will not throw exceptions by itself. All
+-- exceptions thrown by page threads (such as issues with connecting to the
+-- server) are deferred until a call to 'waitPage'.
 runPage :: forall state.
-  PageLocation -> state -> Handlers state -> (state -> ByteString) -> IO (Page state)
+  PageLocation -> state -> Handlers state -> (state -> (Maybe Text, ByteString)) -> IO (Page state)
 runPage pageLocation@PageLocation{pageLocationPath, pageLocationPort}
         initialState handlers draw =
-  do pageActions <- newChan
-     pageFinished <- newEmptyMVar
-     tid <- forkIO $
-       Exception.handle (putMVar pageFinished . Just)  -- finished with exception
-       do redraw initialState
-          withEvents
-            (fromMaybe defaultPort (getLast pageLocationPort))
-            (fromMaybe "" (getLast pageLocationPath))
-            (handledEvents handlers)
-            \event properties targets ->
-              writeChan pageActions $ Just \state ->
-                do state' <- handle handlers event properties targets state
-                   redraw state'
-                   pure state'
-          putMVar pageFinished Nothing  -- finished normally
+  do pageActions  <- newChan       -- channel for state-modifying actions
+     pageFinished <- newEmptyMVar  -- signal for the page's shutdown
+
+     -- Loop through all the events on the page, translating them to events
+     pageEventThread <- forkIO $
+       flip Exception.finally (writeChan pageActions Nothing) $  -- tell state thread to stop
+         Exception.handle (putMVar pageFinished . Left) $  -- finished with exception
+         do writeChan pageActions (Just redraw)
+            withEvents
+              (fromMaybe defaultPort (getLast pageLocationPort))
+              (fromMaybe "" (getLast pageLocationPath))
+              (handledEvents handlers)
+              \event properties targets ->
+                writeChan pageActions . Just $
+                  redraw <=< handle handlers event properties targets
+
+     -- Loop through all the actions, doing them
+     _pageStateThread <- forkIO
+       do state <- newIORef initialState  -- current state of the page
+          flip Exception.finally (killThread pageEventThread) $
+            Exception.handle (putMVar pageFinished . Left) $
+              let loop = readChan pageActions >>=
+                    maybe (putMVar pageFinished . Right =<< readIORef state)
+                      \action -> writeIORef state =<< action =<< readIORef state
+              in loop
+
      pure (Page { pageActions, pageLocation, pageFinished })
+
   where
-    redraw :: state -> IO ()
-    redraw state = _ draw
+    redraw :: state -> IO state
+    redraw state =
+      do let (title, body) = draw state
+         sendUpdate
+           (fromMaybe defaultPort (getLast pageLocationPort))
+           (fromMaybe "" (getLast pageLocationPath))
+           (Dynamic title body)
+         pure state
 
-withPage :: Page state -> (state -> IO state) -> IO ()
-withPage Page{pageActions} action =
-  writeChan pageActions (Just action)
+-- | Wait for a 'Page' to finish executing and return its resultant 'state', or
+-- re-throw any exception the page encountered.
+waitPage :: Page state -> IO state
+waitPage Page{pageFinished} =
+  takeMVar pageFinished >>= either throwIO pure
 
+  -- | Politely request a 'Page' to shut down. This is non-blocking -- to get
+  -- the final state of the 'Page', follow 'stopPage' with a call to 'waitPage'.
+stopPage :: Page state -> IO ()
+stopPage Page{pageActions} =
+  writeChan pageActions Nothing
+
+-- | Modify the state of the page with a pure function, and update the view in
+-- the browser to reflect the new state.
 modifyPage :: Page state -> (state -> state) -> IO ()
 modifyPage page f = withPage page (pure . f)
 
+-- | Set the state of the page to a particular value, and update the view in the
+-- browser to reflect the new state.
 setPage :: Page state -> state -> IO ()
 setPage page = modifyPage page . const
 
+-- | Get the current state of the page. Note that this function, while blocking
+-- the thread which calls it, does not guarantee that the returned state is
+-- fresh -- further updates may have happened by the time you act on the
+-- returned state. That is, @getPage page >>= setPage page@ is not the same as
+-- @modifyPage id@!
 getPage :: Page state -> IO state
 getPage page = do
   v <- newEmptyMVar
@@ -95,3 +144,10 @@ getPage page = do
     do putMVar v state
        pure state
   takeMVar v
+
+-- | Modify the state of the page, potentially doing arbitrary other effects in
+-- the 'IO' monad, then re-draw the page to the browser. This is the primitive
+-- upon which all other 'Page'-manipulating functions are built.
+withPage :: Page state -> (state -> IO state) -> IO ()
+withPage Page{pageActions} action =
+  writeChan pageActions (Just action)

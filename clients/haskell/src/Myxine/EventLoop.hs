@@ -17,7 +17,6 @@ import qualified Data.ByteString.Lazy.Char8 as ByteString
 import Data.ByteString.Lazy.Char8 (ByteString)
 import Data.Text (Text)
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text
 import qualified Data.Aeson as JSON
 import qualified Network.HTTP.Req as Req
 import Network.HTTP.Types (ok200)
@@ -41,7 +40,7 @@ data EventParseException
   deriving (Eq, Ord, Show, Exception)
 
 data Update
-  = Dynamic (Maybe Text) Text
+  = Dynamic (Maybe Text) ByteString
   | Static ByteString ByteString
 
 pageUrl :: Text -> Req.Url 'Req.Http
@@ -51,21 +50,20 @@ pageUrl path =
 sendUpdate :: Int -> Text -> Update -> IO ()
 sendUpdate port path update =
   do _ <- Req.runReq Req.defaultHttpConfig $
-       Req.req Req.POST (pageUrl path) body Req.ignoreResponse options
+       Req.req Req.POST (pageUrl path) body
+         Req.ignoreResponse (Req.port port <> params)
      pure ()
   where
     body   :: Req.ReqBodyLbs
     params :: Req.Option 'Req.Http
     (body, params) = case update of
       Dynamic maybeTitle text ->
-        ( Req.ReqBodyLbs (ByteString.fromStrict (Text.encodeUtf8 text))
+        ( Req.ReqBodyLbs text
         , foldMap ("title" Req.=:) maybeTitle )
       Static contentType content ->
         ( Req.ReqBodyLbs content
         , Req.header "Content-Type" (ByteString.toStrict contentType)
           <> Req.queryFlag "static" )
-
-    options = (Req.port port <> params)
 
 -- | Given a port, path, and list of events, make a request to Myxine for the
 -- event stream at that location and run the provided callback for each typed
