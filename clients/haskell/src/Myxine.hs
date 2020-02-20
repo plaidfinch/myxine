@@ -2,7 +2,14 @@
     ScopedTypeVariables, BlockArguments, KindSignatures, TemplateHaskell,
     OverloadedStrings, DerivingStrategies, DerivingVia, StandaloneDeriving,
     DeriveGeneric, DeriveAnyClass, GeneralizedNewtypeDeriving, NamedFieldPuns #-}
+{-|
 
+__Required extensions:__ You'll likely find this library impossible to use
+without enabling the @OverloadedRecordFields@ language extension, as a variety
+of event interfaces share field names/types. You may also find useful for
+concision: @NamedFieldPuns@ and @RecordWildCards@.
+
+-}
 module Myxine
   ( module Myxine.Page
 
@@ -18,7 +25,7 @@ module Myxine
 -- of data is carried by events of that type. Note the type of 'on':
 --
 -- @
--- 'on' :: 'EventType' d -> (d -> ['Target'] -> a -> m b) -> 'Handlers' m a b
+-- 'on' :: 'EventType' props -> (props -> ['Target'] -> a -> m b) -> 'Handlers' m a b
 -- @
 --
 -- This means that, for instance, if you want to handle a 'Click' event, which
@@ -64,7 +71,7 @@ module Myxine
 
   ) where
 
-import Myxine.Target
+import Myxine.Target (Target, tag, attribute)
 import Myxine.Handlers (Handlers, on)
 import Myxine.Event
 import Myxine.EventLoop
