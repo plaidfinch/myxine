@@ -20,6 +20,15 @@ reflects](#lets-play) whatever you'd like it to show. You can then [listen to
 events](#interactivity) within that page to quickly prototype a reactive user
 interface—with only a knowledge of HTML and your favorite language.
 
+More precisely: `myxine` is a local server that gives you a RESTful API for
+creating model-view-controller style interactive applications in your browser
+from any programming language capable of sending an HTTP request.
+
+The intent of `myxine` is to make it easy and succinct to write idiomatic
+bindings to it in any programming language, or to use it from the shell
+directly. Currently, there are bindings for Python and Haskell, and work in
+progress toward bindings for Rust, JavaScript, and more.
+
 **Q:** Could you show me something cool, then tell me the details after?<br/>
 **A:** Happily, [let's get started](#show-me)!
 
@@ -28,8 +37,14 @@ interface—with only a knowledge of HTML and your favorite language.
 
 ## Show me!
 
-First, [install `myxine`](#installation), get a cup of tea while it builds, and
-then come back here :)
+First, [install `myxine`](#installation) -- in short:
+
+```bash
+$ cargo install myxine
+  ... (things get compiled) ...
+$ myxine
+Running at: http://127.0.0.1:1123
+```
 
 Second, make sure you have [Python 3](https://www.python.org/) and the
 [`requests`](https://2.python-requests.org/en/master/) library installed. Myxine
@@ -40,12 +55,6 @@ happens to be written in Python. If you have Python 3 (and therefore hopefully
 
 ```bash
 $ pip3 install requests
-```
-
-Now, in one terminal window, run:
-
-```bash
-$ cargo run --release
 ```
 
 And in another window, run:
@@ -61,29 +70,26 @@ full story...](#lets-play)
 
 ## Getting started
 
-### Installation
+### Installing and running
 
 You will need a recent version of the Rust programming langauge and its build
 tool, `cargo`. If you don't have that, [here's the quick-start for installing
 Rust](https://www.rust-lang.org/learn/get-started). Once you have `cargo`
-installed, run:
+installed, install the latest version of `myxine`:
 
 ```bash
-$ cargo build --release
+$ cargo install myxine
 ```
 
-We're not yet on [crates.io](https://crates.io) but will be soon! Once we are,
-you'll be able to install with `cargo install myxine`.
-
-### Running
-
-Myxine is meant to run in the background. It might live longer than any
-individual program that uses it, and it's meant to be a service many programs
-might use at the same time. To get started, run:
+Then, start it in the background and leave it running:
 
 ```bash
-$ cargo run --release
+$ myxine
+Running at: http://127.0.0.1:1123
 ```
+
+By default, `myxine` uses the port 1123, but you can pick a different one using
+the `--port` command line option.
 
 ### Let's play!
 
