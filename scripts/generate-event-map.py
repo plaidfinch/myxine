@@ -2,6 +2,7 @@
 
 import sys
 import json
+import html
 from typing import *
 
 graph_parameters = [
@@ -77,7 +78,7 @@ def generate(events, interfaces):
                                  f'<TD HREF="{docs + "/" + property}" BGCOLOR="white" ALIGN="LEFT">' + \
                                  property + '<FONT COLOR="black">:</FONT></TD>' + \
                                  '<TD BGCOLOR="white" ALIGN="LEFT"><FONT COLOR="black">' + \
-                                 type + '</FONT></TD>' + \
+                                 html.escape(type) + '</FONT></TD>' + \
                                  '</TR>' \
                                  for property, type in interface_info['properties'].items())
             label = f'<<TABLE BORDER="1" CELLPADDING="4" CELLSPACING="0">' \
