@@ -1,5 +1,5 @@
 {-# language BlockArguments, NamedFieldPuns, OverloadedStrings,
-  ScopedTypeVariables, TypeApplications #-}
+  ScopedTypeVariables, TypeApplications, LambdaCase #-}
 
 module Myxine.Page
   ( -- * Pages
@@ -81,22 +81,25 @@ runPage pageLocation@PageLocation{pageLocationPath, pageLocationPort}
      pageEventThread <- forkIO $
        flip Exception.finally (writeChan pageActions Nothing) $  -- tell state thread to stop
          Exception.handle (putMVar pageFinished . Left) $  -- finished with exception
-         do writeChan pageActions (Just redraw)
-            withEvents
-              (fromMaybe defaultPort (getLast pageLocationPort))
-              (fromMaybe "" (getLast pageLocationPath))
-              (Just (handledEvents handlers))
-              \event properties targets ->
-                writeChan pageActions . Just $
-                  redraw <=< handle handlers event properties targets
+           Exception.handle @Exception.AsyncException (const (pure ())) $ -- don't track when the thread is killed
+             do writeChan pageActions (Just redraw)
+                withEvents
+                  (fromMaybe defaultPort (getLast pageLocationPort))
+                  (fromMaybe "" (getLast pageLocationPath))
+                  (Just (handledEvents handlers))
+                  \event properties targets ->
+                    writeChan pageActions . Just $
+                      redraw <=< handle handlers event properties targets
 
      -- Loop through all the actions, doing them
      _pageStateThread <- forkIO
        do state <- newIORef initialState  -- current state of the page
           Exception.handle (putMVar pageFinished . Left) $
-            let loop = readChan pageActions >>=
-                  maybe (putMVar pageFinished . Right =<< readIORef state)
-                    \action -> writeIORef state =<< action =<< readIORef state
+            let loop = readChan pageActions >>= \case
+                  Nothing -> putMVar pageFinished . Right =<< readIORef state
+                  Just action ->
+                    do writeIORef state =<< action =<< readIORef state
+                       loop
             in loop
 
      pure (Page { pageActions, pageLocation, pageFinished, pageEventThread })
