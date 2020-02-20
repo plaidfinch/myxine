@@ -2,8 +2,10 @@
   ScopedTypeVariables, TypeApplications, LambdaCase #-}
 
 module Myxine.Page
-  ( -- * Pages
-  Page, runPage, waitPage, stopPage, modifyPage, getPage, setPage, withPage
+  ( -- * Creating Interactive Pages
+  Page, runPage, waitPage, stopPage,
+  -- * Manipulating Running Pages
+  modifyPage, getPage, setPage, withPage
   -- * Specifying Page Locations
   , PageLocation, path, port
   ) where
@@ -51,6 +53,8 @@ instance Monoid PageLocation where
     { pageLocationPort = mempty
     , pageLocationPath = mempty }
 
+-- | A handle to a running page with internal state. To create a 'Page', use
+-- 'runPage'. To interact with it further, see the rest of this module.
 data Page state
   = Page
     { pageActions     :: !(Chan (Maybe (state -> IO state)))
@@ -71,7 +75,16 @@ data Page state
 -- exceptions thrown by page threads (such as issues with connecting to the
 -- server) are deferred until a call to 'waitPage'.
 runPage :: forall state.
-  PageLocation -> state -> Handlers state -> (state -> (Maybe Text, ByteString)) -> IO (Page state)
+  PageLocation
+    {- ^ The location of the 'Page' ('port' and/or 'path') -} ->
+  state
+    {- ^ The initial @state@ of the 'Page' -} ->
+  Handlers state
+    {- ^ The set of event 'Handlers' for events in the page -} ->
+  (state -> (Maybe Text, ByteString))
+    {- ^ A function to draw the @state@ as an optional @<title>@ and @<body>@ contents -} ->
+  IO (Page state)
+    {- ^ A 'Page' handle to permit further interaction with the running page -}
 runPage pageLocation@PageLocation{pageLocationPath, pageLocationPort}
         initialState handlers draw =
   do pageActions  <- newChan       -- channel for state-modifying actions
@@ -122,8 +135,8 @@ waitPage Page{pageFinished, pageEventThread} =
      killThread pageEventThread
      either throwIO pure result
 
-  -- | Politely request a 'Page' to shut down. This is non-blocking -- to get
-  -- the final state of the 'Page', follow 'stopPage' with a call to 'waitPage'.
+-- | Politely request a 'Page' to shut down. This is non-blocking: to get the
+-- final state of the 'Page', follow 'stopPage' with a call to 'waitPage'.
 stopPage :: Page state -> IO ()
 stopPage Page{pageActions} =
   writeChan pageActions Nothing

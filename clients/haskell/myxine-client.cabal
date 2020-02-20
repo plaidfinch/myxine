@@ -43,10 +43,10 @@ common deps
 library
   import:              deps, options
   exposed-modules:     Myxine
-                       Myxine.Page
+  other-modules:       Myxine.Page
                        Myxine.Target
                        Myxine.Handlers
-  other-modules:       Myxine.Event
+                       Myxine.Event
                        Myxine.EventStream
                        Myxine.EventLoop
                        Myxine.TH

@@ -3,8 +3,7 @@
   RankNTypes, LambdaCase, DerivingStrategies #-}
 
 module Myxine.EventLoop
-  ( pageUrl
-  , Update(..)
+  ( Update(..)
   , sendUpdate
   , withEvents
   , EventParseException(..)
@@ -31,7 +30,10 @@ import Myxine.Target
 -- | If the response from the server fails to parse, this exception is thrown.
 -- This should never happen in ordinary circumstances; if it does, your version
 -- of the client library may mismatch the version of the Myxine server you are
--- running.
+-- running, or there may be a bug in the Myxine server or this library.
+--
+-- If you encounter this exception in the wild, please file a bug report at
+-- <https://github.com/GaloisInc/myxine/issues/new>. Thanks!
 data EventParseException
   = TargetParseException String
     -- ^ The target path failed to parse
@@ -67,14 +69,24 @@ instance Show EventParseException where
            "  - Bad input properties: " <> show badInput)
       bugReportURL = "https://github.com/GaloisInc/myxine/issues/new"
 
+-- | A full page update as ready-to-send to the Myxine server.
 data Update
-  = Dynamic (Maybe Text) ByteString
-  | Static ByteString ByteString
+  = Dynamic       -- ^ A dynamic page which can be updated live
+    (Maybe Text)  -- ^ An optional @<title>@ for the page
+    ByteString    -- ^ The contents of the page's @<body>@
+  | Static        -- ^ A static file which is hosted precisely as specified
+    ByteString    -- ^ The @Content-Type@ of the content
+    ByteString    -- ^ The raw bytes to be served by the server
 
+-- | Compute the localhost 'Req.Url' of a given path, allowing for dynamic
+-- appearances of @/@ in the URL.
 pageUrl :: Text -> Req.Url 'Req.Http
 pageUrl path =
   foldl' (Req./:) (Req.http "localhost") (Text.split ('/' ==) path)
 
+-- | Send a full-page update to Myxine at a particular port and path. An
+-- 'Update' is either a 'Dynamic' page body with an optional title, or a
+-- 'Static' file with a particular Content-Type.
 sendUpdate :: Int -> Text -> Update -> IO ()
 sendUpdate port path update =
   do _ <- Req.runReq Req.defaultHttpConfig $
