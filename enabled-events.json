@@ -33,7 +33,7 @@
             "bubbles": true,
             "interface": "MouseEvent",
             "nameWords": [
-                "double",
+                "dbl",
                 "click"
             ]
         },
@@ -290,9 +290,9 @@
         "InputEvent": {
             "inherits": "UIEvent",
             "properties": {
-                "data": "String",
-                "inputType": "String",
-                "isComposing": "bool"
+                "data": "Option<String>",
+                "inputType": "Option<String>",
+                "isComposing": "Option<bool>"
             }
         },
         "KeyboardEvent": {
@@ -303,8 +303,6 @@
                 "ctrlKey": "bool",
                 "isComposing": "bool",
                 "key": "String",
-                "locale": "String",
-                "location": "i64",
                 "metaKey": "bool",
                 "repeat": "bool",
                 "shiftKey": "bool"
@@ -326,7 +324,7 @@
                 "offsetY": "f64",
                 "pageX": "f64",
                 "pageY": "f64",
-                "region": "String",
+                "region": "Option<String>",
                 "screenX": "f64",
                 "screenY": "f64",
                 "shiftKey": "bool"
@@ -335,8 +333,7 @@
         "UIEvent": {
             "inherits": "Event",
             "properties": {
-                "detail": "i64",
-                "isChar": "bool"
+                "detail": "Option<i64>"
             }
         },
         "WheelEvent": {
