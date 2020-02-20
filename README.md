@@ -1,4 +1,4 @@
-# `myxine`: a slithery sea-friend to help you _get GUI fast_
+# Myxine: a slithery sea-friend to help you _get GUI fast_
 
 <table style="border: 0">
 <tr style="border: 0">
@@ -15,7 +15,7 @@
 ## TL;DR:
 
 If you write a function in *any programming language* that makes some HTML,
-`myxine` can give you a dynamic webpage whose content [instantly
+Myxine can give you a dynamic webpage whose content [instantly
 reflects](#lets-play) whatever you'd like it to show. You can then [listen to
 events](#interactivity) within that page to quickly prototype a reactive user
 interface—with only a knowledge of HTML and your favorite language.
@@ -257,3 +257,68 @@ well as the inheritance hierarchy for the interfaces of those events and the
 fields which are to be reported for each event interface. This list is
 intentionally conservative: if you are in need of support for another event or
 set of events, feel free to submit a PR with changes to this file.
+
+## The escape hatch: evaluating arbitrary JavaScript
+
+It occasionally might become necessary for you to directly evaluate some
+JavaScript within the context of the page. The most frequent reason for this is
+to query the value of some object, such as the current contents of a text-box,
+or the current window dimensions. To allow this, `myxine` exposes a simple API
+to send arbitrary JavaScript to the page and return its result: the `?evaluate`
+query string.
+
+There are two ways to use this API, corresponding to JavaScript's notions of
+"expression" and "statement". The more convenient of the two evaluates a given
+string as an *expression* and returns its value:
+
+```bash
+$ curl -X POST "http://localhost:1123/?evaluate=window.innerWidth"
+1224
+```
+
+This form is succinct: you don't have to use JavaScript's `return` keyword, and
+you can specify everything in the URL itself. However, you can't evaluate
+multiple lines delimited by semicolons (since the input is interpreted as an
+expression), and you must percent-escape all special characters like spaces.
+
+To circumvent these limitations, `myxine` also provides a "statement" form of
+the `?evaluate` API, where the POST body is used as a multi-line block of
+statements to be evaluated:
+
+```bash
+$ curl "http://localhost:1123/?evaluate" -d \
+    'let x = 100; let y = 200; return x + y;'
+300
+```
+
+In this form, `return` is mandatory to send back a value, but there is no need
+to escape special characters, and multiple statements can be executed as a
+block.
+
+### Further details
+
+- Return values of `undefined` are reported as `null`, and therefore calls which
+  don't return anything (i.e. if you did not use `return` in a statement-type
+  request) result in `null`.
+- Return types are limited to those which can be serialized via the JavaScript
+  method
+  [`JSON.stringify`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify),
+  which does not work for cyclic objects (like `window`, `document`, and all DOM
+  nodes), and may fail to serialize some properties for other non-scalar values.
+  If you want to return a non-scalar value like a list or dictionary, construct
+  it explicitly yourself by copying from the fields of the object you're
+  interested in.
+- There is a default timeout of 1 second for reporting evaluation results. This
+  is not enforced in the browser -- your JavaScript will continue to run
+  indefinitely -- but is a guarantee of the `myxine` API. To alter this timeout,
+  use the `timeout` query parameter to specify the desired limit in
+  milliseconds.
+- All errors in evaluation, including timeouts, serialization errors, and other
+  exceptions, are caught and reported with status code `400 Bad Request`. If the
+  status code is `200 OK`, it's guaranteed that the response will be valid JSON.
+  Otherwise, the response body is a human-readable description of the error.
+- For both forms, the JavaScript given is evaluated in the `window` (global)
+  scope of the browser. For nitty-gritty details, see the docs on
+  [`window.Function`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function)
+  and the MDN writeup
+  ["Never use `eval()`!"](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/eval#Never_use_eval!).
