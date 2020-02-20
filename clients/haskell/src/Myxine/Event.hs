@@ -9,5 +9,3 @@ import Data.FileEmbed
 import Myxine.TH
 
 mkEventsAndInterfaces $(embedFile "enabled-events.json")
-
--- TODO: Use an associated data family for EventType, to allow forward compat

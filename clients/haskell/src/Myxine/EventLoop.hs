@@ -39,7 +39,33 @@ data EventParseException
     -- ^ The event type failed to parse
   | EventDataParseException ByteString String ByteString
     -- ^ The properties associated with the event type failed to parse
-  deriving (Eq, Ord, Show, Exception)
+  deriving (Eq, Ord, Exception)
+
+instance Show EventParseException where
+  show exn =
+       "*** Myxine client panic: Failed to parse " <> component <> "! This means one of:\n\n"
+    <> "  1) You connected to an event source that is not the Myxine server\n"
+    <> "  2) You connected to a Myxine server process with an incompatible major version\n"
+    <> "  3) There is a bug in the Myxine server or client library (totally possible!)\n\n"
+    <> "  If you suspect it's (3), please file a bug report at:\n\n    " <> bugReportURL <> "\n\n"
+    <> "  Please include the version of this library, the version of the Myxine server,\n"
+    <> "  and the following details:\n\n"
+    <> details
+    where
+      component, details, bugReportURL :: String
+      (component, details) = case exn of
+        TargetParseException input ->
+          ("target path",
+           "  - Unparseable target path: " <> show input)
+        UnknownEventTypeException eventType ->
+          ("event type",
+           "  - Unknown event type: " <> show eventType)
+        EventDataParseException eventType parseError badInput ->
+          ("event properties",
+           "  - Known event type: " <> show eventType <> "\n" <>
+           "  - Parse error: " <> parseError <> "\n" <>
+           "  - Bad input properties: " <> show badInput)
+      bugReportURL = "https://github.com/GaloisInc/myxine/issues/new"
 
 data Update
   = Dynamic (Maybe Text) ByteString
