@@ -1,21 +1,22 @@
 {-# language BlockArguments, NamedFieldPuns, OverloadedStrings,
   ScopedTypeVariables, TypeApplications #-}
 
-module Myxine.Page where
+module Myxine.Page
+  ( -- * Pages
+  Page, runPage, waitPage, stopPage, modifyPage, getPage, setPage, withPage
+  -- * Specifying Page Locations
+  , PageLocation, path, port
+  ) where
 
 import Data.Monoid
 import Control.Monad
 import Data.IORef
 import Data.Maybe
-import Control.Exception (Exception, SomeException, throwIO)
+import Control.Exception (SomeException, throwIO)
 import qualified Control.Exception as Exception
 import Data.Text (Text)
-import qualified Data.Text as Text
 import Data.ByteString.Lazy.Char8 (ByteString)
-import qualified Data.ByteString.Lazy.Char8 as ByteString
 import Control.Concurrent
-import Control.Concurrent.Chan
-import qualified Network.HTTP.Req as Req
 
 import Myxine.EventLoop
 import Myxine.Handlers
@@ -54,7 +55,8 @@ data Page state
   = Page
     { pageActions     :: !(Chan (Maybe (state -> IO state)))
     , pageFinished    :: !(MVar (Either SomeException state))
-    , pageLocation    :: !PageLocation }
+    , pageLocation    :: !PageLocation
+    , pageEventThread :: !ThreadId }
 
 -- | Run an interactive page, returning a handle 'Page' through which it can be
 -- interacted. This function takes four arguments: a 'PageLocation' describing
@@ -83,7 +85,7 @@ runPage pageLocation@PageLocation{pageLocationPath, pageLocationPort}
             withEvents
               (fromMaybe defaultPort (getLast pageLocationPort))
               (fromMaybe "" (getLast pageLocationPath))
-              (handledEvents handlers)
+              (Just (handledEvents handlers))
               \event properties targets ->
                 writeChan pageActions . Just $
                   redraw <=< handle handlers event properties targets
@@ -91,14 +93,13 @@ runPage pageLocation@PageLocation{pageLocationPath, pageLocationPort}
      -- Loop through all the actions, doing them
      _pageStateThread <- forkIO
        do state <- newIORef initialState  -- current state of the page
-          flip Exception.finally (killThread pageEventThread) $
-            Exception.handle (putMVar pageFinished . Left) $
-              let loop = readChan pageActions >>=
-                    maybe (putMVar pageFinished . Right =<< readIORef state)
-                      \action -> writeIORef state =<< action =<< readIORef state
-              in loop
+          Exception.handle (putMVar pageFinished . Left) $
+            let loop = readChan pageActions >>=
+                  maybe (putMVar pageFinished . Right =<< readIORef state)
+                    \action -> writeIORef state =<< action =<< readIORef state
+            in loop
 
-     pure (Page { pageActions, pageLocation, pageFinished })
+     pure (Page { pageActions, pageLocation, pageFinished, pageEventThread })
 
   where
     redraw :: state -> IO state
@@ -113,8 +114,10 @@ runPage pageLocation@PageLocation{pageLocationPath, pageLocationPort}
 -- | Wait for a 'Page' to finish executing and return its resultant 'state', or
 -- re-throw any exception the page encountered.
 waitPage :: Page state -> IO state
-waitPage Page{pageFinished} =
-  takeMVar pageFinished >>= either throwIO pure
+waitPage Page{pageFinished, pageEventThread} =
+  do result <- takeMVar pageFinished
+     killThread pageEventThread
+     either throwIO pure result
 
   -- | Politely request a 'Page' to shut down. This is non-blocking -- to get
   -- the final state of the 'Page', follow 'stopPage' with a call to 'waitPage'.

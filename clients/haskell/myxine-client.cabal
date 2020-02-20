@@ -14,6 +14,7 @@ category:            Graphics
 extra-source-files:  CHANGELOG.md, enabled-events.json
 
 common options
+  default-language:    Haskell2010
   ghc-options:         -Wall
                        -Wincomplete-uni-patterns
                        -Wincomplete-record-updates
@@ -42,20 +43,35 @@ common deps
 library
   import:              deps, options
   exposed-modules:     Myxine
+                       Myxine.Page
                        Myxine.Target
                        Myxine.Handlers
+  other-modules:       Myxine.Event
                        Myxine.EventStream
                        Myxine.EventLoop
-  other-modules:       Myxine.Event
                        Myxine.TH
                        Paths_myxine_client
   default-extensions:
   hs-source-dirs:      src
-  default-language:    Haskell2010
+
+executable circles
+  import:              options
+  build-depends:       base ^>=4.13.0.0,
+                       myxine-client,
+                       text,
+                       bytestring,
+                       blaze-html,
+                       blaze-markup,
+                       random
+  main-is:             Main.hs
+  hs-source-dirs:      examples/circles
 
 test-suite myxine-client-test
-  default-language:    Haskell2010
+  import:              options
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Test.hs
-  build-depends:       base ^>=4.13.0.0
+  build-depends:       base ^>=4.13.0.0,
+                       myxine-client,
+                       text,
+                       bytestring

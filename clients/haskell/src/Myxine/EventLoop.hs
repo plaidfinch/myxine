@@ -10,6 +10,8 @@ module Myxine.EventLoop
   , EventParseException(..)
   ) where
 
+import Control.Monad
+import Control.Concurrent
 import Data.List
 import Control.Exception
 import Data.Dependent.Map (Some(..))
@@ -67,8 +69,9 @@ sendUpdate port path update =
 
 -- | Given a port, path, and list of events, make a request to Myxine for the
 -- event stream at that location and run the provided callback for each typed
--- event in the stream. If the list of events specified is empty, every event
--- will be listened for.
+-- event in the stream. If no list of events is specified (@Nothing@), every
+-- event will be listened for. If the specific list of no events (@Just []@) is
+-- specified, this function will sleep forever.
 --
 -- This blocks until the stream is closed by the server, or an exception is
 -- encountered. This throws 'EventParseException' if the server sends an
@@ -77,9 +80,13 @@ sendUpdate port path update =
 withEvents ::
   Int ->
   Text ->
-  [Some EventType] ->
+  Maybe [Some EventType] ->
   (forall d. EventType d -> d -> [Target] -> IO ()) ->
   IO ()
+withEvents _ _ (Just []) _ =
+  -- if the user requests no events, there is no corresponding Myxine API
+  -- request to handle this, so we just sleep forever
+  forever (threadDelay maxBound)
 withEvents port path events perEvent =
   do withStreamEvents
        (pageUrl path)
@@ -95,8 +102,8 @@ withEvents port path events perEvent =
   where
     eventParams :: Req.Option 'Req.Http
     eventParams = case events of
-      [] -> Req.queryFlag "events"
-      es -> flip foldMap es
+      Nothing -> Req.queryFlag "events"
+      Just es -> flip foldMap es
         \(Some e) -> "event" Req.=: ByteString.unpack (encodeEventType e)
 
 -- | Given an event name and properties as raw bytestrings, invoke the given

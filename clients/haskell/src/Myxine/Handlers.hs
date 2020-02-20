@@ -41,6 +41,9 @@ instance Semigroup (Handlers state) where
   Handlers hs <> Handlers hs' =
     Handlers (DMap.unionWithKey (const (<>)) hs hs')
 
+instance Monoid (Handlers state) where
+  mempty = Handlers mempty
+
 -- | A handler for a single event type with associated data @props@.
 newtype Handler state props
   = Handler (props -> [Target] -> state -> IO state)

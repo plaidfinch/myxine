@@ -4,9 +4,11 @@
     DeriveGeneric, DeriveAnyClass, GeneralizedNewtypeDeriving, NamedFieldPuns #-}
 
 module Myxine
-  (
+  ( -- * Creating Interactive Pages
+  module Myxine.Page
+
   -- * Types of Events
-  EventType(..)
+  , EventType(..)
 
   -- * Targets for Events
   , module Myxine.Target
@@ -55,5 +57,6 @@ module Myxine
 import Myxine.Target
 import Myxine.Handlers
 import Myxine.Event
+import Myxine.Page
 import qualified Myxine.Event as Event
   hiding (decodeSomeEventType, decodeEventProperties, EventType(..))
