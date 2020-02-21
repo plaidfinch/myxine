@@ -5,7 +5,13 @@
     TupleSections, LambdaCase #-}
 {-# options_ghc -Wno-incomplete-uni-patterns #-}
 
-module Myxine.TH (mkEventsAndInterfaces) where
+{-| * Internal Template-Haskell for generating events
+
+    __Note:__ This module is used exclusively to template the various event and
+    event interface data types used by this library. It is not intended for
+    external use, and may not follow the PVP.
+-}
+module Myxine.Internal.TH (mkEventsAndInterfaces) where
 
 import qualified Data.Aeson           as JSON
 import qualified Data.Aeson.Types     as JSON

@@ -11,7 +11,8 @@ import Data.List (intercalate)
 import System.Random (randomIO)
 import Text.Blaze.Html5 hiding (main, style, map)
 import Text.Blaze.Html5.Attributes hiding (span)
-import Text.Blaze.Renderer.Utf8 (renderMarkup)
+import qualified Data.Text.Lazy as Text
+import Text.Blaze.Renderer.Text (renderMarkup)
 import Myxine
 
 data Circle = Circle
@@ -44,8 +45,8 @@ main = do
                    Just circle -> state { current = Nothing, rest = circle : rest state }
              ])
     \state@Circles{current, rest} ->
-      (Just ("Circles: " <> fromString (show (maybe 0 (const 1) current + length rest))),
-       renderMarkup (toMarkup state))
+      pageTitle ("Circles: " <> fromString (show (maybe 0 (const 1) current + length rest)))
+      <> pageBody (Text.toStrict (renderMarkup (toMarkup state)))
   print =<< waitPage page
 
 instance ToMarkup Circle where
@@ -79,8 +80,7 @@ instance ToMarkup Circles where
         , ("left", "50%")
         , ("font-family", "Helvetica Neue")
         , ("font-size", "50pt")
-        , ("color", "darkgrey")
-        ]
+        , ("color", "darkgrey") ]
 
   toMarkup Circles{current, rest} =
     div ! styles canvasStyles $
@@ -91,8 +91,7 @@ instance ToMarkup Circles where
         , ("padding", "0px")
         , ("height", "100vh")
         , ("width", "100vw")
-        , ("overflow", "hidden")
-        ]
+        , ("overflow", "hidden") ]
 
 styles :: [(String, String)] -> Attribute
 styles pairs =

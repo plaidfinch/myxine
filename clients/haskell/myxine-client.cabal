@@ -1,8 +1,7 @@
 cabal-version:       2.4
 name:                myxine-client
-version:             0.0.2.0
-synopsis:            A thin Haskell client for the Myxine GUI server
--- description:
+version:             0.0.0.1
+synopsis:            A Haskell client for the Myxine GUI server
 homepage:            https://github.com/GaloisInc/myxine
 bug-reports:         https://github.com/GaloisInc/myxine/issues
 license:             MIT
@@ -10,8 +9,34 @@ license-file:        LICENSE
 author:              Kenny Foner
 maintainer:          kwf@galois.com
 copyright:           Copyright (c) 2020 Galois, Inc.
-category:            Graphics
+category:            GUI
+stability:           alpha
 extra-source-files:  CHANGELOG.md, enabled-events.json
+description:
+  [Myxine](https://github.com/GaloisInc/myxine) is a language-agnostic local
+  server that lets you build interactive applications in the browser using a
+  RESTful API. This package defines high-level typed Haskell bindings for using
+  Myxine to quickly prototype surprisingly high-performance GUIs.
+  .
+  Myxine itself runs as a local server, separately from these bindings. It is
+  built in [Rust](https://www.rust-lang.org/learn/get-started), and can be
+  installed using the standard Rust build tool @cargo@:
+  .
+  > $ cargo install myxine
+  .
+  This Haskell package does __not__ manage the @myxine@ server process; it
+  assumes that it is already running in the background (either started by an
+  end-user, or managed by your own Haskell application).
+  .
+  __Required extensions:__ This library relies on the @OverloadedRecordFields@
+  language extension, since a variety of browser event interfaces share field
+  names/types. Without enabling it, you'll see many bewildering errors about
+  ambiguous names. You may also find useful for concision the extensions
+  @NamedFieldPuns@ and @RecordWildCards@.
+  .
+  __Package versioning and stability:__ This package should be considered in
+  "alpha" stability at present. No compatibility between alpha versions is
+  guaranteed.
 
 common options
   default-language:    Haskell2010
@@ -43,13 +68,13 @@ common deps
 library
   import:              deps, options
   exposed-modules:     Myxine
+                       Myxine.Direct
   other-modules:       Myxine.Page
                        Myxine.Target
                        Myxine.Handlers
                        Myxine.Event
-                       Myxine.EventStream
-                       Myxine.EventLoop
-                       Myxine.TH
+                       Myxine.Internal.EventStream
+                       Myxine.Internal.TH
                        Paths_myxine_client
   default-extensions:
   hs-source-dirs:      src

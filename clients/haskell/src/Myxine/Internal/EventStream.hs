@@ -1,7 +1,12 @@
 {-# language ScopedTypeVariables, BlockArguments, OverloadedStrings,
   FlexibleInstances, TypeApplications, ViewPatterns, LambdaCase #-}
 
-module Myxine.EventStream
+{-| * A generic implementation of @text/event-stream@ parsing
+
+    __Note:__ No end-user of this library needs to use this module; it's exposed
+    for testing purposes and is not guaranteed to follow the PVP.
+-}
+module Myxine.Internal.EventStream
   ( StreamEvent(..)
   , eventsFromLines
   , linesFromChunks
