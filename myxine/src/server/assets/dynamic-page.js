@@ -182,39 +182,42 @@ export function activate(initialSubscription, debugMode) {
         }
         // Set up event handlers
         subscription.forEach(eventName => {
-            const event = allEventDescriptions[eventName];
-            const listener = event => {
-                // Calculate the id path
-                const path =
-                      event.composedPath()
-                      .filter(t => t instanceof Element)
-                      .map(target => {
-                          const pathElement = {
-                              tagName: target.tagName.toLowerCase(),
-                              attributes: {},
-                          };
-                          for (let i = target.attributes.length - 1; i >= 0; i--) {
-                              const attribute = target.attributes[i];
-                              const name = attribute.name;
-                              const value = attribute.value;
-                              pathElement.attributes[name] = value;
-                          }
-                          return pathElement;
-                      });
+            if (typeof allEventDescriptions[eventName] !== 'undefined') {
+                const listener = event => {
+                    // Calculate the id path
+                    const path =
+                        event.composedPath()
+                        .filter(t => t instanceof Element)
+                        .map(target => {
+                            const pathElement = {
+                                tagName: target.tagName.toLowerCase(),
+                                attributes: {},
+                            };
+                            for (let i = target.attributes.length - 1; i >= 0; i--) {
+                                const attribute = target.attributes[i];
+                                const name = attribute.name;
+                                const value = attribute.value;
+                                pathElement.attributes[name] = value;
+                            }
+                            return pathElement;
+                        });
 
-                // Extract the relevant properties
-                const data = {};
-                Object.entries(allEventDescriptions[eventName])
-                    .forEach(([property, formatter]) => {
-                        data[property] = formatter(event[property]);
-                    });
-                // Send the event back to the server
-                // TODO: implement batching
-                sendEvent(eventName, path, data);
-            };
-            debug("Adding listener: " + eventName);
-            window.addEventListener(eventName, listener);
-            listeners[eventName] = listener;
+                    // Extract the relevant properties
+                    const data = {};
+                    Object.entries(allEventDescriptions[eventName])
+                        .forEach(([property, formatter]) => {
+                            data[property] = formatter(event[property]);
+                        });
+                    // Send the event back to the server
+                    // TODO: implement batching
+                    sendEvent(eventName, path, data);
+                };
+                debug("Adding listener: " + eventName);
+                window.addEventListener(eventName, listener);
+                listeners[eventName] = listener;
+            } else {
+                debug("Invalid event name: " + eventName);
+            }
         });
 
     }
