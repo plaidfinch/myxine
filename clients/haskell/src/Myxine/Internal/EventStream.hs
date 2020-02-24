@@ -1,6 +1,3 @@
-{-# language ScopedTypeVariables, BlockArguments, OverloadedStrings,
-  FlexibleInstances, TypeApplications, ViewPatterns, LambdaCase #-}
-
 {-| * A generic implementation of @text/event-stream@ parsing
 
     __Note:__ No end-user of this library needs to use this module; it's exposed

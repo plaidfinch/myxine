@@ -1,7 +1,3 @@
-{-# language BlockArguments, ScopedTypeVariables, OverloadedStrings,
-  NamedFieldPuns, GeneralizedNewtypeDeriving, DataKinds, DeriveAnyClass,
-  RankNTypes, LambdaCase, DerivingStrategies #-}
-
 {-|
 Description : Direct one-to-one typed bindings to the Myxine server API
 

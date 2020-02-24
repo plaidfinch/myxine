@@ -1,7 +1,3 @@
-{-# language GADTs, DataKinds, DuplicateRecordFields, RankNTypes, StrictData,
-    ScopedTypeVariables, BlockArguments, KindSignatures, TemplateHaskell,
-    OverloadedStrings, DerivingStrategies, DerivingVia, StandaloneDeriving,
-    DeriveGeneric, DeriveAnyClass, GeneralizedNewtypeDeriving, NamedFieldPuns #-}
 {-|
     Description : High-level "model-view-controller" interface to the Myxine server
 

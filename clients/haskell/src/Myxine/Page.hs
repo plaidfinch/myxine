@@ -1,5 +1,3 @@
-{-# language BlockArguments, NamedFieldPuns, OverloadedStrings,
-  ScopedTypeVariables, TypeApplications, LambdaCase #-}
 {-# options_haddock not-home #-}
 
 module Myxine.Page

@@ -1,6 +1,4 @@
-{-# language TemplateHaskell, StrictData, DeriveGeneric, DeriveAnyClass, GADTs,
-    KindSignatures, StandaloneDeriving, OverloadedStrings, EmptyCase,
-    DuplicateRecordFields, DerivingStrategies #-}
+{-# language StrictData #-}
 {-# options_ghc -Wno-name-shadowing -Wno-unused-matches #-}
 {-# options_haddock not-home #-}
 

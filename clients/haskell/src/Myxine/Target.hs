@@ -1,4 +1,3 @@
-{-# language NamedFieldPuns, DeriveGeneric, DeriveAnyClass #-}
 {-# options_haddock not-home #-}
 
 module Myxine.Target (Target, attribute, tag) where

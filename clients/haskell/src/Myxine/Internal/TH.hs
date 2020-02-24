@@ -1,8 +1,3 @@
-{-# language GADTs, DataKinds, DuplicateRecordFields, RankNTypes, StrictData,
-    ScopedTypeVariables, BlockArguments, KindSignatures, TemplateHaskell,
-    OverloadedStrings, DerivingStrategies, DerivingVia, StandaloneDeriving,
-    DeriveGeneric, DeriveAnyClass, NamedFieldPuns, GeneralizedNewtypeDeriving,
-    TupleSections, LambdaCase #-}
 {-# options_ghc -Wno-incomplete-uni-patterns #-}
 
 {-| * Internal Template-Haskell for generating events
