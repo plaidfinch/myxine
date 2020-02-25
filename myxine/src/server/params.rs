@@ -23,20 +23,25 @@ impl GetParams {
         {
             Some(GetParams::PageUpdates)
         } else if constrained_to_keys(&params, &["events", "event"]) {
-            match (param_as_strs("events", &params),
-                   param_as_strs("event", &params)) {
-                (Some(e1), Some(e2)) => Some(e1.chain(e2).map(String::from).collect()),
-                (Some(e1), None) => Some(e1.map(String::from).collect()),
-                (None, Some(e2)) => Some(e2.map(String::from).collect()),
-                (None, None) => None,
-            }.map(|events: HashSet<String>| if events.is_empty() {
-                GetParams::Subscribe(Subscription::universal())
-            } else {
-                GetParams::Subscribe(Subscription::from_events(events))
-            })
+            Some(GetParams::Subscribe(parse_subscription(&params)))
         } else {
             None
         }
+    }
+}
+
+fn parse_subscription<'a>(params: &'a HashMap<&'a str, Vec<Cow<'a, str>>>) -> Subscription {
+    let events = match (param_as_strs("events", &params),
+           param_as_strs("event", &params)) {
+        (Some(e1), Some(e2)) => e1.chain(e2).map(String::from).collect(),
+        (Some(e1), None) => e1.map(String::from).collect(),
+        (None, Some(e2)) => e2.map(String::from).collect(),
+        (None, None) => HashSet::new(),
+    };
+    if events.is_empty() {
+        Subscription::universal()
+    } else {
+        Subscription::from_events(events)
     }
 }
 
@@ -45,6 +50,7 @@ pub(crate) enum PostParams {
     DynamicPage{title: String},
     StaticPage,
     Evaluate{expression: Option<String>, timeout: Option<Duration>},
+    ChangeSubscription{id: Uuid, subscription: Subscription},
     // TODO: Add validation key to page-sent events to prevent MITM?
     PageEvent,
     EvalResult{id: Uuid},
@@ -64,6 +70,9 @@ impl PostParams {
             if param_as_bool("static", &params)? {
                 return Some(PostParams::StaticPage)
             }
+        } else if let Some(id) = param_as_str("subscription", &params).and_then(|s| Uuid::parse_str(s).ok()) {
+            let subscription = parse_subscription(&params);
+            return Some(PostParams::ChangeSubscription{id, subscription})
         } else if constrained_to_keys(&params, &["result"]) {
             let id = Uuid::parse_str(param_as_str("result", &params)?).ok()?;
             return Some(PostParams::EvalResult{id})

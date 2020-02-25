@@ -264,6 +264,54 @@ fields which are to be reported for each event interface. This list is
 intentionally conservative: if you are in need of support for another event or
 set of events, feel free to submit a PR with changes to this file.
 
+### Changing subscriptions
+
+Sometimes, especially when implementing higher-level bindings in some other
+programming language, it's useful to be able to change what events you are
+subscribed to. While you can just make another request for events on a page,
+this risks either duplicating or dropping events as you switch from one stream
+to another, since there's no way to determine whether two equal events in the
+stream represent the same user interaction, or if they are two separate
+interactions closely spaced in time.
+
+To solve this, you can continue to listen for events on a single stream, but
+tell `myxine` to alter the events in the stream from those you were originally
+listening for. Every event stream from `myxine` is tagged with a unique
+`Content-Location` header that identifies a relative URL corresponding to that
+particular stream. For example:
+
+```bash
+$ curl -v "http://localhost:1123/?event=click"
+...
+> GET /?event=click HTTP/1.1
+> Host: localhost:1123
+> User-Agent: curl/7.54.0
+> Accept: */*
+>
+< HTTP/1.1 200 OK
+...
+< content-location: /?subscription=1ac911f9-d321-44fc-910e-64497e3095b4
+...
+```
+
+If you then POST to this URL with query parameters describing a new event
+subscription, the *original stream* will begin to receive the events you
+specified (and *only* the events you specified). Suppose you were to run the
+following `curl` command:
+
+```bash
+$ curl -X POST "http://localhost:1123/?subscription=1ac911f9-d321-44fc-910e-64497e3095b4&event=keydown"
+```
+
+The moment before the command, the only events available on the stream would be
+`"click"` events. The moment after the command returns, the only events
+published on the stream would be `"keydown"` events (though some `"click"`
+events might remain in the stream yet to be processed, if your client-side HTTP
+library uses some kind of buffering).
+
+This method of changing event subscriptions ensures that you will never see
+duplicated or dropped events.
+
 ## The escape hatch: evaluating arbitrary JavaScript
 
 It occasionally might become necessary for you to directly evaluate some

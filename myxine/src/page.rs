@@ -76,9 +76,9 @@ impl Page {
 
     /// Subscribe another page event listener to this page, given a subscription
     /// specification for what events to listen to.
-    pub async fn event_stream(&self, subscription: Subscription) -> Body {
+    pub async fn event_stream(&self, subscription: Subscription) -> (Uuid, Body) {
         let mut subscribers = self.subscribers.lock().await;
-        let (total_subscription, event_stream) =
+        let (uuid, total_subscription, event_stream) =
             subscribers.add_subscriber(subscription).await;
         let content = &mut *self.content.lock().await;
         match content {
@@ -87,7 +87,7 @@ impl Page {
                 set_subscriptions(updates, total_subscription).await;
             }
         }
-        event_stream
+        (uuid, event_stream)
     }
 
     /// Send an event to all subscribers. This should only be called with events
@@ -256,6 +256,24 @@ impl Page {
     /// existed, if any.
     pub async fn set_body(&self, new_body: impl Into<String>) {
         self.content.lock().await.set_body(new_body).await
+    }
+
+    /// Change a particular existing subscription stream's subscription,
+    /// updating the aggregate subscription in the browser if necessary. Returns
+    /// `Err(())` if the id given does not correspond to an extant stream.
+    pub async fn change_subscription(&self, id: Uuid, subscription: Subscription) -> Result<(), ()> {
+        match self.subscribers.lock().await.change_subscription(id, subscription) {
+            Ok(Some(new_aggregate)) => {
+                match &mut *self.content.lock().await {
+                    Content::Static{..} => { },
+                    Content::Dynamic{ref mut updates, ..} =>
+                        set_subscriptions(updates, new_aggregate).await
+                }
+                Ok(())
+            },
+            Ok(None) => Ok(()),
+            Err(()) => Err(()),
+        }
     }
 
     /// Clear the page entirely, removing all subscribers and resetting the page

@@ -176,11 +176,14 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                 },
                 // Client wants to subscribe to events on this page:
                 Some(GetParams::Subscribe(subscription)) => {
-                    let body = page.event_stream(subscription).await;
+                    let (uuid, body) = page.event_stream(subscription).await;
+                    let subscription_url =
+                        format!("{}?subscription={}", path, uuid);
                     Response::builder()
                         .header("Content-Type", "text/event-stream")
                         .header("Cache-Control", "no-cache")
                         .header("Access-Control-Allow-Origin", "*")
+                        .header("Content-Location", subscription_url)
                         .body(body)
                         .unwrap()
                 },
@@ -284,6 +287,17 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                             StatusCode::FORBIDDEN,
                             "Clients cannot set the contents of the dashboard page.",
                         )
+                    }
+                },
+                // Client wants to change the subscribed event list of an
+                // existing subscription connection
+                Some(PostParams::ChangeSubscription{id, subscription}) => {
+                    match page.change_subscription(id, subscription).await {
+                        Ok(()) => Response::new(Body::empty()),
+                        Err(()) => response_with_status(
+                            StatusCode::NOT_FOUND,
+                            format!("Subscription does not exist: {}", id)
+                        ),
                     }
                 },
                 // Browser wants to notify client of an event
