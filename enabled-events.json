@@ -229,14 +229,6 @@
                 "select"
             ]
         },
-        "selectionchange": {
-            "bubbles": false,
-            "interface": "Event",
-            "nameWords": [
-                "selection",
-                "change"
-            ]
-        },
         "submit": {
             "bubbles": true,
             "interface": "Event",
