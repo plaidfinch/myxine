@@ -35,9 +35,9 @@ const DEFAULT_EVAL_TIMEOUT_MILLIS: Duration = Duration::from_millis(1000);
 
 impl Page {
     /// Make a new empty (dynamic) page
-    pub async fn new() -> Page {
+    pub fn new() -> Page {
         Page {
-            content: Mutex::new(Content::new().await),
+            content: Mutex::new(Content::new()),
             subscribers: Mutex::new(Subscribers::new()),
             queries: Mutex::new(Queries::new()),
         }
@@ -149,13 +149,13 @@ impl Page {
                 let event = EventBuilder::new(expression)
                     .event_type(if statement_mode { "run" } else { "evaluate" })
                     .id(&id_string);
-                let get_client_count = updates.send_to_clients(event.build()).await;
+                let client_count = updates.send_to_clients(event.build()).await;
                 // All the below gets executed *after* the lock on content is
                 // released, because it's a returned async block that is
                 // .await-ed after the scope of the match closes.
                 async move {
                     // If nobody's listening, give up now and report the issue
-                    if get_client_count.await == 0 {
+                    if client_count == 0 {
                         self.queries.lock().await.cancel(id);
                         Err("Can't evaluate JavaScript when no browser is viewing the page.".to_string())
                     } else {
@@ -213,7 +213,7 @@ impl Page {
     pub async fn is_empty(&self) -> bool {
         let (content_empty, subscribers_empty, queries_empty) =
             join!(
-                async { self.content.lock().await.is_empty().await },
+                async { self.content.lock().await.is_empty() },
                 async { self.subscribers.lock().await.is_empty() },
                 async { self.queries.lock().await.is_empty() },
             );
@@ -299,12 +299,10 @@ impl Page {
 /// sending an event, or sending a heartbeat! It will cause unexpected loss
 /// of messages if you arbitrarily set the subscriptions of a page outside
 /// of these contexts.
-async fn set_subscriptions<'a>(server: &'a mut sse::BufferedServer,
+async fn set_subscriptions<'a>(server: &'a mut hyper_usse::Server,
                                subscription: AggregateSubscription<'a>) {
     let data = serde_json::to_string(&subscription)
         .expect("Serializing subscriptions to JSON shouldn't fail");
     let event = EventBuilder::new(&data).event_type("subscribe");
-    // We're not using the future returned here because we don't care what the
-    // number of client connections is, so we don't need to wait to find out
-    let _unused_response = server.send_to_clients(event.build()).await;
+    server.send_to_clients(event.build()).await;
 }
