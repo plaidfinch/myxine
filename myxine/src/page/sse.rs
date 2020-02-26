@@ -13,6 +13,7 @@ pub struct BufferedServer {
 pub enum Command {
     Connections(oneshot::Sender<usize>),
     SendToClients(Bytes, oneshot::Sender<usize>),
+    SendHeartbeat(oneshot::Sender<usize>),
     DisconnectAll,
     AddClient(hyper::body::Sender),
 }
@@ -24,6 +25,9 @@ impl BufferedServer {
             let mut server = hyper_usse::Server::new();
             while let Some(command) = receiver.recv().await {
                 match command {
+                    Command::SendHeartbeat(ret) => {
+                        ret.send(server.send_heartbeat().await).unwrap_or(());
+                    },
                     Command::SendToClients(bytes, ret) => {
                         ret.send(server.send_to_clients(bytes).await).unwrap_or(());
                     },
@@ -49,6 +53,16 @@ impl BufferedServer {
         let (sender, receiver) = oneshot::channel();
         let mut commands = self.commands.lock().await.clone();
         commands.send(Command::SendToClients(text.into(), sender)).await.unwrap_or(());
+        async { receiver.await.expect("oneshot::Sender dropped before sending \
+                                       response from BufferedServer, which \
+                                       should be impossible") }
+    }
+
+    #[allow(unused)]
+    pub async fn send_heartbeat(&self) -> impl Future<Output = usize> {
+        let (sender, receiver) = oneshot::channel();
+        let mut commands = self.commands.lock().await.clone();
+        commands.send(Command::SendHeartbeat(sender)).await.unwrap_or(());
         async { receiver.await.expect("oneshot::Sender dropped before sending \
                                        response from BufferedServer, which \
                                        should be impossible") }
