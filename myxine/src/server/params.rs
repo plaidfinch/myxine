@@ -2,8 +2,8 @@ use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use percent_encoding::percent_decode;
 use std::borrow::Cow;
-use uuid::Uuid;
-use crate::page::Subscription;
+
+use crate::page::{Subscription, Id, Global, Frame};
 
 /// Parsed parameters from a query string for a GET/HEAD request.
 pub(crate) enum GetParams {
@@ -50,11 +50,11 @@ pub(crate) enum PostParams {
     DynamicPage{title: String},
     StaticPage,
     Evaluate{expression: Option<String>, timeout: Option<Duration>},
-    ChangeSubscription{id: Uuid, subscription: Subscription},
+    ChangeSubscription{id: Id<Global>, subscription: Subscription},
     // TODO: Add validation key to page-sent events to prevent MITM?
-    PageEvent,
-    EvalResult{id: Uuid},
-    EvalError{id: Uuid},
+    PageEvent{id: Id<Frame>},
+    EvalResult{id: Id<Global>},
+    EvalError{id: Id<Global>},
 }
 
 impl PostParams {
@@ -70,18 +70,19 @@ impl PostParams {
             if param_as_bool("static", &params)? {
                 return Some(PostParams::StaticPage)
             }
-        } else if let Some(id) = param_as_str("subscription", &params).and_then(|s| Uuid::parse_str(s).ok()) {
+        } else if let Some(id) = param_as_str("subscription", &params).and_then(|s| Id::parse_str(s)) {
             let subscription = parse_subscription(&params);
             return Some(PostParams::ChangeSubscription{id, subscription})
         } else if constrained_to_keys(&params, &["result"]) {
-            let id = Uuid::parse_str(param_as_str("result", &params)?).ok()?;
+            let id = Id::parse_str(param_as_str("result", &params)?)?;
             return Some(PostParams::EvalResult{id})
         } else if constrained_to_keys(&params, &["error"]) {
-            let id = Uuid::parse_str(param_as_str("error", &params)?).ok()?;
+            let id = Id::parse_str(param_as_str("error", &params)?)?;
             return Some(PostParams::EvalError{id})
-        } else if constrained_to_keys(&params, &["event"]) {
+        } else if constrained_to_keys(&params, &["event", "frame"]) {
             if param_as_bool("event", &params)? {
-                return Some(PostParams::PageEvent)
+                let id = Id::parse_str(param_as_str("frame", &params)?)?;
+                return Some(PostParams::PageEvent{id})
             }
         } else if constrained_to_keys(&params, &["evaluate", "timeout"]) {
             let timeout = if let Some(timeout_str) = param_as_str("timeout", &params) {

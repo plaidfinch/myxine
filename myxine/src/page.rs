@@ -5,7 +5,6 @@ use std::io::Write;
 use tokio::sync::Mutex;
 use futures::join;
 use serde_json::Value;
-use uuid::Uuid;
 use std::fmt::{Display, self};
 use futures::{select, pin_mut, FutureExt};
 
@@ -13,8 +12,10 @@ mod subscription;
 mod query;
 mod content;
 mod sse;
+mod id;
 
 pub use subscription::{Subscription, AggregateSubscription, Event};
+pub use id::{Id, Global, Frame};
 use subscription::Subscribers;
 use query::Queries;
 use content::Content;
@@ -23,6 +24,7 @@ use content::Content;
 /// `Subscribers` to the events on the page.
 #[derive(Debug)]
 pub struct Page {
+    frame_id: Mutex<Id<Frame>>,
     content: Mutex<Content>,
     subscribers: Mutex<Subscribers>,
     queries: Mutex<Queries<Result<Value, String>>>,
@@ -70,13 +72,27 @@ const TEMPLATE_SIZE: usize = include_str!("page/dynamic.html").len();
 const DEFAULT_EVAL_TIMEOUT: Duration = Duration::from_millis(1000);
 
 impl Page {
-    /// Make a new empty (dynamic) page
+    /// Make a new empty (dynamic) page.
     pub async fn new() -> Page {
         Page {
+            frame_id: Mutex::new(Id::new(Frame::new())),
             content: Mutex::new(Content::new().await),
             subscribers: Mutex::new(Subscribers::new()),
             queries: Mutex::new(Queries::new()),
         }
+    }
+
+    /// Increment the frame number for the page. This should be called
+    /// internally whenever its contents have been updated.
+    async fn next_frame(&self) -> Id<Frame> {
+        let mut frame_id = self.frame_id.lock().await;
+        *frame_id = Id::new(Frame::new());
+        *frame_id
+    }
+
+    /// Get the current frame number for this page.
+    async fn current_frame(&self) -> Id<Frame> {
+        *self.frame_id.lock().await
     }
 
     /// Render a whole page as HTML (for first page load).
@@ -84,6 +100,7 @@ impl Page {
         match &*self.content.lock().await {
             Content::Dynamic{title, body, ..} => {
                 let debug = cfg!(debug_assertions).to_string();
+                let frame_id = format!("\"{}\"", self.current_frame().await);
                 let subscription = {
                     let subscribers = self.subscribers.lock().await;
                     let aggregate_subscription = subscribers.total_subscription();
@@ -99,6 +116,7 @@ impl Page {
                        include_str!("page/dynamic.html"),
                        debug = debug,
                        title = title,
+                       frame_id = frame_id,
                        subscription = subscription,
                        body = body)
                     .expect("Internal error: write!() failed on a Vec<u8>");
@@ -112,15 +130,16 @@ impl Page {
 
     /// Subscribe another page event listener to this page, given a subscription
     /// specification for what events to listen to.
-    pub async fn event_stream(&self, subscription: Subscription) -> (Uuid, Body) {
+    pub async fn event_stream(&self, subscription: Subscription) -> (Id<Global>, Body) {
         let mut subscribers = self.subscribers.lock().await;
         let (uuid, total_subscription, event_stream) =
-            subscribers.add_subscriber(subscription).await;
+            subscribers.add_persistent_subscriber(subscription).await;
         let content = &mut *self.content.lock().await;
         match content {
             Content::Static{..} => { },
             Content::Dynamic{ref mut updates, ..} => {
-                set_subscriptions(updates, total_subscription).await;
+                let frame_id = self.current_frame().await;
+                set_subscriptions(updates, frame_id, total_subscription).await;
             }
         }
         (uuid, event_stream)
@@ -129,15 +148,16 @@ impl Page {
     /// Send an event to all subscribers. This should only be called with events
     /// that have come from the corresponding page itself, or confusion will
     /// result!
-    pub async fn send_event(&self, event: &str, targets: &Value, data: &Value) {
+    pub async fn send_event(&self, frame_id: Id<Frame>, event: Event) {
         if let Some(total_subscription) =
             self.subscribers.lock().await
-            .send_event(event, targets, data).await {
+            .send_event(frame_id, event).await {
                 let content = &mut *self.content.lock().await;
                 match content {
                     Content::Static{..} => { },
                     Content::Dynamic{ref mut updates, ..} => {
-                        set_subscriptions(updates, total_subscription).await;
+                        let frame_id = self.current_frame().await;
+                        set_subscriptions(updates, frame_id, total_subscription).await;
                     }
                 }
             }
@@ -164,7 +184,7 @@ impl Page {
         match *self.content.lock().await {
             Content::Dynamic{ref mut updates, ..} => {
                 let (id, result) = self.queries.lock().await.request();
-                let id_string = id.to_simple_ref().to_string();
+                let id_string = format!("{}", id);
                 let event = EventBuilder::new(expression)
                     .event_type(if statement_mode { "run" } else { "evaluate" })
                     .id(&id_string);
@@ -212,7 +232,7 @@ impl Page {
     /// Notify waiting clients of the result to some in-page JavaScript
     /// evaluation they have requested, either with an error or a valid
     /// response.
-    pub async fn send_evaluate_result(&self, id: Uuid, result: Result<Value, String>) {
+    pub async fn send_evaluate_result(&self, id: Id<Global>, result: Result<Value, String>) {
         self.queries.lock().await.respond(id, result).unwrap_or(())
     }
 
@@ -233,7 +253,8 @@ impl Page {
     /// is static, this has no effect and returns None. Otherwise, returns the
     /// Body stream to give to the new client.
     pub async fn update_stream(&self) -> Option<Body> {
-        self.content.lock().await.update_stream().await
+        let mut content = self.content.lock().await;
+        content.update_stream().await
     }
 
     /// Set the contents of the page to be a static raw set of bytes with no
@@ -243,7 +264,9 @@ impl Page {
     pub async fn set_static(&self,
                             content_type: Option<String>,
                             raw_contents: Bytes) {
-        self.content.lock().await.set_static(content_type, raw_contents).await
+        let mut content = self.content.lock().await;
+        self.next_frame().await;
+        content.set_static(content_type, raw_contents).await
     }
 
     /// Get the content type of a page, or return `None` if none has been set
@@ -257,26 +280,30 @@ impl Page {
     /// page into a dynamic page, overwriting any static content that previously
     /// existed, if any.
     pub async fn set_title(&self, new_title: impl Into<String>) {
-        self.content.lock().await.set_title(new_title).await
+        let mut content = self.content.lock().await;
+        content.set_title(self.next_frame().await, new_title).await
     }
 
     /// Tell all clients to change the body, if necessary. This converts the
     /// page into a dynamic page, overwriting any static content that previously
     /// existed, if any.
     pub async fn set_body(&self, new_body: impl Into<String>) {
-        self.content.lock().await.set_body(new_body).await
+        let mut content = self.content.lock().await;
+        content.set_body(self.next_frame().await, new_body).await
     }
 
     /// Change a particular existing subscription stream's subscription,
     /// updating the aggregate subscription in the browser if necessary. Returns
     /// `Err(())` if the id given does not correspond to an extant stream.
-    pub async fn change_subscription(&self, id: Uuid, subscription: Subscription) -> Result<(), ()> {
+    pub async fn change_subscription(&self, id: Id<Global>, subscription: Subscription) -> Result<(), ()> {
         match self.subscribers.lock().await.change_subscription(id, subscription) {
             Ok(Some(new_aggregate)) => {
                 match &mut *self.content.lock().await {
                     Content::Static{..} => { },
-                    Content::Dynamic{ref mut updates, ..} =>
-                        set_subscriptions(updates, new_aggregate).await
+                    Content::Dynamic{ref mut updates, ..} => {
+                        let frame_id = self.current_frame().await;
+                        set_subscriptions(updates, frame_id, new_aggregate).await
+                    },
                 }
                 Ok(())
             },
@@ -291,14 +318,15 @@ impl Page {
         let subscribers = &mut *self.subscribers.lock().await;
         *subscribers = Subscribers::new();
         let content = &mut *self.content.lock().await;
+        let frame_id = self.next_frame().await;
         match content {
             Content::Static{..} => { },
             Content::Dynamic{ref mut updates, ..} => {
-                set_subscriptions(updates, AggregateSubscription::empty()).await;
+                set_subscriptions(updates, frame_id, AggregateSubscription::empty()).await;
             }
         }
-        content.set_title("").await;
-        content.set_body("").await;
+        content.set_title(frame_id, "").await;
+        content.set_body(frame_id, "").await;
     }
 }
 
@@ -309,11 +337,15 @@ impl Page {
 /// of messages if you arbitrarily set the subscriptions of a page outside
 /// of these contexts.
 async fn set_subscriptions<'a>(server: &'a mut sse::BufferedServer,
+                               frame_id: Id<Frame>,
                                subscription: AggregateSubscription<'a>) {
     let data = serde_json::to_string(&subscription)
         .expect("Serializing subscriptions to JSON shouldn't fail");
-    let event = EventBuilder::new(&data).event_type("subscribe");
+    let event = EventBuilder::new(&data)
+        .event_type("subscribe")
+        .id(&frame_id.to_string())
+        .build();
     // We're not using the future returned here because we don't care what the
     // number of client connections is, so we don't need to wait to find out
-    let _unused_response = server.send_to_clients(event.build()).await;
+    let _unused_response = server.send_to_clients(event).await;
 }

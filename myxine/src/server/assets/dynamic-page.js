@@ -1,4 +1,7 @@
-export function activate(initialSubscription, debugMode) {
+export function activate(initialFrameId, initialSubscription, debugMode) {
+
+    // Print debug info if in debug build mode
+    const debug = debugMode ? console.log : (() => {});
 
     // The initial set of listeners is empty
     let listeners = {};
@@ -9,12 +12,9 @@ export function activate(initialSubscription, debugMode) {
     // The global list of all events and their properties
     let allEventDescriptions;
 
-    // Print debug info if in debug build mode
-    function debug(string) {
-        if (debugMode) {
-            console.log(string);
-        }
-    }
+    // The current frame ID, to be updated each time an event comes in
+    let currentFrameId = initialFrameId;
+    debug("Initial frame id:", currentFrameId);
 
     // NOTE: Why do we use separate workers for events and query results, but
     // only one worker for all events? Well, it matters that events arrive in
@@ -26,14 +26,15 @@ export function activate(initialSubscription, debugMode) {
     // Actually send an event back to the server
     let sendEventWorker = new Worker('/.myxine/assets/post.js');
 
-    function sendEvent(type, path, properties) {
-        let url = window.location.href + '?event';
+    function sendEvent(frameId, type, path, properties) {
+        let url = window.location.href
+            + '?event&frame=' + encodeURIComponent(frameId);
         let data = JSON.stringify({
             event: type,
-            id: path,
-            data: properties,
+            targets: path,
+            properties: properties,
         });
-        debug("Sending event: " + data);
+        debug("Sending event:", data);
         sendEventWorker.postMessage({
             url: url,
             contentType: "application/json",
@@ -78,31 +79,43 @@ export function activate(initialSubscription, debugMode) {
 
     // These are the handlers for SSE events...
     function resubscribe(event) {
-        debug("Received new subscription: " + event.data);
+        debug("Received new subscription:", event.data);
         const subscription = JSON.parse(event.data);
         Object.entries(listeners).forEach(([eventName, listener]) => {
-            debug("Removing listener: " + eventName);
+            debug("Removing listener:", eventName);
             window.removeEventListener(eventName, listener);
         });
         listeners = {};
         setupListeners(subscription);
     }
 
-    // New body
-    function setBody(event) { setBodyTo(event.data); }
+    // Wrap an event handler so that it sets the current frame ID when it fires
+    function settingFrameId(f) {
+        return function(event) {
+            if (typeof event.lastEventId !== 'undefined'
+                && event.lastEventId !== '') {
+                currentFrameId = event.lastEventId;
+            } else {
+                debug("Couldn't set current frame id during:", f);
+            }
+            return f(event);
+        };
+    }
 
-    // New empty body
-    function clearBody(event) { setBodyTo(""); }
-
-    // New title
-    function setTitle(event) { document.title = event.data; }
-
-    // New empty title
-    function clearTitle(event) { document.title = ""; }
+    // Changing the DOM contents
+    function setBody(event)    { setBodyTo(event.data);       }
+    function clearBody(event)  { setBodyTo("");               }
+    function setTitle(event)   { document.title = event.data; }
+    function clearTitle(event) { document.title = "";         }
 
     // Reload the *whole* page from the server
     // Called when transitioning to static page, among other situations
-    function refresh(event) { window.location.reload(); }
+    function refresh(event) {
+        window.location.reload();
+    }
+
+    // The evaluate-* type events should **NOT** set the current frame ID
+    // This is because they are "global" and not frame-bound
 
     // Evaluate a JavaScript expression in the global environment
     function evaluate(expression, statementMode) {
@@ -124,10 +137,10 @@ export function activate(initialSubscription, debugMode) {
             if (typeof result === 'undefined') {
                 result = null;
             }
-            debug("Sending back result response (id " + event.lastEventId + "): " + result);
+            debug("Sending back result response (id " + event.lastEventId + "):", result);
             sendEvalResult(event.lastEventId, result);
         } catch(err) {
-            debug("Sending back error response: (id " + event.lastEventId + ")" + err);
+            debug("Sending back error response: (id " + event.lastEventId + ")", err);
             sendEvalError(event.lastEventId, err);
         }
     }
@@ -208,18 +221,15 @@ export function activate(initialSubscription, debugMode) {
                         .forEach(([property, formatter]) => {
                             data[property] = formatter(event[property]);
                         });
-                    // Send the event back to the server
-                    // TODO: implement batching
-                    sendEvent(eventName, path, data);
+                    sendEvent(currentFrameId, eventName, path, data);
                 };
-                debug("Adding listener: " + eventName);
+                debug("Adding listener:", eventName);
                 window.addEventListener(eventName, listener);
                 listeners[eventName] = listener;
             } else {
-                debug("Invalid event name: " + eventName);
+                debug("Invalid event name:", eventName);
             }
         });
-
     }
 
     // Fetch the description of the events we wish to support
@@ -245,10 +255,10 @@ export function activate(initialSubscription, debugMode) {
             sse = new EventSource(window.location.href + "?updates");
         }, 500); // half a second between retries
     };
-    sse.addEventListener("body", setBody);
-    sse.addEventListener("clear-body", clearBody);
-    sse.addEventListener("title", setTitle);
-    sse.addEventListener("clear-title", clearTitle);
+    sse.addEventListener("body", settingFrameId(setBody));
+    sse.addEventListener("clear-body", settingFrameId(clearBody));
+    sse.addEventListener("title", settingFrameId(setTitle));
+    sse.addEventListener("clear-title", settingFrameId(clearTitle));
     sse.addEventListener("refresh", refresh);
     sse.addEventListener("subscribe", resubscribe);
     sse.addEventListener("evaluate", event => evaluateAndRespond(false, event));

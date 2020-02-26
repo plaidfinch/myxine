@@ -3,6 +3,7 @@ use hyper::body::Bytes;
 use hyper_usse::EventBuilder;
 use std::mem;
 
+use super::id::{Id, Frame};
 use super::sse;
 
 /// The `Content` of a page is either `Dynamic` or `Static`. If it's dynamic, it
@@ -140,7 +141,7 @@ impl Content {
     /// Tell all clients to change the title, if necessary. This converts the
     /// page into a dynamic page, overwriting any static content that previously
     /// existed, if any.
-    pub async fn set_title(&mut self, new_title: impl Into<String>) {
+    pub async fn set_title(&mut self, frame_id: Id<Frame>, new_title: impl Into<String>) {
         loop {
             match self {
                 Content::Dynamic{ref mut title, ref mut updates, ..} => {
@@ -151,10 +152,10 @@ impl Content {
                             EventBuilder::new(title).event_type("title")
                         } else {
                             EventBuilder::new(".").event_type("clear-title")
-                        };
+                        }.id(&frame_id.to_string()).build();
                         // We're ignoring this future because we don't care how
                         // many clients there are
-                        let _unused = updates.send_to_clients(event.build()).await;
+                        let _unused = updates.send_to_clients(event).await;
                     }
                     break; // title has been set
                 },
@@ -169,7 +170,7 @@ impl Content {
     /// Tell all clients to change the body, if necessary. This converts the
     /// page into a dynamic page, overwriting any static content that previously
     /// existed, if any.
-    pub async fn set_body(&mut self, new_body: impl Into<String>) {
+    pub async fn set_body(&mut self, frame_id: Id<Frame>, new_body: impl Into<String>) {
         loop {
             match self {
                 Content::Dynamic{ref mut body, ref mut updates, ..} => {
@@ -180,10 +181,10 @@ impl Content {
                             EventBuilder::new(body).event_type("body")
                         } else {
                             EventBuilder::new(".").event_type("clear-body")
-                        };
+                        }.id(&frame_id.to_string()).build();
                         // We're ignoring this future because we don't care how
                         // many clients of the page there are
-                        let _unused = updates.send_to_clients(event.build()).await;
+                        let _unused = updates.send_to_clients(event).await;
                     }
                     break; // body has been set
                 },

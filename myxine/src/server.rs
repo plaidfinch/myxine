@@ -17,7 +17,7 @@ use void::Void;
 mod params;
 mod heartbeat;
 
-use crate::page::{Page, Event};
+use crate::page::Page;
 use params::{GetParams, PostParams};
 
 lazy_static! {
@@ -300,10 +300,10 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                     }
                 },
                 // Browser wants to notify client of an event
-                Some(PostParams::PageEvent) => {
+                Some(PostParams::PageEvent{id: page_id}) => {
                     match serde_json::from_slice(body::to_bytes(body).await?.as_ref()) {
-                        Ok(Event{event, id, data}) => {
-                            page.send_event(&event, &id, &data).await;
+                        Ok(event) => {
+                            page.send_event(page_id, event).await;
                             Response::new(Body::empty())
                         },
                         Err(err) => {
