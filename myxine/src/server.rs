@@ -17,7 +17,7 @@ use void::Void;
 mod params;
 mod heartbeat;
 
-use crate::page::{Page, subscription::Event};
+use crate::page::{Page, Event};
 use params::{GetParams, PostParams};
 
 lazy_static! {
@@ -334,7 +334,10 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                     };
                     match result {
                         Err(err) => {
-                            response_with_status(StatusCode::BAD_REQUEST, err)
+                            response_with_status(
+                                StatusCode::BAD_REQUEST,
+                                format!("JavaScript evaluation error: {}", err)
+                            )
                         },
                         Ok(value) => {
                             Response::new(Body::from(

@@ -3,7 +3,7 @@ use std::time::Duration;
 use percent_encoding::percent_decode;
 use std::borrow::Cow;
 use uuid::Uuid;
-use crate::page::subscription::Subscription;
+use crate::page::Subscription;
 
 /// Parsed parameters from a query string for a GET/HEAD request.
 pub(crate) enum GetParams {

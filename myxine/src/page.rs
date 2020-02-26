@@ -6,15 +6,17 @@ use tokio::sync::Mutex;
 use futures::join;
 use serde_json::Value;
 use uuid::Uuid;
+use std::fmt::{Display, self};
 use futures::{select, pin_mut, FutureExt};
 
-pub mod sse;
-pub mod subscription;
-pub mod query;
+mod subscription;
+mod query;
 mod content;
+mod sse;
 
-use subscription::{Subscribers, Subscription, AggregateSubscription};
-use query::{Queries};
+pub use subscription::{Subscription, AggregateSubscription, Event};
+use subscription::Subscribers;
+use query::Queries;
 use content::Content;
 
 /// A `Page` pairs some page `Content` (either dynamic or static) with a set of
@@ -26,12 +28,46 @@ pub struct Page {
     queries: Mutex<Queries<Result<Value, String>>>,
 }
 
+/// The possible errors that can occur while evaluating JavaScript in the
+/// context of a page.
+#[derive(Debug, Clone)]
+pub enum EvalError {
+    /// There was no browser viewing the page, so could not run JavaScript.
+    NoBrowser,
+    /// The page was static, so could not run JavaScript.
+    StaticPage,
+    /// An internal error caused the page handle to be dropped.
+    NoResponsePossible,
+    /// The page took too long to respond.
+    Timeout { duration: Duration, was_custom: bool },
+    /// The code threw some kind of exception in JavaScript.
+    JsError(String),
+}
+
+impl Display for EvalError {
+    fn fmt(&self, w: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        use EvalError::*;
+        match self {
+            NoBrowser => write!(w, "No browser is currently viewing the page"),
+            StaticPage => write!(w, "The page is static, which means it cannot run scripts"),
+            NoResponsePossible => write!(w, "Internal error: page handle dropped"),
+            Timeout{duration, was_custom} =>
+                if *was_custom {
+                    write!(w, "Exceeded custom timeout of {}ms", duration.as_millis())
+                } else {
+                    write!(w, "Exceeded default timeout of {}ms", duration.as_millis())
+                },
+            JsError(err) => write!(w, "Exception: {}", err)
+        }
+    }
+}
+
 /// The size of the dynamic page template in bytes
 const TEMPLATE_SIZE: usize = include_str!("page/dynamic.html").len();
 
 /// The default timeout for evaluating JavaScript expressions in the page,
 /// measured in milliseconds
-const DEFAULT_EVAL_TIMEOUT_MILLIS: Duration = Duration::from_millis(1000);
+const DEFAULT_EVAL_TIMEOUT: Duration = Duration::from_millis(1000);
 
 impl Page {
     /// Make a new empty (dynamic) page
@@ -135,13 +171,13 @@ impl Page {
 
     /// Tell the page to evaluate a given piece of JavaScript, as either an
     /// expression or a statement, with an optional explicit timeout (defaults
-    /// to the long-ish hardcoded timeout `DEFAULT_EVAL_TIMEOUT_MILLIS`).
+    /// to the long-ish hardcoded timeout `DEFAULT_EVAL_TIMEOUT`).
     pub async fn evaluate(
         &self,
         expression: &str,
         statement_mode: bool,
         timeout: Option<Duration>,
-    ) -> Result<Value, String> {
+    ) -> Result<Value, EvalError> {
         match *self.content.lock().await {
             Content::Dynamic{ref mut updates, ..} => {
                 let (id, result) = self.queries.lock().await.request();
@@ -157,31 +193,21 @@ impl Page {
                     // If nobody's listening, give up now and report the issue
                     if client_count == 0 {
                         self.queries.lock().await.cancel(id);
-                        Err("Can't evaluate JavaScript when no browser is viewing the page.".to_string())
+                        Err(EvalError::NoBrowser)
                     } else {
                         // Timeout for evaluation request
                         let request_timeout = async move {
-                            let duration = timeout.unwrap_or(DEFAULT_EVAL_TIMEOUT_MILLIS);
+                            let duration = timeout.unwrap_or(DEFAULT_EVAL_TIMEOUT);
                             tokio::time::delay_for(duration).await;
                             self.queries.lock().await.cancel(id);
-                            Err(match timeout {
-                                None => format!(
-                                    "Request timeout: default timeout of {}ms exceeded: \
-                                     for more time, use a custom ?timeout query parameter.",
-                                    DEFAULT_EVAL_TIMEOUT_MILLIS.as_millis()
-                                ),
-                                Some(timeout) => format!(
-                                    "Request timeout: specified timeout of {}ms exceeded: \
-                                     for more time, increase the ?timeout query parameter.",
-                                    timeout.as_millis())
-                            })
+                            Err(EvalError::Timeout{duration, was_custom: timeout.is_some()})
                         }.fuse();
 
                         // Wait for the result
                         let wait_result = async {
                             match result.await {
-                                None => Err("No response from page (handle dropped).".to_string()),
-                                Some(result) => result,
+                                None => Err(EvalError::NoResponsePossible),
+                                Some(result) => result.map_err(EvalError::JsError),
                             }
                         }.fuse();
 
@@ -195,7 +221,7 @@ impl Page {
                 }
             },
             Content::Static{..} => {
-                return Err("Can't evaluate JavaScript within a static page.".to_string());
+                return Err(EvalError::StaticPage);
             },
         }.await
     }
