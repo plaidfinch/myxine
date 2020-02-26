@@ -129,10 +129,10 @@ impl Page {
     /// Send an event to all subscribers. This should only be called with events
     /// that have come from the corresponding page itself, or confusion will
     /// result!
-    pub async fn send_event(&self, event: &str, id: &Value, data: &Value) {
+    pub async fn send_event(&self, event: &str, targets: &Value, data: &Value) {
         if let Some(total_subscription) =
             self.subscribers.lock().await
-            .send_event(event, id, data).await {
+            .send_event(event, targets, data).await {
                 let content = &mut *self.content.lock().await;
                 match content {
                     Content::Static{..} => { },
@@ -148,25 +148,8 @@ impl Page {
     /// `None` if so, otherwise returns the current number of clients getting
     /// live updates to the page.
     pub async fn send_heartbeat(&self) -> Option<usize> {
-        let mut subscribers = self.subscribers.lock().await;
         let mut content = self.content.lock().await;
-        let subscriber_heartbeat = async {
-            subscribers.send_heartbeat().await
-        };
-        let content_heartbeat = async {
-            content.send_heartbeat().await
-        };
-        let (new_subscription, update_client_count) =
-            join!(subscriber_heartbeat, content_heartbeat);
-        if let Some(total_subscription) = new_subscription {
-            match *content {
-                Content::Dynamic{ref mut updates, ..} => {
-                    set_subscriptions(updates, total_subscription).await;
-                },
-                Content::Static{..} => { },
-            }
-        }
-        update_client_count
+        content.send_heartbeat().await
     }
 
     /// Tell the page to evaluate a given piece of JavaScript, as either an

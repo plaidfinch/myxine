@@ -150,16 +150,9 @@ impl Subscribers {
     /// list of subscribers has changed (that is, by client disconnection),
     /// returns the union of all now-current subscriptions.
     pub async fn send_event<'a>(
-        &'a mut self, event: &str, id: &Value, data: &Value
+        &'a mut self, event: &str, targets: &Value, data: &Value
     ) -> Option<AggregateSubscription<'a>>{
-        send_to_all(&mut self.sinks, Some((event, id, data))).await
-    }
-
-    /// Send a heartbeat message to all subscribers, returning a new
-    /// Subscription representing the union of all subscriptions, if there have
-    /// been any noticed changes, or `None` if every client is still connected.
-    pub async fn send_heartbeat(&mut self) -> Option<AggregateSubscription<'_>> {
-        send_to_all(&mut self.sinks, None).await
+        send_to_all(&mut self.sinks, event, targets, data).await
     }
 
     /// Change the subscription for a particular subscriber, identified by UUID.
@@ -205,14 +198,16 @@ impl Subscribers {
 /// remove all those sinks which have become disconnected.
 async fn send_to_all<'a>(
     sinks: &'a mut HashMap<Uuid, Sink>,
-    message: Option<(&str, &Value, &Value)>,
+    event: &str,
+    targets: &Value,
+    data: &Value,
 ) -> Option<AggregateSubscription<'a>> {
     // The collection of futures for sending the event:
     let send_futures = sinks.iter_mut().map(move |(sink_id, sink)| {
         // Make a future for sending the message to the subscriber
         async move {
             // Only send the event if the sink is subscribed to it
-            let remaining = if let Some((event, id, data)) = message {
+            let remaining =
                 // Message was a normal message
                 if sink.subscription.matches_event(event) {
                     // Serialize the fields to JSON
@@ -220,7 +215,7 @@ async fn send_to_all<'a>(
                         .expect("Serializing to a string shouldn't fail");
 
                     // Serialize the target path to JSON
-                    let id = serde_json::to_string(id)
+                    let id = serde_json::to_string(targets)
                         .expect("Serializing to a string shouldn't fail");
 
                     // Build a text/event-stream message to send to subscriber
@@ -228,11 +223,7 @@ async fn send_to_all<'a>(
                     Some(sink.server.send_to_clients(message).await.await)
                 } else {
                     None
-                }
-            } else {
-                // Message was a heartbeat
-                Some(sink.server.send_heartbeat().await.await)
-            };
+                };
             // Return the sink id to be pruned if it lost the client
             remaining.and_then(|r| {
                 assert!(r <= 1, "Subscriber SSE exceeds 1 client");
