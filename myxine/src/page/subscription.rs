@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
-use hyper_usse::EventBuilder;
 use serde::{Serialize, Deserialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 use hyper::Body;
 use futures::future;
 use uuid::Uuid;
@@ -198,7 +197,7 @@ async fn send_to_all<'a>(
     sinks: &'a mut HashMap<Uuid, Sink>,
     event: &str,
     targets: &Value,
-    data: &Value,
+    properties: &Value,
 ) -> Option<AggregateSubscription<'a>> {
     // The collection of futures for sending the event:
     let send_futures = sinks.iter_mut().map(move |(sink_id, sink)| {
@@ -209,16 +208,12 @@ async fn send_to_all<'a>(
                 // Message was a normal message
                 if sink.subscription.matches_event(event) {
                     // Serialize the fields to JSON
-                    let data = serde_json::to_string(data)
-                        .expect("Serializing to a string shouldn't fail");
-
-                    // Serialize the target path to JSON
-                    let id = serde_json::to_string(targets)
-                        .expect("Serializing to a string shouldn't fail");
-
-                    // Build a text/event-stream message to send to subscriber
-                    let message = EventBuilder::new(&data).id(&id).event_type(event).build();
-                    Some(sink.server.send_to_clients(message).await.await)
+                    let message = serde_json::to_string(&json!({
+                        "event": event,
+                        "properties": properties,
+                        "targets": targets,
+                    })).expect("Serializing to a string shouldn't fail");
+                    Some(sink.server.send_to_clients(message + "\n").await.await)
                 } else {
                     None
                 };

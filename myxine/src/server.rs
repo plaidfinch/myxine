@@ -180,7 +180,6 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                     let subscription_url =
                         format!("{}?subscription={}", path, uuid);
                     Response::builder()
-                        .header("Content-Type", "text/event-stream")
                         .header("Cache-Control", "no-cache")
                         .header("Access-Control-Allow-Origin", "*")
                         .header("Content-Location", subscription_url)
