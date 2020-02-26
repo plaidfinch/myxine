@@ -74,7 +74,6 @@ impl BufferedServer {
         commands.send(Command::DisconnectAll).await.unwrap_or(())
     }
 
-    #[allow(unused)]
     pub async fn connections(&self) -> usize {
         let (sender, receiver) = oneshot::channel();
         let mut commands = self.commands.lock().await.clone();

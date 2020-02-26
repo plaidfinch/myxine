@@ -74,7 +74,7 @@ async fn get_page(path: &str) -> Arc<Page> {
     // this path.
     match PAGES.lock().await.entry(path.to_string()) {
         Entry::Vacant(e) => {
-            let page = Arc::new(Page::new());
+            let page = Arc::new(Page::new().await);
             e.insert(page.clone());
             page
         },

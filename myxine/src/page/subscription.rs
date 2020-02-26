@@ -47,8 +47,6 @@ impl Subscription {
     }
 }
 
-/// An aggregated set of `Subscription`s, taking their contained strings by
-/// reference to avoid re-allocating every time we aggregate.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(untagged)]
 pub enum AggregateSubscription<'a> {
