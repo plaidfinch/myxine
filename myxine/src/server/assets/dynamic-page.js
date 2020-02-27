@@ -1,7 +1,7 @@
 export function activate(initialFrameId, initialSubscription, debugMode) {
 
     // Print debug info if in debug build mode
-    const debug = debugMode ? console.log : (() => {});
+    const debug = (debugMode ? console.log : function () { /* do nothing */ });
 
     // The initial set of listeners is empty
     let listeners = {};
@@ -26,26 +26,26 @@ export function activate(initialFrameId, initialSubscription, debugMode) {
     // matter.
 
     // Actually send an event back to the server
-    let sendEventWorker = new Worker('/.myxine/assets/post.js');
+    let sendEventWorker = new window.Worker("/.myxine/assets/post.js");
 
     function sendEvent(frameId, type, path, properties) {
         let url = window.location.href
-            + '?page-event&page-frame=' + encodeURIComponent(frameId);
+            + "?page-event&page-frame=" + encodeURIComponent(frameId);
         let data = JSON.stringify({
             event: type,
             targets: path,
-            properties: properties,
+            properties: properties
         });
         debug("Sending event:", data);
         sendEventWorker.postMessage({
             url: url,
             contentType: "application/json",
-            data: data,
+            data: data
         });
     }
 
     // Actually send a query result back to the server
-    let sendEvalResultWorker = new Worker('/.myxine/assets/post.js');
+    let sendEvalResultWorker = new window.Worker("/.myxine/assets/post.js");
 
     function sendEvalResult(id, result) {
         let url = window.location.href
@@ -75,7 +75,7 @@ export function activate(initialFrameId, initialSubscription, debugMode) {
         }
         // Redraw the body before the next repaint (but not right now yet)
         animationId = window.requestAnimationFrame(timestamp => {
-            diff.innerHTML(document.body, body);
+            window.diff.innerHTML(document.body, body);
             visibleFrameId = currentFrameId;
         });
     }
@@ -95,8 +95,8 @@ export function activate(initialFrameId, initialSubscription, debugMode) {
     // Wrap an event handler so that it sets the current frame ID when it fires
     function settingFrameId(f) {
         return function(event) {
-            if (typeof event.lastEventId !== 'undefined'
-                && event.lastEventId !== '') {
+            if (typeof event.lastEventId !== "undefined"
+                && event.lastEventId !== "") {
                 currentFrameId = event.lastEventId;
             } else {
                 debug("Couldn't set current frame id during:", f);
@@ -124,7 +124,7 @@ export function activate(initialFrameId, initialSubscription, debugMode) {
     function evaluate(expression, statementMode) {
         // TODO: LRU-limited memoization (using memoizee?)
         if (!statementMode) {
-            return Function('return (' + expression + ')')();
+            return Function("return (" + expression + ")")();
         } else {
             return Function(expression)();
         }
@@ -137,13 +137,17 @@ export function activate(initialFrameId, initialSubscription, debugMode) {
               + (statementMode ? " statement" : "n expression"));
         try {
             let result = evaluate(event.data, statementMode);
-            if (typeof result === 'undefined') {
+            if (typeof result === "undefined") {
                 result = null;
             }
-            debug("Sending back result response (id " + event.lastEventId + "):", result);
+            debug("Sending back result response (id "
+                  + event.lastEventId
+                  + "):", result);
             sendEvalResult(event.lastEventId, result);
         } catch(err) {
-            debug("Sending back error response: (id " + event.lastEventId + ")", err);
+            debug("Sending back error response (id "
+                  + event.lastEventId
+                  + "):", err);
             sendEvalError(event.lastEventId, err);
         }
     }
@@ -158,28 +162,33 @@ export function activate(initialFrameId, initialSubscription, debugMode) {
     // event name to mappings from property name -> formatter for that property
     function parseEventDescriptions(enabledEvents) {
         let events = {};
-        Object.entries(enabledEvents.events).forEach(([eventName, eventInfo]) => {
-            // Accumulate the desired fields for the event into a map from field
-            // name to formatter for the objects in that field
-            let interfaceName = eventInfo['interface']; // most specific interface
+        const allEvents = enabledEvents.events;
+        Object.entries(allEvents).forEach(([eventName, eventInfo]) => {
+            // Accumulate the desired fields for the event into a map from
+            // field name to formatter for the objects in that field
+            let interfaceName = eventInfo["interface"]; // most specific
             let theInterface = enabledEvents.interfaces[interfaceName];
             events[eventName] = {};
             while (true) {
                 const properties = Object.keys(theInterface.properties);
                 properties.forEach(property => {
                     let formatter = customJsonFormatters[property];
-                    if (typeof formatter === 'undefined') {
-                        formatter = (x => x); // Default formatter is identity
+                    if (typeof formatter === "undefined") {
+                        formatter = (x => x); // Default formatter is id
                     }
-                    if (typeof events[eventName][property] === 'undefined') {
+                    if (typeof events[eventName][property] === "undefined") {
                         events[eventName][property] = formatter;
                     } else {
-                        debug("Duplicate property in " + eventName + ": " + property);
+                        debug("Duplicate property in "
+                              + eventName
+                              + ": "
+                              + property);
                     }
                 });
                 if (theInterface.inherits !== null) {
                     // Check ancestors for more fields to add
-                    theInterface = enabledEvents.interfaces[theInterface.inherits];
+                    theInterface =
+                        enabledEvents.interfaces[theInterface.inherits];
                 } else {
                     break; // Top of interface hierarchy
                 }
@@ -198,7 +207,7 @@ export function activate(initialFrameId, initialSubscription, debugMode) {
         }
         // Set up event handlers
         subscription.forEach(eventName => {
-            if (typeof allEventDescriptions[eventName] !== 'undefined') {
+            if (typeof allEventDescriptions[eventName] !== "undefined") {
                 const listener = event => {
                     // Calculate the id path
                     const path =
@@ -209,7 +218,8 @@ export function activate(initialFrameId, initialSubscription, debugMode) {
                                 tagName: target.tagName.toLowerCase(),
                                 attributes: {},
                             };
-                            for (let i = target.attributes.length - 1; i >= 0; i--) {
+                            const numAttrs = target.attributes.length;
+                            for (let i = numAttrs - 1; i >= 0; i--) {
                                 const attribute = target.attributes[i];
                                 const name = attribute.name;
                                 const value = attribute.value;
@@ -244,18 +254,18 @@ export function activate(initialFrameId, initialSubscription, debugMode) {
         allEventDescriptions = parseEventDescriptions(enabledEvents);
         setupListeners(initialSubscription);
     };
-    r.open('GET', '/.myxine/assets/enabled-events.json');
+    r.open("GET", "/.myxine/assets/enabled-events.json");
     r.send();
 
     // Actually set up SSE...
-    let sse = new EventSource(window.location.href + "?updates");
+    let sse = new window.EventSource(window.location.href + "?updates");
     sse.onerror = () => {
         // When we disconnect from the server, stop trying to send it events
         // until we reconnect and receive a new subscription
         setupListeners([]);
         // Set up retry interval to attempt reconnection
         window.setTimeout(() => {
-            sse = new EventSource(window.location.href + "?updates");
+            sse = new window.EventSource(window.location.href + "?updates");
         }, 500); // half a second between retries
     };
     sse.addEventListener("body", settingFrameId(setBody));
