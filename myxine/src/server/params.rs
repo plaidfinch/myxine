@@ -135,7 +135,7 @@ fn param_as_strs<'a, 'b: 'a>(
     params: &'a HashMap<&'a str, Vec<Cow<'a, str>>>
 ) -> Option<impl Iterator<Item = &'a str>> {
     match params.get(param) {
-        Some(strings) => Some(strings.into_iter().map(|string| string.as_ref())),
+        Some(strings) => Some(strings.iter().map(|string| string.as_ref())),
         None => None,
     }
 }

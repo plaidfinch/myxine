@@ -13,11 +13,11 @@ impl<E: Epoch> Id<E> {
 
     pub fn parse_str(input: &str) -> Option<Id<E>> {
         match input.splitn(2, '-').collect::<Vec<_>>().as_slice() {
-            &[epoch_part, uuid_part] => {
+            [epoch_part, uuid_part] => {
                 let uuid = Uuid::parse_str(uuid_part).ok()?;
                 Some(Id(Epoch::parse_epoch(epoch_part)?, uuid))
             },
-            &[uuid_part] => {
+            [uuid_part] => {
                 let uuid = Uuid::parse_str(uuid_part).ok()?;
                 Some(Id(Epoch::parse_epoch("")?, uuid))
             }

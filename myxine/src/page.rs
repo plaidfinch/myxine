@@ -159,6 +159,8 @@ impl Page {
     pub async fn send_heartbeat(&self) -> Option<usize> {
         let mut content = self.content.lock().await;
         content.send_heartbeat().await
+        // TODO: Send heartbeat to subscribers also? What heartbeat format to
+        // use, given that it's not text/event-stream anymore?
     }
 
     /// Tell the page to evaluate a given piece of JavaScript, as either an

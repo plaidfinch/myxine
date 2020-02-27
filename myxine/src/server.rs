@@ -203,7 +203,7 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                         // 301 redirects can be cached, but nothing else can
                         builder = builder.header("Cache-Control", "no-cache");
                     }
-                    let body = page.render().await.into();
+                    let body = page.render().await;
                     builder.body(body).unwrap()
                 },
                 None => {
