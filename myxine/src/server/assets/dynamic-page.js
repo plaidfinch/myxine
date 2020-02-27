@@ -12,8 +12,10 @@ export function activate(initialFrameId, initialSubscription, debugMode) {
     // The global list of all events and their properties
     let allEventDescriptions;
 
-    // The current frame ID, to be updated each time an event comes in
+    // The current frame ID, to be updated each time an update event comes in
     let currentFrameId = initialFrameId;
+    // The *visible* frame ID, which is updated only after each body redraw
+    let visibleFrameId = initialFrameId;
     debug("Initial frame id:", currentFrameId);
 
     // NOTE: Why do we use separate workers for events and query results, but
@@ -74,6 +76,7 @@ export function activate(initialFrameId, initialSubscription, debugMode) {
         // Redraw the body before the next repaint (but not right now yet)
         animationId = window.requestAnimationFrame(timestamp => {
             diff.innerHTML(document.body, body);
+            visibleFrameId = currentFrameId;
         });
     }
 
@@ -221,7 +224,7 @@ export function activate(initialFrameId, initialSubscription, debugMode) {
                         .forEach(([property, formatter]) => {
                             data[property] = formatter(event[property]);
                         });
-                    sendEvent(currentFrameId, eventName, path, data);
+                    sendEvent(visibleFrameId, eventName, path, data);
                 };
                 debug("Adding listener:", eventName);
                 window.addEventListener(eventName, listener);
