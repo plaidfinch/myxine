@@ -264,7 +264,7 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                     }
                 },
                 // Client wants to publish some HTML to a dynamic page:
-                Some(PostParams::DynamicPage{title}) => {
+                Some(PostParams::DynamicPage{title, subscription}) => {
                     if writeable_path {
                         let body_bytes = body::to_bytes(body).await?.as_ref().into();
                         match String::from_utf8(body_bytes) {
@@ -272,9 +272,9 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                                 if cfg!(debug_assertions) {
                                     eprintln!("\n{}", body);
                                 }
-                                page.set_title(title).await;
-                                page.set_body(body).await;
-                                Response::new(Body::empty())
+                                let event_stream =
+                                    page.set_content(title, body, subscription).await;
+                                Response::new(event_stream)
                             },
                             Err(_) => response_with_status(
                                 StatusCode::BAD_REQUEST,
@@ -389,9 +389,7 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
             if query != "" {
                 return Ok(response_with_status(StatusCode::BAD_REQUEST, "Invalid query string in DELETE."));
             }
-            page.set_title("").await;
-            page.set_body("").await;
-            Response::new(Body::empty())
+            Response::new(page.set_content("", "", None).await)
         },
 
         _ => Response::builder()

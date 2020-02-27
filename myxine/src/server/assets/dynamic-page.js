@@ -28,7 +28,7 @@ export function activate(initialFrameId, initialSubscription, debugMode) {
 
     function sendEvent(frameId, type, path, properties) {
         let url = window.location.href
-            + '?event&frame=' + encodeURIComponent(frameId);
+            + '?page-event&page-frame=' + encodeURIComponent(frameId);
         let data = JSON.stringify({
             event: type,
             targets: path,
@@ -47,7 +47,7 @@ export function activate(initialFrameId, initialSubscription, debugMode) {
 
     function sendEvalResult(id, result) {
         let url = window.location.href
-            + "?result="  + encodeURIComponent(id);
+            + "?page-result="  + encodeURIComponent(id);
         sendEvalResultWorker.postMessage({
             url: url,
             contentType: "application/json",
@@ -57,7 +57,7 @@ export function activate(initialFrameId, initialSubscription, debugMode) {
 
     function sendEvalError(id, error) {
         let url = window.location.href
-            + "?error="  + encodeURIComponent(id);
+            + "?page-error="  + encodeURIComponent(id);
         sendEvalResultWorker.postMessage({
             url: url,
             contentType: "text/plain",

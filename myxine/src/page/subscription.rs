@@ -130,24 +130,51 @@ impl Subscribers {
         self.sinks.is_empty()
     }
 
-    /// Add a new subscription to this set of subscribers, returning a streaming
-    /// body to be sent to the subscribing client.
-    pub async fn add_persistent_subscriber(
-        &mut self,
-        subscription: Subscription,
-    ) -> (Id<Global>, AggregateSubscription<'_>, Body) {
+    /// Internal helper function to add a subscriber with a given SinkId (which
+    /// should be generated elsewhere and returned from the public interface).
+    async fn add_subscriber_with_id(
+        &mut self, id: SinkId, subscription: Subscription
+    ) -> (AggregateSubscription<'_>, Body) {
         // Create a new single-client SSE server (new clients will never be added
         // after this, because each event subscription is potentially unique).
         let server = sse::BufferedServer::new(EVENT_BUFFER_SIZE).await;
         let (sender, body) = Body::channel();
         server.add_client(sender).await;
 
-        let id = Id::new(Global);
-        self.sinks.insert(SinkId::Persistent(id), Sink{server, subscription});
+        // Insert the server into the sinks map
+        self.sinks.insert(id, Sink{server, subscription});
 
         // Return the body, for sending to whoever subscribed
-        let subscriptions = self.sinks.values().map(|Sink{subscription, ..}| subscription);
-        (id, AggregateSubscription::aggregate(subscriptions), body)
+        let subscriptions =
+            self.sinks.values().map(|Sink{subscription, ..}| subscription);
+        (AggregateSubscription::aggregate(subscriptions), body)
+    }
+
+    /// Add a new *persistent* subscription to this set of subscribers,
+    /// returning a streaming body to be sent to the subscribing client. The
+    /// returned `Body` will not terminate until the consumer disconnects or the
+    /// server exits.
+    pub async fn add_persistent_subscriber(
+        &mut self,
+        subscription: Subscription,
+    ) -> (Id<Global>, AggregateSubscription<'_>, Body) {
+        let id = Id::new(Global);
+        let (aggregate, body) =
+            self.add_subscriber_with_id(SinkId::Persistent(id), subscription).await;
+        (id, aggregate, body)
+    }
+
+    /// Add a new *transient* subscription to this set of subscribers, returning
+    /// a streaming body to be sent to the subscribing client. The returned
+    /// `Body` will terminate as soon as an event from any future `Frame` is
+    /// sent from the browser, since this indicates that no events from this
+    /// `Frame` could happen again.
+    pub async fn add_transient_subscriber(
+        &mut self,
+        frame_id: Id<Frame>,
+        subscription: Subscription,
+    ) -> (AggregateSubscription<'_>, Body) {
+        self.add_subscriber_with_id(SinkId::Transient(frame_id), subscription).await
     }
 
     /// Send an event to all subscribers to that event, giving each subscriber
@@ -218,7 +245,7 @@ async fn send_to_all<'a>(
             let frame_ordering = match sink_id {
                 SinkId::Persistent(_) => Ordering::Equal,
                 SinkId::Transient(sink_frame_id) =>
-                    event_frame_id.partial_cmp(sink_frame_id)
+                    sink_frame_id.partial_cmp(event_frame_id)
                     .unwrap_or(Ordering::Equal)
             };
             match frame_ordering {

@@ -47,7 +47,7 @@ fn parse_subscription<'a>(params: &'a HashMap<&'a str, Vec<Cow<'a, str>>>) -> Su
 
 /// Parsed parameters from a query string for a POST request.
 pub(crate) enum PostParams {
-    DynamicPage{title: String},
+    DynamicPage{title: String, subscription: Option<Subscription>},
     StaticPage,
     Evaluate{expression: Option<String>, timeout: Option<Duration>},
     ChangeSubscription{id: Id<Global>, subscription: Subscription},
@@ -61,11 +61,15 @@ impl PostParams {
     /// Parse a query string from a POST request.
     pub fn parse(query: &str) -> Option<PostParams> {
         let params = query_params(query)?;
-        if constrained_to_keys(&params, &[]) {
-            return Some(PostParams::DynamicPage{title: "".to_string()})
-        } else if constrained_to_keys(&params, &["title"]) {
-            let title = param_as_str("title", &params)?.to_string();
-            return Some(PostParams::DynamicPage{title})
+        if constrained_to_keys(&params, &["title", "event", "events"]) {
+            let title = param_as_str("title", &params).unwrap_or("").to_string();
+            let subscription =
+                if params.contains_key("event") || params.contains_key("events") {
+                    Some(parse_subscription(&params))
+                } else {
+                    None
+                };
+            return Some(PostParams::DynamicPage{title, subscription})
         } else if constrained_to_keys(&params, &["static"]) {
             if param_as_bool("static", &params)? {
                 return Some(PostParams::StaticPage)
@@ -73,15 +77,15 @@ impl PostParams {
         } else if let Some(id) = param_as_str("subscription", &params).and_then(|s| Id::parse_str(s)) {
             let subscription = parse_subscription(&params);
             return Some(PostParams::ChangeSubscription{id, subscription})
-        } else if constrained_to_keys(&params, &["result"]) {
-            let id = Id::parse_str(param_as_str("result", &params)?)?;
+        } else if constrained_to_keys(&params, &["page-result"]) {
+            let id = Id::parse_str(param_as_str("page-result", &params)?)?;
             return Some(PostParams::EvalResult{id})
-        } else if constrained_to_keys(&params, &["error"]) {
-            let id = Id::parse_str(param_as_str("error", &params)?)?;
+        } else if constrained_to_keys(&params, &["page-error"]) {
+            let id = Id::parse_str(param_as_str("page-error", &params)?)?;
             return Some(PostParams::EvalError{id})
-        } else if constrained_to_keys(&params, &["event", "frame"]) {
-            if param_as_bool("event", &params)? {
-                let id = Id::parse_str(param_as_str("frame", &params)?)?;
+        } else if constrained_to_keys(&params, &["page-event", "page-frame"]) {
+            if param_as_bool("page-event", &params)? {
+                let id = Id::parse_str(param_as_str("page-frame", &params)?)?;
                 return Some(PostParams::PageEvent{id})
             }
         } else if constrained_to_keys(&params, &["evaluate", "timeout"]) {

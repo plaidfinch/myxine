@@ -4,7 +4,7 @@ use hyper_usse::EventBuilder;
 use std::mem;
 
 use super::id::{Id, Frame};
-use super::sse;
+use super::{sse, subscription::AggregateSubscription};
 
 /// The `Content` of a page is either `Dynamic` or `Static`. If it's dynamic, it
 /// has a title, body, and a set of SSE event listeners who are waiting for
@@ -15,7 +15,7 @@ use super::sse;
 /// direction, it requires a manual refresh (because a static page has no
 /// injected javascript to make it update itself).
 #[derive(Debug)]
-pub enum Content {
+pub(in super) enum Content {
     Dynamic {
         title: String,
         body: String,
@@ -40,7 +40,7 @@ const UPDATE_BUFFER_SIZE: usize = 1;
 
 impl Content {
     /// Make a new empty (dynamic) page
-    pub async fn new() -> Content {
+    pub(in super) async fn new() -> Content {
         Content::Dynamic {
             title: String::new(),
             body: String::new(),
@@ -51,7 +51,7 @@ impl Content {
     /// Test if this page is empty, where "empty" means that it is dynamic, with
     /// an empty title, empty body, and no subscribers waiting on its page
     /// events: that is, it's identical to `Content::new()`.
-    pub async fn is_empty(&mut self) -> bool {
+    pub(in super) async fn is_empty(&mut self) -> bool {
         match self {
             Content::Dynamic{title, body, ref mut updates}
             if title == "" && body == "" => updates.connections().await == 0,
@@ -62,7 +62,7 @@ impl Content {
     /// Add a client to the dynamic content of a page, if it is dynamic. If it
     /// is static, this has no effect and returns None. Otherwise, returns the
     /// Body stream to give to the new client.
-    pub async fn update_stream(&mut self) -> Option<Body> {
+    pub(in super) async fn update_stream(&mut self) -> Option<Body> {
         match self {
             Content::Dynamic{updates, title, body} => {
                 let (channel, stream_body) = Body::channel();
@@ -91,7 +91,7 @@ impl Content {
     /// dynamic. This has no effect if it is (currently) static, and returns
     /// `None` if so, otherwise returns the current number of clients getting
     /// live updates to the page.
-    pub async fn send_heartbeat(&mut self) -> Option<usize> {
+    pub(in super) async fn send_heartbeat(&mut self) -> Option<usize> {
         match self {
             Content::Dynamic{updates, ..} => {
                 // Send a heartbeat to pages waiting on <body> updates
@@ -103,7 +103,7 @@ impl Content {
 
     /// Tell all clients to refresh the contents of a page, if it is dynamic.
     /// This has no effect if it is (currently) static.
-    pub async fn refresh(&mut self) {
+    pub(in super) async fn refresh(&mut self) {
         match self {
             Content::Dynamic{updates, ..} => {
                 let event = EventBuilder::new(".").event_type("refresh").build();
@@ -119,7 +119,7 @@ impl Content {
     /// self-refreshing functionality. All clients will be told to refresh their
     /// page to load the new static content (which will not be able to update
     /// itself until a client refreshes their page again).
-    pub async fn set_static(&mut self,
+    pub(in super) async fn set_static(&mut self,
                             content_type: Option<String>,
                             raw_contents: Bytes) {
         let mut page =
@@ -131,7 +131,7 @@ impl Content {
     /// Get the content type of a page, or return `None` if none has been set
     /// (as in the case of a dynamic page, where the content type is not
     /// client-configurable).
-    pub fn content_type(&self) -> Option<String> {
+    pub(in super) fn content_type(&self) -> Option<String> {
         match self {
             Content::Dynamic{..} => None,
             Content::Static{content_type, ..} => content_type.clone(),
@@ -140,8 +140,12 @@ impl Content {
 
     /// Tell all clients to change the title, if necessary. This converts the
     /// page into a dynamic page, overwriting any static content that previously
-    /// existed, if any.
-    pub async fn set_title(&mut self, frame_id: Id<Frame>, new_title: impl Into<String>) {
+    /// existed, if any. Returns `true` if the page content was changed (either
+    /// converted from static, or altered whilst dynamic).
+    pub(in super) async fn set_title(
+        &mut self, frame_id: Id<Frame>, new_title: impl Into<String>
+    ) -> bool {
+        let mut changed = false;
         loop {
             match self {
                 Content::Dynamic{ref mut title, ref mut updates, ..} => {
@@ -156,21 +160,28 @@ impl Content {
                         // We're ignoring this future because we don't care how
                         // many clients there are
                         let _unused = updates.send_to_clients(event).await;
+                        changed = true;
                     }
                     break; // title has been set
                 },
                 Content::Static{..} => {
                     *self = Content::new().await;
+                    changed = true;
                     // and loop again to actually set the title
                 }
             }
         }
+        changed // report whether the page was changed
     }
 
     /// Tell all clients to change the body, if necessary. This converts the
     /// page into a dynamic page, overwriting any static content that previously
-    /// existed, if any.
-    pub async fn set_body(&mut self, frame_id: Id<Frame>, new_body: impl Into<String>) {
+    /// existed, if any. Returns `true` if the page content was changed (either
+    /// converted from static, or altered whilst dynamic).
+    pub(in super) async fn set_body(
+        &mut self, frame_id: Id<Frame>, new_body: impl Into<String>
+    ) -> bool {
+        let mut changed = false;
         loop {
             match self {
                 Content::Dynamic{ref mut body, ref mut updates, ..} => {
@@ -185,14 +196,45 @@ impl Content {
                         // We're ignoring this future because we don't care how
                         // many clients of the page there are
                         let _unused = updates.send_to_clients(event).await;
+                        changed = true;
                     }
                     break; // body has been set
                 },
                 Content::Static{..} => {
                     *self = Content::new().await;
+                    changed = true;
                     // and loop again to actually set the body
                 }
             }
+        }
+        changed // report whether the page was changed
+    }
+
+    /// Send a new total set of subscriptions to the page, so it can update its
+    /// event hooks. This function should *only* ever be called *directly* after
+    /// obtaining such a new set of subscriptions from adding a subscriber,
+    /// sending an event, or sending a heartbeat! It will cause unexpected loss
+    /// of messages if you arbitrarily set the subscriptions of a page outside
+    /// of these contexts.
+    pub(in super) async fn set_subscriptions<'a>(
+        &mut self,
+        frame_id: Id<Frame>,
+        subscription: AggregateSubscription<'a>
+    ) -> bool {
+        let data = serde_json::to_string(&subscription)
+            .expect("Serializing subscriptions to JSON shouldn't fail");
+        let event = EventBuilder::new(&data)
+            .event_type("subscribe")
+            .id(&frame_id.to_string())
+            .build();
+        if let Content::Dynamic{ref mut updates, ..} = self {
+            // We're not using the future returned here because we don't care
+            // what the number of client connections is, so we don't need to
+            // wait to find out
+            let _unused_response = updates.send_to_clients(event).await;
+            true // the page was dynamic
+        } else {
+            false // the page was static
         }
     }
 }

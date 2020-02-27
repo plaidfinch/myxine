@@ -132,17 +132,12 @@ impl Page {
     /// specification for what events to listen to.
     pub async fn event_stream(&self, subscription: Subscription) -> (Id<Global>, Body) {
         let mut subscribers = self.subscribers.lock().await;
-        let (uuid, total_subscription, event_stream) =
+        let (id, total_subscription, event_stream) =
             subscribers.add_persistent_subscriber(subscription).await;
+        let frame_id = self.current_frame().await;
         let content = &mut *self.content.lock().await;
-        match content {
-            Content::Static{..} => { },
-            Content::Dynamic{ref mut updates, ..} => {
-                let frame_id = self.current_frame().await;
-                set_subscriptions(updates, frame_id, total_subscription).await;
-            }
-        }
-        (uuid, event_stream)
+        content.set_subscriptions(frame_id, total_subscription).await;
+        (id, event_stream)
     }
 
     /// Send an event to all subscribers. This should only be called with events
@@ -153,13 +148,7 @@ impl Page {
             self.subscribers.lock().await
             .send_event(frame_id, event).await {
                 let content = &mut *self.content.lock().await;
-                match content {
-                    Content::Static{..} => { },
-                    Content::Dynamic{ref mut updates, ..} => {
-                        let frame_id = self.current_frame().await;
-                        set_subscriptions(updates, frame_id, total_subscription).await;
-                    }
-                }
+                content.set_subscriptions(frame_id, total_subscription).await;
             }
     }
 
@@ -276,20 +265,58 @@ impl Page {
         self.content.lock().await.content_type()
     }
 
-    /// Tell all clients to change the title, if necessary. This converts the
-    /// page into a dynamic page, overwriting any static content that previously
-    /// existed, if any.
-    pub async fn set_title(&self, new_title: impl Into<String>) {
-        let mut content = self.content.lock().await;
-        content.set_title(self.next_frame().await, new_title).await
-    }
-
-    /// Tell all clients to change the body, if necessary. This converts the
-    /// page into a dynamic page, overwriting any static content that previously
-    /// existed, if any.
-    pub async fn set_body(&self, new_body: impl Into<String>) {
-        let mut content = self.content.lock().await;
-        content.set_body(self.next_frame().await, new_body).await
+    /// Tell all clients to change the title and body, if necessary. This
+    /// converts the page into a dynamic page, overwriting any static content
+    /// that previously existed, if any.
+    pub async fn set_content(
+        &self,
+        new_title: impl Into<String>,
+        new_body: impl Into<String>,
+        frame_subscription: Option<Subscription>,
+    ) -> Body {
+        // Get the next frame id for this page
+        let frame_id = self.next_frame().await;
+        // If the user wants to subscribe to events only on this frame, then set
+        // up that transient subscription and return the event stream for the
+        // single specified subscription. If there was no subscription
+        // specified, returns the empty `Body`.
+        if let Some(frame_subscription) = frame_subscription {
+            // We only lock the subscribers in this scope, so that if the user
+            // doesn't want events from this frame we don't pay the
+            // synchronization penalty.
+            let mut subscribers = self.subscribers.lock().await;
+            let (new_aggregate, event_stream) =
+                subscribers.add_transient_subscriber(frame_id, frame_subscription).await;
+            // The content and subscribers locks need to overlap here because
+            // the lifetime of the aggregate subscription is tied to the
+            // lifetime of the subscribers.
+            let mut content = self.content.lock().await;
+            // We update the subscriptions before we update the body, to
+            // make sure we don't miss any events.
+            content.set_subscriptions(frame_id, new_aggregate).await;
+            // Don't lock subscribers for any longer than is necessary
+            drop(subscribers);
+            // Update the title and body and note whether they've changed
+            let title_changed = content.set_title(frame_id, new_title).await;
+            let body_changed = content.set_body(frame_id, new_body).await;
+            if title_changed || body_changed {
+                event_stream
+            } else {
+                // If they haven't changed, then return an empty body. This
+                // prevents the problem where an idempotent update gives back an
+                // event stream that blocks and never yields events, until it
+                // terminates when an event originating from a frame in its
+                // future arrives, which kills it.
+                Body::empty()
+            }
+        } else {
+            // If there's no transient subscription required, then just set the
+            // content and return the empty body
+            let mut content = self.content.lock().await;
+            content.set_title(frame_id, new_title).await;
+            content.set_body(frame_id, new_body).await;
+            Body::empty()
+        }
     }
 
     /// Change a particular existing subscription stream's subscription,
@@ -298,13 +325,8 @@ impl Page {
     pub async fn change_subscription(&self, id: Id<Global>, subscription: Subscription) -> Result<(), ()> {
         match self.subscribers.lock().await.change_subscription(id, subscription) {
             Ok(Some(new_aggregate)) => {
-                match &mut *self.content.lock().await {
-                    Content::Static{..} => { },
-                    Content::Dynamic{ref mut updates, ..} => {
-                        let frame_id = self.current_frame().await;
-                        set_subscriptions(updates, frame_id, new_aggregate).await
-                    },
-                }
+                let frame_id = self.current_frame().await;
+                self.content.lock().await.set_subscriptions(frame_id, new_aggregate).await;
                 Ok(())
             },
             Ok(None) => Ok(()),
@@ -319,33 +341,8 @@ impl Page {
         *subscribers = Subscribers::new();
         let content = &mut *self.content.lock().await;
         let frame_id = self.next_frame().await;
-        match content {
-            Content::Static{..} => { },
-            Content::Dynamic{ref mut updates, ..} => {
-                set_subscriptions(updates, frame_id, AggregateSubscription::empty()).await;
-            }
-        }
+        content.set_subscriptions(frame_id, AggregateSubscription::empty()).await;
         content.set_title(frame_id, "").await;
         content.set_body(frame_id, "").await;
     }
-}
-
-/// Send a new total set of subscriptions to the page, so it can update its
-/// event hooks. This function should *only* ever be called *directly* after
-/// obtaining such a new set of subscriptions from adding a subscriber,
-/// sending an event, or sending a heartbeat! It will cause unexpected loss
-/// of messages if you arbitrarily set the subscriptions of a page outside
-/// of these contexts.
-async fn set_subscriptions<'a>(server: &'a mut sse::BufferedServer,
-                               frame_id: Id<Frame>,
-                               subscription: AggregateSubscription<'a>) {
-    let data = serde_json::to_string(&subscription)
-        .expect("Serializing subscriptions to JSON shouldn't fail");
-    let event = EventBuilder::new(&data)
-        .event_type("subscribe")
-        .id(&frame_id.to_string())
-        .build();
-    // We're not using the future returned here because we don't care what the
-    // number of client connections is, so we don't need to wait to find out
-    let _unused_response = server.send_to_clients(event).await;
 }
