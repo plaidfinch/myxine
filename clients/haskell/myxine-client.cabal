@@ -52,7 +52,8 @@ common deps
                        hashable             ^>= 1.3,
                        file-embed           ^>= 0.0.11.1,
                        http-client          ^>= 0.6,
-                       http-types           ^>= 0.12
+                       http-types           ^>= 0.12,
+                       constraints          >= 0.10 && <= 0.12
 
 common options
   default-language:    Haskell2010
@@ -94,6 +95,7 @@ library
                        Myxine.Target
                        Myxine.Handlers
                        Myxine.Event
+                       Myxine.ConjMap
                        Myxine.Internal.EventStream
                        Myxine.Internal.TH
                        Paths_myxine_client
