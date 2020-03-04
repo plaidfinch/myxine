@@ -77,6 +77,8 @@ export function activate(initialFrameId, initialSubscription, debugMode) {
         animationId = window.requestAnimationFrame(timestamp => {
             window.diff.innerHTML(document.body, body);
             visibleFrameId = currentFrameId;
+            // only now we set the visibleFrameId, because we've just updated
+            // the body to match the currentFrameId
         });
     }
 

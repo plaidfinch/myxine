@@ -46,6 +46,7 @@ common deps
                        transformers         ^>= 0.5,
                        bytestring           ^>= 0.10,
                        unordered-containers ^>= 0.2,
+                       containers           ^>= 0.6,
                        dependent-map        ^>= 0.3,
                        dependent-sum        ^>= 0.6,
                        template-haskell     >= 2.14.0.0 && <= 2.15.0.0,

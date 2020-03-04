@@ -15,22 +15,21 @@ module Myxine.Direct
   ( -- * Page locations on @localhost@
     PageLocation, pagePort, PagePort, pagePath, PagePath
     -- * Sending updates to pages
-  , Update(..), PageContent, pageBody, pageTitle, sendUpdate
-    -- * Looping over typed events
-  , withEvents
+  , Update(..), EventList(..), PageEvent(..)
+  , PageContent, pageBody, pageTitle, sendUpdate
     -- * Evaluating raw JavaScript in the context of a page
   , JavaScript(..), evaluateJs
     -- * Exceptions
   , EventParseException(..)
-  , -- * The @Some@ existential
+    -- * The @Some@ existential
+  , Some(..)
   ) where
 
 import Data.Maybe
 import Data.Monoid
 import Data.String
-import Control.Monad
-import Control.Concurrent
 import Data.List
+import Data.Constraint
 import Control.Exception
 import Data.Dependent.Map (Some(..))
 import qualified Data.ByteString.Lazy.Char8 as ByteString
@@ -54,39 +53,22 @@ import Myxine.Target
 --
 -- If you encounter this exception in the wild, please file a bug report at
 -- <https://github.com/GaloisInc/myxine/issues/new>. Thanks!
-data EventParseException
-  = TargetParseException String
-    -- ^ The target path failed to parse
-  | UnknownEventTypeException ByteString
-    -- ^ The event type failed to parse
-  | EventDataParseException ByteString String ByteString
-    -- ^ The properties associated with the event type failed to parse
+newtype EventParseException
+  = EventParseException String
   deriving (Eq, Ord, Exception)
 
 instance Show EventParseException where
-  show exn =
-       "*** Myxine client panic: Failed to parse " <> component <> "! This means one of:\n\n"
+  show (EventParseException details) =
+       "*** Myxine client panic: Failed to parse event! This means one of:\n\n"
     <> "  1) You connected to an event source that is not the Myxine server\n"
-    <> "  2) You connected to a Myxine server process with an incompatible major version\n"
+    <> "  2) You connected to a Myxine server process with an incompatible version\n"
     <> "  3) There is a bug in the Myxine server or client library (totally possible!)\n\n"
     <> "  If you suspect it's (3), please file a bug report at:\n\n    " <> bugReportURL <> "\n\n"
     <> "  Please include the version of this library, the version of the Myxine server,\n"
-    <> "  and the following details:\n\n"
+    <> "  and the following error message:\n\n"
     <> details
     where
-      component, details, bugReportURL :: String
-      (component, details) = case exn of
-        TargetParseException input ->
-          ("target path",
-           "  - Unparseable target path: " <> show input)
-        UnknownEventTypeException eventType ->
-          ("event type",
-           "  - Unknown event type: " <> show eventType)
-        EventDataParseException eventType parseError badInput ->
-          ("event properties",
-           "  - Known event type: " <> show eventType <> "\n" <>
-           "  - Parse error: " <> parseError <> "\n" <>
-           "  - Bad input properties: " <> show badInput)
+      bugReportURL :: String
       bugReportURL = "https://github.com/GaloisInc/myxine/issues/new"
 
 -- | The view of a page, as rendered in the browser. Create page content with
@@ -178,26 +160,55 @@ instance Monoid PageLocation where
     { pageLocationPort = mempty
     , pageLocationPath = mempty }
 
+data PageEvent where
+  PageEvent :: { event :: EventType props
+               , properties :: props
+               , targets :: [Target]
+               } -> PageEvent
+
+instance JSON.FromJSON PageEvent where
+  parseJSON = JSON.withObject "PageEvent" \o ->
+    do eventName <- o JSON..: "event"
+       Some event <-
+         flip maybe pure
+          (fail ("Unrecognized event: " <> Text.unpack eventName))
+          (decodeSomeEventType eventName)
+       Dict <- pure (eventPropertiesDecodeDict event)
+       properties <- o JSON..: "properties"
+       targets <- o JSON..: "targets"
+       pure (PageEvent{event, properties, targets})
+
+-- | A list of event types to listen for: either all events, or a specific list
+-- of events.
+data EventList
+  = AllEvents  -- ^ Listen for all events
+  | SomeEvents [Some EventType]  -- ^ Listen only for these events
+  deriving (Eq, Ord, Show)
+
 -- | Send a full-page update to Myxine at a particular port and path. An
 -- 'Update' is either a 'Dynamic' page body with an optional title, or a
 -- 'Static' file with a particular Content-Type.
 sendUpdate ::
   PageLocation {- ^ The location of the page to update -} ->
   Update {- ^ The new content of the page to display -} ->
-  IO ()
+  EventList {- ^ The events to listen for within the context of this update -} ->
+  IO (IO (Maybe PageEvent))
 sendUpdate PageLocation{pageLocationPort = Last maybePort,
-                        pageLocationPath = Last maybePath} update =
-  do _ <- Req.runReq Req.defaultHttpConfig $
-       Req.req Req.POST url body
-         Req.ignoreResponse (portOption <> params)
-     pure ()
+                        pageLocationPath = Last maybePath} update events =
+  do Req.runReq Req.defaultHttpConfig $
+       Req.reqBr Req.POST url body (portOption <> updateOptions <> eventOptions)
+         \response ->
+           (maybe (pure Nothing)
+             (either (throwIO . EventParseException) pure . JSON.eitherDecode) =<<)
+           <$> linesFromChunks (responseBody response)
   where
     url = pageUrl (fromMaybe "" maybePath)
     portOption = Req.port (maybe defaultPort (\(PagePort p) -> p) maybePort)
+    eventOptions = eventParams events
 
-    body   :: Req.ReqBodyLbs
-    params :: Req.Option 'Req.Http
-    (body, params) = case update of
+    body :: Req.ReqBodyLbs
+    updateOptions :: Req.Option 'Req.Http
+    (body, updateOptions) = case update of
       Dynamic (PageContent{pageContentTitle = Last maybeTitle,
                            pageContentBody = text}) ->
         ( Req.ReqBodyLbs (ByteString.fromStrict (Text.encodeUtf8 text))
@@ -278,66 +289,36 @@ evaluateJs PageLocation{pageLocationPort = Last maybePort,
 -- encountered. This throws 'EventParseException' if the server sends an
 -- unparseable event (this shouldn't happen in normal operation), and
 -- 'Req.HttpException' if the underlying connection has an issue.
-withEvents ::
-  PageLocation
-    {- ^ The location of the page to listen for events from -} ->
-  Maybe [Some EventType]
-    {- ^ The list of events for which to listen -} ->
-  (forall d. EventType d -> d -> [Target] -> IO ())
-    {- ^ The action to perform when each event happens -} ->
-  IO ()
-withEvents _ (Just []) _ =
-  -- if the user requests no events, there is no corresponding Myxine API
-  -- request to handle this, so we just sleep forever
-  forever (threadDelay maxBound)
-withEvents PageLocation{pageLocationPort = Last maybePort,
-                        pageLocationPath = Last maybePath} events perEvent =
-  do withStreamEvents url
-       (portOption <> eventParams)
-       \StreamEvent{eventId, eventType, eventData} -> do
-         targets <- either (throwIO . TargetParseException)
-                           pure (JSON.eitherDecode eventId)
-         withParsedEvent eventType eventData \case
-           Left Nothing -> throwIO (UnknownEventTypeException eventType)
-           Left (Just err) -> throwIO (EventDataParseException eventType err eventData)
-           Right (eventTy, properties) ->
-             perEvent eventTy properties targets
-  where
-    url = pageUrl (fromMaybe "" maybePath)
-    portOption = Req.port (maybe defaultPort (\(PagePort p) -> p) maybePort)
+-- withEvents ::
+--   PageLocation
+--     {- ^ The location of the page to listen for events from -} ->
+--   EventList
+--     {- ^ The list of events for which to listen -} ->
+--   (forall d. EventType d -> d -> [Target] -> IO ())
+--     {- ^ The action to perform when each event happens -} ->
+--   IO ()
+-- withEvents _ (Just []) _ =
+--   -- if the user requests no events, there is no corresponding Myxine API
+--   -- request to handle this, so we just sleep forever
+--   forever (threadDelay maxBound)
+-- withEvents PageLocation{pageLocationPort = Last maybePort,
+--                         pageLocationPath = Last maybePath} events perEvent =
+--   do withStreamEvents url
+--        (portOption <> eventParams)
+--        \StreamEvent{eventId, eventType, eventData} -> do
+--          targets <- either (throwIO . TargetParseException)
+--                            pure (JSON.eitherDecode eventId)
+--          withParsedEvent eventType eventData \case
+--            Left Nothing -> throwIO (UnknownEventTypeException eventType)
+--            Left (Just err) -> throwIO (EventDataParseException eventType err eventData)
+--            Right (eventTy, properties) ->
+--              perEvent eventTy properties targets
+--   where
+--     url = pageUrl (fromMaybe "" maybePath)
+--     portOption = Req.port (maybe defaultPort (\(PagePort p) -> p) maybePort)
 
-    eventParams :: Req.Option 'Req.Http
-    eventParams = case events of
-      Nothing -> Req.queryFlag "events"
-      Just es -> flip foldMap es
-        \(Some e) -> "event" Req.=: ByteString.unpack (encodeEventType e)
-
--- | Given an event name and properties as raw bytestrings, invoke the given
--- callback if the event parses properly, or return 'Nothing'.
-withParsedEvent ::
-  ByteString -> ByteString -> (forall d. Either (Maybe String) (EventType d, d) -> r) -> r
-withParsedEvent name properties k =
-  case decodeSomeEventType name of
-    Nothing -> k (Left Nothing)
-    Just (Some t) -> case decodeEventProperties t properties of
-      Left err -> k (Left (Just err))
-      Right p -> k (Right (t, p))
-
--- | Request an event-stream from the given 'Req.Url' with the given
--- 'Req.Option's, and run the provided callback for each StreamEvent. This
--- throws 'Req.HttpException' when the underlying connection has an issue.
-withStreamEvents ::
-  Req.Url scheme -> Req.Option scheme -> (StreamEvent -> IO ()) -> IO ()
-withStreamEvents url options withEvent =
-  Req.runReq Req.defaultHttpConfig $ Req.reqBr Req.GET url Req.NoReqBody options
-    \response ->
-      if responseStatus response /= ok200
-      then pure ()
-      else do
-        let nextChunk = ByteString.fromStrict <$> responseBody response
-        nextLine <- linesFromChunks nextChunk
-        nextEvent <- eventsFromLines nextLine
-        let loop = do
-              maybeEvent <- nextEvent
-              maybe (pure ()) (\e -> withEvent e >> loop) maybeEvent
-        loop
+eventParams :: EventList -> Req.Option 'Req.Http
+eventParams events = case events of
+  AllEvents -> Req.queryFlag "events"
+  SomeEvents es -> flip foldMap es
+    \(Some e) -> "event" Req.=: ByteString.unpack (encodeEventType e)

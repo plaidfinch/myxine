@@ -10,7 +10,6 @@ import Prelude hiding (lookup)
 import Data.Maybe
 import Data.Hashable
 import qualified Data.HashSet as HashSet
-import Data.HashSet (HashSet)
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
 

@@ -18,6 +18,7 @@ import           Data.Dependent.Map   (Some(..))
 import           Data.Either
 import           Data.Foldable
 import           Data.GADT.Compare
+import           Data.GADT.Show
 import           Data.HashMap.Lazy    (HashMap)
 import qualified Data.HashMap.Lazy    as HashMap
 import           Data.HashSet         (HashSet)
@@ -27,12 +28,13 @@ import           Data.List
 import           Data.Ord
 import           Data.Text            (Text)
 import           Data.Traversable
+import           Data.Constraint
 import qualified GHC.Generics         as Generic
 import           Language.Haskell.TH
 
 eventTypeName, decodeEventPropertiesName, decodeSomeEventTypeName, encodeEventTypeName :: Name
 eventTypeName             = mkName "EventType"
-decodeEventPropertiesName = mkName "decodeEventProperties"
+decodeEventPropertiesName = mkName "eventPropertiesDecodeDict"
 decodeSomeEventTypeName   = mkName "decodeSomeEventType"
 encodeEventTypeName       = mkName "encodeEventType"
 
@@ -144,6 +146,8 @@ mkEvents (Events events) = do
   showInstance <- deriveEvent [t|Show|]
   geqInstance           <- mkEnumGEqInstance eventTypeName (map snd cons)
   gcompareInstance      <- mkEnumGCompareInstance eventTypeName (map snd cons)
+  gshowInstance <-
+    [d|instance GShow $(conT eventTypeName) where gshowsPrec = showsPrec|]
   encodeEventType       <- mkEncodeEventType cons
   decodeSomeEventType   <- mkDecodeSomeEventType cons
   decodeEventProperties <- mkDecodeEventProperties (map snd cons)
@@ -154,7 +158,7 @@ mkEvents (Events events) = do
          , showInstance
          , geqInstance
          , gcompareInstance
-         ]
+         ] <> gshowInstance
   where
     deriveEvent typeclass =
       standaloneDerivD (pure []) [t|forall d. $typeclass ($(pure (ConT eventTypeName)) d)|]
@@ -267,8 +271,8 @@ mkDecodeEventProperties :: [Con] -> Q [Dec]
 mkDecodeEventProperties cons = do
   let event = pure (ConT eventTypeName)
   let cases = flip map cons \(GadtC [con] _ _) ->
-        match (conP con []) (normalB [|JSON.eitherDecode|]) []
-  sig <- sigD decodeEventPropertiesName [t| forall d. $event d -> ByteString -> Either String d|]
+        match (conP con []) (normalB [|Dict|]) []
+  sig <- sigD decodeEventPropertiesName [t| forall d. $event d -> Dict (JSON.FromJSON d)|]
   arg <- newName "event"
   dec <- funD decodeEventPropertiesName
            [clause [varP arg] (normalB (caseE (varE arg) cases)) []]
@@ -281,10 +285,10 @@ mkDecodeSomeEventType cons = do
   let list =
         [ [|($(litE (stringL string)), Some $(conE con))|]
         | (string, GadtC [con] _ _) <- cons ]
-  allEventsSig <- sigD allEvents [t|HashMap ByteString (Some $(conT eventTypeName))|]
+  allEventsSig <- sigD allEvents [t|HashMap Text (Some $(conT eventTypeName))|]
   allEventsDec <- funD allEvents [clause [] (normalB [|HashMap.fromList $(listE list)|]) []]
   sig <- sigD decodeSomeEventTypeName
-    [t| ByteString -> Maybe (Some $(conT eventTypeName))|]
+    [t|Text -> Maybe (Some $(conT eventTypeName))|]
   dec <- funD decodeSomeEventTypeName
     [clause [] (normalB [|flip HashMap.lookup $(varE allEvents)|])
       [pure allEventsSig, pure allEventsDec]]

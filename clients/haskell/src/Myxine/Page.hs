@@ -142,9 +142,10 @@ import Control.Exception (SomeException, throwIO)
 import qualified Control.Exception as Exception
 import qualified Data.Aeson as JSON
 import Control.Concurrent
+import qualified Data.Sequence as Seq
 
 import Myxine.Direct
-import Myxine.Target (Target, tag, attribute)
+import Myxine.Target (Target)
 import Myxine.Handlers
 
 -- | A handle to a running 'Page'. Create this using 'runPage', and wait for its
@@ -175,13 +176,13 @@ runPage :: forall model.
     {- ^ The location of the 'Page' ('pagePort' and/or 'pagePath') -} ->
   model
     {- ^ The initial @model@ of the model for the 'Page' -} ->
-  Handlers model
-    {- ^ The set of event 'Handlers' for events in the page -} ->
+  (model -> Handlers model)
+    {- ^ A function to compute the set of event 'Handlers' for events in the page -} ->
   (model -> PageContent)
     {- ^ A function to draw the @model@ as some rendered 'PageContent' (how you do this is up to you) -} ->
   IO (Page model)
     {- ^ A 'Page' handle to permit further interaction with the running page -}
-runPage pageLocation initialModel handlers draw =
+runPage pageLocation initialModel handlersFor draw =
   do pageActions  <- newChan       -- channel for model-modifying actions
      pageFinished <- newEmptyMVar  -- signal for the page's shutdown
 
@@ -190,12 +191,12 @@ runPage pageLocation initialModel handlers draw =
        flip Exception.finally (writeChan pageActions Nothing) $  -- tell model thread to stop
          Exception.handle (putMVar pageFinished . Left) $  -- finished with exception
            Exception.handle @Exception.AsyncException (const (pure ())) $ -- don't track when the thread is killed
-             do writeChan pageActions (Just redraw)
-                withEvents pageLocation
-                  (Just (handledEvents handlers))
-                  \event properties targets ->
-                    writeChan pageActions . Just $
-                      redraw <=< handle handlers event properties targets
+             do undefined -- FIXME!
+                -- withEvents pageLocation
+                --   (Just (handledEvents handlers))
+                --   \event properties targets ->
+                --     writeChan pageActions . Just $
+                --       redraw <=< handle handlers event properties targets
 
      -- Loop through all the actions, doing them
      _pageModelThread <- forkIO
@@ -211,11 +212,61 @@ runPage pageLocation initialModel handlers draw =
      pure (Page { pageActions, pageLocation, pageFinished, pageEventThread })
 
   where
-    redraw :: model -> IO model
-    redraw model =
-      do let pageContent = draw model
-         sendUpdate pageLocation (Dynamic pageContent)
-         pure model
+    update ::
+      Chan (Maybe model) ->
+      Chan (Maybe (model -> IO model)) ->
+      Chan (Maybe (Handlers model, IO (Maybe PageEvent))) ->
+      IO ()
+    update models actions events =
+      do maybeModel <- readChan models
+         case maybeModel of
+           Nothing ->
+             do writeChan actions Nothing
+                writeChan events Nothing
+           Just model ->
+             do let newContent = draw model
+                    newHandlers = handlersFor model
+                newEvents <-
+                  sendUpdate pageLocation
+                    (Dynamic newContent)
+                    (SomeEvents (handledEvents newHandlers))
+                writeChan events (Just (newHandlers, newEvents))
+                update models actions events
+
+    listen ::
+      Chan (Maybe (Handlers model, IO (Maybe PageEvent))) ->
+      Chan (Maybe (model -> IO model)) ->
+      IO ()
+    listen events actions =
+      do maybeEvents <- readChan events
+         case maybeEvents of
+           Nothing -> pure ()
+           Just (handlers, nextEvent) ->
+             let loop freshness =
+                   do maybeEvent <- nextEvent
+                      case maybeEvent of
+                        Nothing -> listen events actions
+                        Just PageEvent{event, properties, targets} ->
+                          do let action =
+                                   handle handlers freshness event properties targets
+                             writeChan actions (Just action)
+                             loop Stale
+             in loop Fresh
+
+    act ::
+      Chan (Maybe (model -> IO model)) ->
+      Chan (Maybe model) ->
+      model ->
+      IO model
+    act actions models model =
+      do maybeAction <- readChan actions
+         case maybeAction of
+           Nothing -> pure model
+           Just action ->
+             do model' <- action model
+                writeChan models (Just model)
+                act actions models model
+
 
 -- | Wait for a 'Page' to finish executing and return its resultant @model@, or
 -- re-throw any exception the page encountered.
