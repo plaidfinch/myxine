@@ -132,11 +132,13 @@ impl Page {
     /// specification for what events to listen to.
     pub async fn event_stream(&self, subscription: Subscription) -> (Id<Global>, Body) {
         let mut subscribers = self.subscribers.lock().await;
-        let (id, total_subscription, event_stream) =
+        let (id, new_aggregate, event_stream) =
             subscribers.add_persistent_subscriber(subscription).await;
         let frame_id = self.current_frame().await;
         let content = &mut *self.content.lock().await;
-        content.set_subscriptions(frame_id, total_subscription).await;
+        if let Some(aggregate) = new_aggregate {
+            content.set_subscriptions(frame_id, aggregate).await;
+        }
         (id, event_stream)
     }
 
@@ -295,22 +297,15 @@ impl Page {
             let mut content = self.content.lock().await;
             // We update the subscriptions before we update the body, to
             // make sure we don't miss any events.
-            content.set_subscriptions(frame_id, new_aggregate).await;
+            if let Some(aggregate) = new_aggregate {
+                content.set_subscriptions(frame_id, aggregate).await;
+            }
             // Don't lock subscribers for any longer than is necessary
             drop(subscribers);
             // Update the title and body and note whether they've changed
-            let title_changed = content.set_title(frame_id, new_title).await;
-            let body_changed = content.set_body(frame_id, new_body).await;
-            if title_changed || body_changed {
-                event_stream
-            } else {
-                // If they haven't changed, then return an empty body. This
-                // prevents the problem where an idempotent update gives back an
-                // event stream that blocks and never yields events, until it
-                // terminates when an event originating from a frame in its
-                // future arrives, which kills it.
-                Body::empty()
-            }
+            content.set_title(frame_id, new_title).await;
+            content.set_body(frame_id, new_body).await;
+            event_stream
         } else {
             // If there's no transient subscription required, then just set the
             // content and return the empty body

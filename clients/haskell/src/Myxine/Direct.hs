@@ -55,7 +55,8 @@ import Myxine.Target
 -- <https://github.com/GaloisInc/myxine/issues/new>. Thanks!
 newtype EventParseException
   = EventParseException String
-  deriving (Eq, Ord, Exception)
+  deriving stock (Eq, Ord)
+  deriving anyclass (Exception)
 
 instance Show EventParseException where
   show (EventParseException details) =
@@ -189,22 +190,42 @@ data EventList
 -- 'Update' is either a 'Dynamic' page body with an optional title, or a
 -- 'Static' file with a particular Content-Type.
 sendUpdate ::
-  PageLocation {- ^ The location of the page to update -} ->
-  Update {- ^ The new content of the page to display -} ->
-  EventList {- ^ The events to listen for within the context of this update -} ->
-  IO (IO (Maybe PageEvent))
+  PageLocation
+    {- ^ The location of the page to update -} ->
+  Update
+    {- ^ The new content of the page to display -} ->
+  EventList
+    {- ^ The events to listen for within the context of this update -} ->
+  (PageEvent -> IO ())
+    {- ^ What to do with each event that happens within this version of the page -} ->
+  IO ()
 sendUpdate PageLocation{pageLocationPort = Last maybePort,
-                        pageLocationPath = Last maybePath} update events =
+                        pageLocationPath = Last maybePath} update events perEvent =
   do Req.runReq Req.defaultHttpConfig $
-       Req.reqBr Req.POST url body (portOption <> updateOptions <> eventOptions)
+       Req.reqBr Req.POST url body options
          \response ->
-           (maybe (pure Nothing)
-             (either (throwIO . EventParseException) pure . JSON.eitherDecode) =<<)
-           <$> linesFromChunks (responseBody response)
+           do nextLine <- linesFromChunks (responseBody response)
+              loop nextLine
   where
+    loop nextLine =
+      nextLine >>= \case
+        Nothing -> pure ()
+        Just line ->
+          do --print line
+             event <- parseEvent line
+             perEvent event
+             loop nextLine
+      where
+        parseEvent =
+          either (throwIO . EventParseException) pure . JSON.eitherDecode
+
     url = pageUrl (fromMaybe "" maybePath)
-    portOption = Req.port (maybe defaultPort (\(PagePort p) -> p) maybePort)
-    eventOptions = eventParams events
+
+    options =
+      Req.port (maybe defaultPort (\(PagePort p) -> p) maybePort) <>
+      Req.responseTimeout maxBound <>
+      updateOptions <>
+      eventParams events
 
     body :: Req.ReqBodyLbs
     updateOptions :: Req.Option 'Req.Http
@@ -260,18 +281,21 @@ evaluateJs ::
 evaluateJs PageLocation{pageLocationPort = Last maybePort,
                         pageLocationPath = Last maybePath} timeout js =
   do result <- Req.runReq Req.defaultHttpConfig $
-       Req.req Req.POST url body Req.lbsResponse
-         (portOption <> timeoutOption <> exprOption)
+       Req.req Req.POST url body Req.lbsResponse options
      pure if Req.responseStatusCode result == 200
        then JSON.eitherDecode (Req.responseBody result)
        else Left (ByteString.unpack (Req.responseBody result))
   where
     url = pageUrl (fromMaybe "" maybePath)
-    portOption = Req.port (maybe defaultPort (\(PagePort p) -> p) maybePort)
+
+    options =
+      Req.port (maybe defaultPort (\(PagePort p) -> p) maybePort) <>
+      Req.responseTimeout maxBound <>
+      foldMap ("timeout" Req.=:) timeout <>
+      exprOption
 
     body :: Req.ReqBodyLbs
-    exprOption, timeoutOption :: Req.Option 'Req.Http
-    timeoutOption = foldMap ("timeout" Req.=:) timeout
+    exprOption :: Req.Option 'Req.Http
     (body, exprOption) = case js of
       JsExpression expr ->
         (Req.ReqBodyLbs "", "evaluate" Req.=: expr)
@@ -322,3 +346,5 @@ eventParams events = case events of
   AllEvents -> Req.queryFlag "events"
   SomeEvents es -> flip foldMap es
     \(Some e) -> "event" Req.=: ByteString.unpack (encodeEventType e)
+
+-- TODO: Catch HTTPExceptions in this module

@@ -49,20 +49,20 @@ impl Subscription {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(untagged)]
-pub enum AggregateSubscription<'a> {
-    Specific(HashSet<&'a String>),
+pub enum AggregateSubscription {
+    Specific(HashSet<String>),
     Universal,
 }
 
-impl<'a> AggregateSubscription<'a> {
+impl<'a> AggregateSubscription {
     /// Make an empty aggregate subscription (useful when specifying that a page
     /// should disconnect all open subscribers).
-    pub fn empty() -> AggregateSubscription<'a> {
+    pub fn empty() -> AggregateSubscription {
         AggregateSubscription::Specific(HashSet::new())
     }
 
     /// Add a single subscription to an aggregate.
-    pub fn add(&mut self, subscription: &'a Subscription) {
+    pub fn add(&mut self, subscription: Subscription) {
         if match self {
             AggregateSubscription::Universal => true,
             AggregateSubscription::Specific(ref mut existing) => {
@@ -81,14 +81,35 @@ impl<'a> AggregateSubscription<'a> {
 
     /// Join together a bunch of individual `Subscription`s to form their
     /// aggregate.
-    pub fn aggregate<'b: 'a>(
-        subscriptions: impl IntoIterator<Item = &'b Subscription>
-    ) -> AggregateSubscription<'a> {
+    pub fn aggregate(
+        subscriptions: impl IntoIterator<Item = &'a Subscription>
+    ) -> AggregateSubscription {
         let mut aggregate = AggregateSubscription::empty();
         for subscription in subscriptions {
-            aggregate.add(subscription);
+            aggregate.add(subscription.clone());
         }
         aggregate
+    }
+
+    /// Determine whether the given subscription is entirely subsumed by this
+    /// one (that is, all its events are already present in the aggregate)
+    pub fn subsumes(&self, subscription: &Subscription) -> bool {
+        match self {
+            AggregateSubscription::Universal => true,
+            AggregateSubscription::Specific(aggregate_events) => {
+                match subscription {
+                    Subscription::Universal => false,
+                    Subscription::Specific(these_events) => {
+                        for event in these_events {
+                            if !aggregate_events.contains(event) {
+                                return false;
+                            }
+                        }
+                        true
+                    },
+                }
+            },
+        }
     }
 }
 
@@ -134,20 +155,31 @@ impl Subscribers {
     /// should be generated elsewhere and returned from the public interface).
     async fn add_subscriber_with_id(
         &mut self, id: SinkId, subscription: Subscription
-    ) -> (AggregateSubscription<'_>, Body) {
+    ) -> (Option<AggregateSubscription>, Body) {
         // Create a new single-client SSE server (new clients will never be added
         // after this, because each event subscription is potentially unique).
         let server = sse::BufferedServer::new(EVENT_BUFFER_SIZE).await;
         let (sender, body) = Body::channel();
         server.add_client(sender).await;
 
+        // Determine if the aggregate subscription has changed as a result of
+        // this new subscription being added
+        let pre_existing_subscriptions =
+            self.sinks.values().map(|Sink{subscription, ..}| subscription);
+        let mut aggregate =
+            AggregateSubscription::aggregate(pre_existing_subscriptions);
+        let new_aggregate = if aggregate.subsumes(&subscription) {
+            None
+        } else {
+            aggregate.add(subscription.clone());
+            Some(aggregate)
+        };
+
         // Insert the server into the sinks map
         self.sinks.insert(id, Sink{server, subscription});
 
-        // Return the body, for sending to whoever subscribed
-        let subscriptions =
-            self.sinks.values().map(|Sink{subscription, ..}| subscription);
-        (AggregateSubscription::aggregate(subscriptions), body)
+        // Return the body, and new aggregate, for sending to whoever subscribed
+        (new_aggregate, body)
     }
 
     /// Add a new *persistent* subscription to this set of subscribers,
@@ -157,7 +189,7 @@ impl Subscribers {
     pub async fn add_persistent_subscriber(
         &mut self,
         subscription: Subscription,
-    ) -> (Id<Global>, AggregateSubscription<'_>, Body) {
+    ) -> (Id<Global>, Option<AggregateSubscription>, Body) {
         let id = Id::new(Global);
         let (aggregate, body) =
             self.add_subscriber_with_id(SinkId::Persistent(id), subscription).await;
@@ -173,7 +205,7 @@ impl Subscribers {
         &mut self,
         frame_id: Id<Frame>,
         subscription: Subscription,
-    ) -> (AggregateSubscription<'_>, Body) {
+    ) -> (Option<AggregateSubscription>, Body) {
         self.add_subscriber_with_id(SinkId::Transient(frame_id), subscription).await
     }
 
@@ -183,7 +215,7 @@ impl Subscribers {
     /// returns the union of all now-current subscriptions.
     pub async fn send_event<'a>(
         &'a mut self, frame_id: Id<Frame>, event: Event
-    ) -> Option<AggregateSubscription<'a>>{
+    ) -> Option<AggregateSubscription> {
         send_to_all(&mut self.sinks, &frame_id, &event).await
     }
 
@@ -193,7 +225,7 @@ impl Subscribers {
     /// `None` if it has not.
     pub fn change_subscription<'a>(
         &'a mut self, id: Id<Global>, subscription: Subscription,
-    ) -> Result<Option<AggregateSubscription<'a>>, ()> {
+    ) -> Result<Option<AggregateSubscription>, ()> {
         let key = SinkId::Persistent(id);
         match self.sinks.remove(&key) {
             None => Err(()),
@@ -219,7 +251,7 @@ impl Subscribers {
     }
 
     /// Calculate the union of all subscriptions currently active.
-    pub fn total_subscription(&self) -> AggregateSubscription<'_> {
+    pub fn total_subscription(&self) -> AggregateSubscription {
         let subscriptions =
             self.sinks.values().map(|Sink{subscription, ..}| subscription);
         AggregateSubscription::aggregate(subscriptions)
@@ -233,7 +265,7 @@ async fn send_to_all<'a>(
     sinks: &'a mut HashMap<SinkId, Sink>,
     event_frame_id: &Id<Frame>,
     event: &Event,
-) -> Option<AggregateSubscription<'a>> {
+) -> Option<AggregateSubscription> {
     // The collection of futures for sending the event
     // Each future has Output = Option<Uuid>, where Some indicates that the sink
     // by that id **should** be pruned.

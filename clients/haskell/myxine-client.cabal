@@ -73,6 +73,7 @@ common options
                        DerivingStrategies,
                        DerivingVia,
                        DuplicateRecordFields,
+                       RecordWildCards,
                        EmptyCase,
                        GADTs,
                        GeneralizedNewtypeDeriving,
@@ -111,3 +112,13 @@ test-suite myxine-client-test
   build-depends:       myxine-client,
                        text,
                        bytestring
+
+executable circles
+  import:              options
+  main-is:             examples/circles/Main.hs
+  build-depends:       base,
+                       random,
+                       text,
+                       blaze-markup,
+                       blaze-html,
+                       myxine-client

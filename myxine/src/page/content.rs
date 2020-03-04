@@ -161,6 +161,11 @@ impl Content {
                         // many clients there are
                         let _unused = updates.send_to_clients(event).await;
                         changed = true;
+                    } else {
+                        let event = EventBuilder::new(".")
+                            .event_type("frame")
+                            .id(&frame_id.to_string()).build();
+                        let _unused = updates.send_to_clients(event).await;
                     }
                     break; // title has been set
                 },
@@ -197,6 +202,11 @@ impl Content {
                         // many clients of the page there are
                         let _unused = updates.send_to_clients(event).await;
                         changed = true;
+                    } else {
+                        let event = EventBuilder::new(".")
+                            .event_type("frame")
+                            .id(&frame_id.to_string()).build();
+                        let _unused = updates.send_to_clients(event).await;
                     }
                     break; // body has been set
                 },
@@ -216,10 +226,10 @@ impl Content {
     /// sending an event, or sending a heartbeat! It will cause unexpected loss
     /// of messages if you arbitrarily set the subscriptions of a page outside
     /// of these contexts.
-    pub(in super) async fn set_subscriptions<'a>(
+    pub(in super) async fn set_subscriptions(
         &mut self,
         frame_id: Id<Frame>,
-        subscription: AggregateSubscription<'a>
+        subscription: AggregateSubscription
     ) -> bool {
         let data = serde_json::to_string(&subscription)
             .expect("Serializing subscriptions to JSON shouldn't fail");

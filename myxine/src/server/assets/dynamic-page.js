@@ -108,10 +108,11 @@ export function activate(initialFrameId, initialSubscription, debugMode) {
     }
 
     // Changing the DOM contents
-    function setBody(event)    { setBodyTo(event.data);       }
-    function clearBody(event)  { setBodyTo("");               }
+    function setBody(event)    { setBodyTo(event.data); }
+    function clearBody(event)  { setBodyTo(""); }
     function setTitle(event)   { document.title = event.data; }
-    function clearTitle(event) { document.title = "";         }
+    function clearTitle(event) { document.title = ""; }
+    function newFrame(event)   { visibleFrameId = currentFrameId;  }
 
     // Reload the *whole* page from the server
     // Called when transitioning to static page, among other situations
@@ -270,12 +271,15 @@ export function activate(initialFrameId, initialSubscription, debugMode) {
             sse = new window.EventSource(window.location.href + "?updates");
         }, 500); // half a second between retries
     };
-    sse.addEventListener("body", settingFrameId(setBody));
-    sse.addEventListener("clear-body", settingFrameId(clearBody));
-    sse.addEventListener("title", settingFrameId(setTitle));
+
+    // The listeners:
+    sse.addEventListener("body",        settingFrameId(setBody));
+    sse.addEventListener("clear-body",  settingFrameId(clearBody));
+    sse.addEventListener("title",       settingFrameId(setTitle));
     sse.addEventListener("clear-title", settingFrameId(clearTitle));
-    sse.addEventListener("refresh", refresh);
-    sse.addEventListener("subscribe", resubscribe);
-    sse.addEventListener("evaluate", event => evaluateAndRespond(false, event));
-    sse.addEventListener("run", event => evaluateAndRespond(true, event));
+    sse.addEventListener("frame",       settingFrameId(newFrame));
+    sse.addEventListener("refresh",     refresh);
+    sse.addEventListener("subscribe",   resubscribe);
+    sse.addEventListener("evaluate",    event => evaluateAndRespond(false, event));
+    sse.addEventListener("run",         event => evaluateAndRespond(true, event));
 }
