@@ -34,7 +34,7 @@ import           Language.Haskell.TH
 
 eventTypeName, decodeEventPropertiesName, decodeSomeEventTypeName, encodeEventTypeName :: Name
 eventTypeName             = mkName "EventType"
-decodeEventPropertiesName = mkName "eventPropertiesDecodeDict"
+decodeEventPropertiesName = mkName "eventPropertiesDict"
 decodeSomeEventTypeName   = mkName "decodeSomeEventType"
 encodeEventTypeName       = mkName "encodeEventType"
 

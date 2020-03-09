@@ -174,7 +174,7 @@ instance JSON.FromJSON PageEvent where
          flip maybe pure
           (fail ("Unrecognized event: " <> Text.unpack eventName))
           (decodeSomeEventType eventName)
-       Dict <- pure (eventPropertiesDecodeDict event)
+       Dict <- pure (eventPropertiesDict event)
        properties <- o JSON..: "properties"
        targets <- o JSON..: "targets"
        pure (PageEvent{event, properties, targets})
