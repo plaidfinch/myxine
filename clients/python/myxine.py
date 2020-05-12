@@ -32,8 +32,7 @@ class Event:
         value = self.properties[name]
         if value is None:
             raise AttributeError
-        else:
-            return value
+        return value
 
 
 def page_url(path: str, port: int = MYXINE_DEFAULT_PORT) -> str:
