@@ -250,6 +250,13 @@ impl Page {
         content.update_stream().await
     }
 
+    /// Tell the content of the page to do a full refresh from the server. This
+    /// can be invoked by the client in the case of "poorly-behaved" HTML (such
+    /// as that containing SVGs) that don't play well with incremental diffing.
+    pub async fn refresh(&self) {
+        self.content.lock().await.refresh().await
+    }
+
     /// Set the contents of the page to be a static raw set of bytes with no
     /// self-refreshing functionality. All clients will be told to refresh their
     /// page to load the new static content (which will not be able to update

@@ -46,7 +46,7 @@ fn parse_subscription<'a>(params: &'a HashMap<String, Vec<String>>) -> Subscript
 
 /// Parsed parameters from a query string for a POST request.
 pub(crate) enum PostParams {
-    DynamicPage{title: String, subscription: Option<Subscription>},
+    DynamicPage{title: String, refresh: bool, subscription: Option<Subscription>},
     StaticPage,
     Evaluate{expression: Option<String>, timeout: Option<Duration>},
     ChangeSubscription{id: Id<Global>, subscription: Subscription},
@@ -60,7 +60,7 @@ impl PostParams {
     /// Parse a query string from a POST request.
     pub fn parse(query: &str) -> Option<PostParams> {
         let params = query_params(query)?;
-        if constrained_to_keys(&params, &["title", "event", "events"]) {
+        if constrained_to_keys(&params, &["title", "event", "events", "refresh"]) {
             let title = param_as_str("title", &params).unwrap_or("").to_string();
             let subscription =
                 if params.contains_key("event") || params.contains_key("events") {
@@ -68,7 +68,8 @@ impl PostParams {
                 } else {
                     None
                 };
-            return Some(PostParams::DynamicPage{title, subscription})
+            let refresh = param_as_flag("refresh", &params)?;
+            return Some(PostParams::DynamicPage{title, refresh, subscription})
         } else if constrained_to_keys(&params, &["static"]) {
             if param_as_flag("static", &params)? {
                 return Some(PostParams::StaticPage);

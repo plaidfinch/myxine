@@ -264,7 +264,7 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                     }
                 },
                 // Client wants to publish some HTML to a dynamic page:
-                Some(PostParams::DynamicPage{title, subscription}) => {
+                Some(PostParams::DynamicPage{title, refresh, subscription}) => {
                     if writeable_path {
                         let body_bytes = body::to_bytes(body).await?.as_ref().into();
                         match String::from_utf8(body_bytes) {
@@ -274,6 +274,9 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                                 }
                                 let event_stream =
                                     page.set_content(title, body, subscription).await;
+                                if refresh {
+                                    page.refresh().await;
+                                }
                                 Response::new(event_stream)
                             },
                             Err(_) => response_with_status(
