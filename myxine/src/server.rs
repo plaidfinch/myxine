@@ -18,7 +18,7 @@ mod params;
 mod heartbeat;
 
 use crate::page::Page;
-use params::{GetParams, PostParams};
+pub(crate) use params::{GetParams, PostParams, RefreshMode};
 
 lazy_static! {
     /// The current contents of the server, indexed by path
@@ -389,7 +389,7 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
             if query != "" {
                 return Ok(response_with_status(StatusCode::BAD_REQUEST, "Invalid query string in DELETE."));
             }
-            Response::new(page.set_content("", "", false, None).await)
+            Response::new(page.set_content("", "", RefreshMode::Diff, None).await)
         },
 
         _ => Response::builder()

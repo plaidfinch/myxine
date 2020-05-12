@@ -19,6 +19,7 @@ pub use id::{Id, Global, Frame};
 use subscription::Subscribers;
 use query::Queries;
 use content::Content;
+use super::server::RefreshMode;
 
 /// A `Page` pairs some page `Content` (either dynamic or static) with a set of
 /// `Subscribers` to the events on the page.
@@ -283,7 +284,7 @@ impl Page {
         &self,
         new_title: impl Into<String>,
         new_body: impl Into<String>,
-        refresh: bool,
+        refresh: RefreshMode,
         frame_subscription: Option<Subscription>,
     ) -> Body {
         // Get the next frame id for this page
@@ -349,6 +350,6 @@ impl Page {
         let frame_id = self.next_frame().await;
         content.set_subscriptions(frame_id, AggregateSubscription::empty()).await;
         content.set_title(frame_id, "").await;
-        content.set_body(frame_id, "", false).await;
+        content.set_body(frame_id, "", RefreshMode::Diff).await;
     }
 }

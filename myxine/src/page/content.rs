@@ -5,6 +5,7 @@ use std::mem;
 
 use super::id::{Id, Frame};
 use super::{sse, subscription::AggregateSubscription};
+use super::RefreshMode;
 
 /// The `Content` of a page is either `Dynamic` or `Static`. If it's dynamic, it
 /// has a title, body, and a set of SSE event listeners who are waiting for
@@ -187,7 +188,7 @@ impl Content {
         &mut self,
         frame_id: Id<Frame>,
         new_body: impl Into<String>,
-        refresh: bool,
+        refresh: RefreshMode,
     ) -> bool {
         let mut changed = false;
         loop {
@@ -199,17 +200,23 @@ impl Content {
                         changed = true;
                         // If refreshing whole page, do so; otherwise,
                         // diff-update
-                        if refresh {
-                            self.refresh().await;
-                        } else {
-                            let event = if body != "" {
-                                EventBuilder::new(body).event_type("body")
-                            } else {
-                                EventBuilder::new(".").event_type("clear-body")
-                            }.id(&frame_id.to_string()).build();
-                            // We're ignoring this future because we don't care how
-                            // many clients of the page there are
-                            let _unused = updates.send_to_clients(event).await;
+                        match refresh {
+                            RefreshMode::FullReload => self.refresh().await,
+                            RefreshMode::SetBody | RefreshMode::Diff => {
+                                let event = if body != "" {
+                                    EventBuilder::new(body)
+                                        .event_type(if refresh == RefreshMode::Diff {
+                                            "body"
+                                        } else {
+                                            "set-body"
+                                        })
+                                } else {
+                                    EventBuilder::new(".").event_type("clear-body")
+                                }.id(&frame_id.to_string()).build();
+                                // We're ignoring this future because we don't care how
+                                // many clients of the page there are
+                                let _unused = updates.send_to_clients(event).await;
+                            }
                         }
                     } else {
                         let event = EventBuilder::new(".")
