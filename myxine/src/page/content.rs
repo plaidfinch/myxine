@@ -184,7 +184,10 @@ impl Content {
     /// existed, if any. Returns `true` if the page content was changed (either
     /// converted from static, or altered whilst dynamic).
     pub(in super) async fn set_body(
-        &mut self, frame_id: Id<Frame>, new_body: impl Into<String>
+        &mut self,
+        frame_id: Id<Frame>,
+        new_body: impl Into<String>,
+        refresh: bool,
     ) -> bool {
         let mut changed = false;
         loop {
@@ -193,15 +196,21 @@ impl Content {
                     let new_body = new_body.into();
                     if new_body != *body {
                         *body = new_body;
-                        let event = if body != "" {
-                            EventBuilder::new(body).event_type("body")
-                        } else {
-                            EventBuilder::new(".").event_type("clear-body")
-                        }.id(&frame_id.to_string()).build();
-                        // We're ignoring this future because we don't care how
-                        // many clients of the page there are
-                        let _unused = updates.send_to_clients(event).await;
                         changed = true;
+                        // If refreshing whole page, do so; otherwise,
+                        // diff-update
+                        if refresh {
+                            self.refresh().await;
+                        } else {
+                            let event = if body != "" {
+                                EventBuilder::new(body).event_type("body")
+                            } else {
+                                EventBuilder::new(".").event_type("clear-body")
+                            }.id(&frame_id.to_string()).build();
+                            // We're ignoring this future because we don't care how
+                            // many clients of the page there are
+                            let _unused = updates.send_to_clients(event).await;
+                        }
                     } else {
                         let event = EventBuilder::new(".")
                             .event_type("frame")

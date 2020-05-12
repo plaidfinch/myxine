@@ -283,10 +283,12 @@ impl Page {
         &self,
         new_title: impl Into<String>,
         new_body: impl Into<String>,
+        refresh: bool,
         frame_subscription: Option<Subscription>,
     ) -> Body {
         // Get the next frame id for this page
         let frame_id = self.next_frame().await;
+
         // If the user wants to subscribe to events only on this frame, then set
         // up that transient subscription and return the event stream for the
         // single specified subscription. If there was no subscription
@@ -311,14 +313,14 @@ impl Page {
             drop(subscribers);
             // Update the title and body and note whether they've changed
             content.set_title(frame_id, new_title).await;
-            content.set_body(frame_id, new_body).await;
+            content.set_body(frame_id, new_body, refresh).await;
             event_stream
         } else {
             // If there's no transient subscription required, then just set the
             // content and return the empty body
             let mut content = self.content.lock().await;
             content.set_title(frame_id, new_title).await;
-            content.set_body(frame_id, new_body).await;
+            content.set_body(frame_id, new_body, refresh).await;
             Body::empty()
         }
     }
@@ -347,6 +349,6 @@ impl Page {
         let frame_id = self.next_frame().await;
         content.set_subscriptions(frame_id, AggregateSubscription::empty()).await;
         content.set_title(frame_id, "").await;
-        content.set_body(frame_id, "").await;
+        content.set_body(frame_id, "", false).await;
     }
 }

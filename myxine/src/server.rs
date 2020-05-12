@@ -273,10 +273,7 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                                     eprintln!("\n{}", body);
                                 }
                                 let event_stream =
-                                    page.set_content(title, body, subscription).await;
-                                if refresh {
-                                    page.refresh().await;
-                                }
+                                    page.set_content(title, body, refresh, subscription).await;
                                 Response::new(event_stream)
                             },
                             Err(_) => response_with_status(
@@ -392,7 +389,7 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
             if query != "" {
                 return Ok(response_with_status(StatusCode::BAD_REQUEST, "Invalid query string in DELETE."));
             }
-            Response::new(page.set_content("", "", None).await)
+            Response::new(page.set_content("", "", false, None).await)
         },
 
         _ => Response::builder()
