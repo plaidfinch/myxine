@@ -73,7 +73,7 @@ impl Content {
                     EventBuilder::new(".").event_type("clear-title")
                 }.build();
                 let body_event = if *body != "" {
-                    EventBuilder::new(body).event_type("set-body")
+                    EventBuilder::new(body).event_type("body")
                 } else {
                     EventBuilder::new(".").event_type("clear-body")
                 }.build();
