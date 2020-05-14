@@ -12,10 +12,9 @@ mod subscription;
 mod query;
 mod content;
 mod sse;
-mod id;
 
 pub use subscription::{Subscription, AggregateSubscription, Event};
-pub use id::{Id, Global, Frame};
+use crate::unique::Unique;
 use subscription::Subscribers;
 use query::Queries;
 use content::Content;
@@ -25,7 +24,6 @@ use super::server::RefreshMode;
 /// `Subscribers` to the events on the page.
 #[derive(Debug)]
 pub struct Page {
-    frame_id: Mutex<Id<Frame>>,
     content: Mutex<Content>,
     subscribers: Mutex<Subscribers>,
     queries: Mutex<Queries<Result<Value, String>>>,
@@ -76,24 +74,10 @@ impl Page {
     /// Make a new empty (dynamic) page.
     pub async fn new() -> Page {
         Page {
-            frame_id: Mutex::new(Id::new(Frame::new())),
             content: Mutex::new(Content::new().await),
             subscribers: Mutex::new(Subscribers::new()),
             queries: Mutex::new(Queries::new()),
         }
-    }
-
-    /// Increment the frame number for the page. This should be called
-    /// internally whenever its contents have been updated.
-    async fn next_frame(&self) -> Id<Frame> {
-        let mut frame_id = self.frame_id.lock().await;
-        *frame_id = Id::new(Frame::new());
-        *frame_id
-    }
-
-    /// Get the current frame number for this page.
-    async fn current_frame(&self) -> Id<Frame> {
-        *self.frame_id.lock().await
     }
 
     /// Render a whole page as HTML (for first page load).
@@ -101,7 +85,6 @@ impl Page {
         match &*self.content.lock().await {
             Content::Dynamic{title, body, ..} => {
                 let debug = cfg!(debug_assertions).to_string();
-                let frame_id = format!("\"{}\"", self.current_frame().await);
                 let subscription = {
                     let subscribers = self.subscribers.lock().await;
                     let aggregate_subscription = subscribers.total_subscription();
@@ -117,7 +100,6 @@ impl Page {
                        include_str!("page/dynamic.html"),
                        debug = debug,
                        title = title,
-                       frame_id = frame_id,
                        subscription = subscription,
                        body = body)
                     .expect("Internal error: write!() failed on a Vec<u8>");
@@ -131,14 +113,13 @@ impl Page {
 
     /// Subscribe another page event listener to this page, given a subscription
     /// specification for what events to listen to.
-    pub async fn event_stream(&self, subscription: Subscription) -> (Id<Global>, Body) {
+    pub async fn event_stream(&self, subscription: Subscription) -> (Unique, Body) {
         let mut subscribers = self.subscribers.lock().await;
         let (id, new_aggregate, event_stream) =
             subscribers.add_persistent_subscriber(subscription).await;
-        let frame_id = self.current_frame().await;
         let content = &mut *self.content.lock().await;
         if let Some(aggregate) = new_aggregate {
-            content.set_subscriptions(frame_id, aggregate).await;
+            content.set_subscriptions(aggregate).await;
         }
         (id, event_stream)
     }
@@ -146,12 +127,12 @@ impl Page {
     /// Send an event to all subscribers. This should only be called with events
     /// that have come from the corresponding page itself, or confusion will
     /// result!
-    pub async fn send_event(&self, frame_id: Id<Frame>, event: Event) {
+    pub async fn send_event(&self, event: Event) {
         if let Some(total_subscription) =
             self.subscribers.lock().await
-            .send_event(frame_id, event).await {
+            .send_event(event).await {
                 let content = &mut *self.content.lock().await;
-                content.set_subscriptions(frame_id, total_subscription).await;
+                content.set_subscriptions(total_subscription).await;
             }
     }
 
@@ -226,7 +207,7 @@ impl Page {
     /// Notify waiting clients of the result to some in-page JavaScript
     /// evaluation they have requested, either with an error or a valid
     /// response.
-    pub async fn send_evaluate_result(&self, id: Id<Global>, result: Result<Value, String>) {
+    pub async fn send_evaluate_result(&self, id: Unique, result: Result<Value, String>) {
         self.queries.lock().await.respond(id, result).unwrap_or(())
     }
 
@@ -251,13 +232,6 @@ impl Page {
         content.update_stream().await
     }
 
-    /// Tell the content of the page to do a full refresh from the server. This
-    /// can be invoked by the client in the case of "poorly-behaved" HTML (such
-    /// as that containing SVGs) that don't play well with incremental diffing.
-    pub async fn refresh(&self) {
-        self.content.lock().await.refresh().await
-    }
-
     /// Set the contents of the page to be a static raw set of bytes with no
     /// self-refreshing functionality. All clients will be told to refresh their
     /// page to load the new static content (which will not be able to update
@@ -266,7 +240,6 @@ impl Page {
                             content_type: Option<String>,
                             raw_contents: Bytes) {
         let mut content = self.content.lock().await;
-        self.next_frame().await;
         content.set_static(content_type, raw_contents).await
     }
 
@@ -285,55 +258,20 @@ impl Page {
         new_title: impl Into<String>,
         new_body: impl Into<String>,
         refresh: RefreshMode,
-        frame_subscription: Option<Subscription>,
     ) -> Body {
-        // Get the next frame id for this page
-        let frame_id = self.next_frame().await;
-
-        // If the user wants to subscribe to events only on this frame, then set
-        // up that transient subscription and return the event stream for the
-        // single specified subscription. If there was no subscription
-        // specified, returns the empty `Body`.
-        if let Some(frame_subscription) = frame_subscription {
-            // We only lock the subscribers in this scope, so that if the user
-            // doesn't want events from this frame we don't pay the
-            // synchronization penalty.
-            let mut subscribers = self.subscribers.lock().await;
-            let (new_aggregate, event_stream) =
-                subscribers.add_transient_subscriber(frame_id, frame_subscription).await;
-            // The content and subscribers locks need to overlap here because
-            // the lifetime of the aggregate subscription is tied to the
-            // lifetime of the subscribers.
-            let mut content = self.content.lock().await;
-            // We update the subscriptions before we update the body, to
-            // make sure we don't miss any events.
-            if let Some(aggregate) = new_aggregate {
-                content.set_subscriptions(frame_id, aggregate).await;
-            }
-            // Don't lock subscribers for any longer than is necessary
-            drop(subscribers);
-            // Update the title and body and note whether they've changed
-            content.set_title(frame_id, new_title).await;
-            content.set_body(frame_id, new_body, refresh).await;
-            event_stream
-        } else {
-            // If there's no transient subscription required, then just set the
-            // content and return the empty body
-            let mut content = self.content.lock().await;
-            content.set_title(frame_id, new_title).await;
-            content.set_body(frame_id, new_body, refresh).await;
-            Body::empty()
-        }
+        let mut content = self.content.lock().await;
+        content.set_title(new_title).await;
+        content.set_body(new_body, refresh).await;
+        Body::empty()
     }
 
     /// Change a particular existing subscription stream's subscription,
     /// updating the aggregate subscription in the browser if necessary. Returns
     /// `Err(())` if the id given does not correspond to an extant stream.
-    pub async fn change_subscription(&self, id: Id<Global>, subscription: Subscription) -> Result<(), ()> {
+    pub async fn change_subscription(&self, id: Unique, subscription: Subscription) -> Result<(), ()> {
         match self.subscribers.lock().await.change_subscription(id, subscription) {
             Ok(Some(new_aggregate)) => {
-                let frame_id = self.current_frame().await;
-                self.content.lock().await.set_subscriptions(frame_id, new_aggregate).await;
+                self.content.lock().await.set_subscriptions(new_aggregate).await;
                 Ok(())
             },
             Ok(None) => Ok(()),
@@ -347,9 +285,8 @@ impl Page {
         let subscribers = &mut *self.subscribers.lock().await;
         *subscribers = Subscribers::new();
         let content = &mut *self.content.lock().await;
-        let frame_id = self.next_frame().await;
-        content.set_subscriptions(frame_id, AggregateSubscription::empty()).await;
-        content.set_title(frame_id, "").await;
-        content.set_body(frame_id, "", RefreshMode::Diff).await;
+        content.set_subscriptions(AggregateSubscription::empty()).await;
+        content.set_title("").await;
+        content.set_body("", RefreshMode::Diff).await;
     }
 }

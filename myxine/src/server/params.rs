@@ -2,7 +2,8 @@ use serde_urlencoded;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
-use crate::page::{Subscription, Id, Global, Frame};
+use crate::page::Subscription;
+use crate::unique::Unique;
 
 /// Parsed parameters from a query string for a GET/HEAD request.
 pub(crate) enum GetParams {
@@ -54,28 +55,22 @@ pub enum RefreshMode {
 
 /// Parsed parameters from a query string for a POST request.
 pub(crate) enum PostParams {
-    DynamicPage{title: String, refresh: RefreshMode, subscription: Option<Subscription>},
+    DynamicPage{title: String, refresh: RefreshMode},
     StaticPage,
     Evaluate{expression: Option<String>, timeout: Option<Duration>},
-    ChangeSubscription{id: Id<Global>, subscription: Subscription},
+    ChangeSubscription{id: Unique, subscription: Subscription},
     // TODO: Add validation key to page-sent events to prevent MITM?
-    PageEvent{id: Id<Frame>},
-    EvalResult{id: Id<Global>},
-    EvalError{id: Id<Global>},
+    PageEvent,
+    EvalResult{id: Unique},
+    EvalError{id: Unique},
 }
 
 impl PostParams {
     /// Parse a query string from a POST request.
     pub fn parse(query: &str) -> Option<PostParams> {
         let params = query_params(query)?;
-        if constrained_to_keys(&params, &["title", "event", "events", "refresh"]) {
+        if constrained_to_keys(&params, &["title", "refresh"]) {
             let title = param_as_str("title", &params).unwrap_or("").to_string();
-            let subscription =
-                if params.contains_key("event") || params.contains_key("events") {
-                    Some(parse_subscription(&params))
-                } else {
-                    None
-                };
             let refresh = match param_as_flag("refresh", &params) {
                 Some(true) => RefreshMode::FullReload,
                 Some(false) => RefreshMode::Diff,
@@ -86,24 +81,26 @@ impl PostParams {
                     _ => return None,
                 }
             };
-            return Some(PostParams::DynamicPage{title, refresh, subscription})
+            return Some(PostParams::DynamicPage{title, refresh})
         } else if constrained_to_keys(&params, &["static"]) {
             if param_as_flag("static", &params)? {
                 return Some(PostParams::StaticPage);
             }
-        } else if let Some(id) = param_as_str("subscription", &params).and_then(|s| Id::parse_str(s)) {
+        } else if let Some(id) =
+            param_as_str("subscription", &params)
+            .and_then(|s| Unique::parse_str(s))
+        {
             let subscription = parse_subscription(&params);
             return Some(PostParams::ChangeSubscription{id, subscription})
         } else if constrained_to_keys(&params, &["page-result"]) {
-            let id = Id::parse_str(param_as_str("page-result", &params)?)?;
+            let id = Unique::parse_str(param_as_str("page-result", &params)?)?;
             return Some(PostParams::EvalResult{id})
         } else if constrained_to_keys(&params, &["page-error"]) {
-            let id = Id::parse_str(param_as_str("page-error", &params)?)?;
+            let id = Unique::parse_str(param_as_str("page-error", &params)?)?;
             return Some(PostParams::EvalError{id})
-        } else if constrained_to_keys(&params, &["page-event", "page-frame"]) {
+        } else if constrained_to_keys(&params, &["page-event"]) {
             if param_as_flag("page-event", &params)? {
-                let id = Id::parse_str(param_as_str("page-frame", &params)?)?;
-                return Some(PostParams::PageEvent{id})
+                return Some(PostParams::PageEvent)
             }
         } else if constrained_to_keys(&params, &["evaluate", "timeout"]) {
             let timeout = if let Some(timeout_str) = param_as_str("timeout", &params) {

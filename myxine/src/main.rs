@@ -2,6 +2,7 @@ use structopt::StructOpt;
 
 mod server;
 mod page;
+mod unique;
 
 #[derive(Debug, StructOpt)]
 struct Options {

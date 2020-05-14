@@ -268,7 +268,7 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                     }
                 },
                 // Client wants to publish some HTML to a dynamic page:
-                Some(PostParams::DynamicPage{title, refresh, subscription}) => {
+                Some(PostParams::DynamicPage{title, refresh}) => {
                     if writeable_path {
                         let body_bytes = body::to_bytes(body).await?.as_ref().into();
                         match String::from_utf8(body_bytes) {
@@ -277,7 +277,7 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                                     eprintln!("\n{}", body);
                                 }
                                 let event_stream =
-                                    page.set_content(title, body, refresh, subscription).await;
+                                    page.set_content(title, body, refresh).await;
                                 Response::new(event_stream)
                             },
                             Err(_) => response_with_status(
@@ -304,10 +304,10 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                     }
                 },
                 // Browser wants to notify client of an event
-                Some(PostParams::PageEvent{id: page_id}) => {
+                Some(PostParams::PageEvent) => {
                     match serde_json::from_slice(body::to_bytes(body).await?.as_ref()) {
                         Ok(event) => {
-                            page.send_event(page_id, event).await;
+                            page.send_event(event).await;
                             Response::new(Body::empty())
                         },
                         Err(err) => {
@@ -393,7 +393,7 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
             if query != "" {
                 return Ok(response_with_status(StatusCode::BAD_REQUEST, "Invalid query string in DELETE."));
             }
-            Response::new(page.set_content("", "", RefreshMode::Diff, None).await)
+            Response::new(page.set_content("", "", RefreshMode::Diff).await)
         },
 
         _ => Response::builder()

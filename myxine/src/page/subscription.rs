@@ -3,10 +3,9 @@ use serde::{Serialize, Deserialize};
 use serde_json::{Value, json};
 use hyper::Body;
 use futures::future;
-use std::cmp::Ordering;
 
 use super::sse;
-use super::id::{Id, Global, Frame};
+use crate::unique::Unique;
 
 /// An incoming event sent from the browser, intended to be forwarded directly
 /// to listeners. While there is more structure here than merely a triple of
@@ -121,10 +120,7 @@ impl<'a> AggregateSubscription {
 const EVENT_BUFFER_SIZE: usize = 10_000;
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-enum SinkId {
-    Persistent(Id<Global>),
-    Transient(Id<Frame>),
-}
+struct SinkId(Unique);
 
 #[derive(Debug)]
 pub struct Subscribers {
@@ -189,24 +185,11 @@ impl Subscribers {
     pub async fn add_persistent_subscriber(
         &mut self,
         subscription: Subscription,
-    ) -> (Id<Global>, Option<AggregateSubscription>, Body) {
-        let id = Id::new(Global);
+    ) -> (Unique, Option<AggregateSubscription>, Body) {
+        let id = Unique::new();
         let (aggregate, body) =
-            self.add_subscriber_with_id(SinkId::Persistent(id), subscription).await;
+            self.add_subscriber_with_id(SinkId(id), subscription).await;
         (id, aggregate, body)
-    }
-
-    /// Add a new *transient* subscription to this set of subscribers, returning
-    /// a streaming body to be sent to the subscribing client. The returned
-    /// `Body` will terminate as soon as an event from any future `Frame` is
-    /// sent from the browser, since this indicates that no events from this
-    /// `Frame` could happen again.
-    pub async fn add_transient_subscriber(
-        &mut self,
-        frame_id: Id<Frame>,
-        subscription: Subscription,
-    ) -> (Option<AggregateSubscription>, Body) {
-        self.add_subscriber_with_id(SinkId::Transient(frame_id), subscription).await
     }
 
     /// Send an event to all subscribers to that event, giving each subscriber
@@ -214,9 +197,9 @@ impl Subscribers {
     /// list of subscribers has changed (that is, by client disconnection),
     /// returns the union of all now-current subscriptions.
     pub async fn send_event<'a>(
-        &'a mut self, frame_id: Id<Frame>, event: Event
+        &'a mut self, event: Event
     ) -> Option<AggregateSubscription> {
-        send_to_all(&mut self.sinks, &frame_id, &event).await
+        send_to_all(&mut self.sinks, &event).await
     }
 
     /// Change the subscription for a particular persistent subscriber,
@@ -224,9 +207,9 @@ impl Subscribers {
     /// Otherwise, returns the new aggregate subscription, if it has changed, or
     /// `None` if it has not.
     pub fn change_subscription<'a>(
-        &'a mut self, id: Id<Global>, subscription: Subscription,
+        &'a mut self, id: Unique, subscription: Subscription,
     ) -> Result<Option<AggregateSubscription>, ()> {
-        let key = SinkId::Persistent(id);
+        let key = SinkId(id);
         match self.sinks.remove(&key) {
             None => Err(()),
             Some(Sink{server, subscription: old_subscription}) => {
@@ -263,7 +246,6 @@ impl Subscribers {
 /// to remove all those sinks which have become disconnected.
 async fn send_to_all<'a>(
     sinks: &'a mut HashMap<SinkId, Sink>,
-    event_frame_id: &Id<Frame>,
     event: &Event,
 ) -> Option<AggregateSubscription> {
     // The collection of futures for sending the event
@@ -272,48 +254,25 @@ async fn send_to_all<'a>(
     let send_futures = sinks.iter_mut().map(move |(sink_id, sink)| {
         // Make a future for sending the message to the subscriber
         async move {
-            // Determine the relationship in time between the event's frame
-            // number and the sink in question
-            let frame_ordering = match sink_id {
-                SinkId::Persistent(_) => Ordering::Equal,
-                SinkId::Transient(sink_frame_id) =>
-                    sink_frame_id.partial_cmp(event_frame_id)
-                    .unwrap_or(Ordering::Equal)
-            };
-            match frame_ordering {
-                // If the sink's frame is *after* the frame of this event, then
-                // the event is from a stale frame, and shouldn't affect this
-                // sink.
-                Ordering::Greater => None,
-                // If the sink's frame is *before* the frame of this event, then
-                // we should prune this sink, since no more events from its
-                // frame will happen (frame numbers monotonically increase).
-                Ordering::Less => Some(*sink_id),
-                // If the sink's frame matches the frame for the event, then the
-                // event is from that frame (or the sink is persistent). We
-                // should dispatch the event to the listener of this sink.
-                Ordering::Equal => {
-                    let Event{event: event_type, properties, targets} = event;
-                    let remaining =
-                        // Message was a normal message
-                        if sink.subscription.matches_event(&event_type) {
-                            // Serialize the fields to JSON
-                            let message = serde_json::to_string(&json!({
-                                "event": event_type,
-                                "properties": properties,
-                                "targets": targets,
-                            })).expect("Serializing to a string shouldn't fail");
-                            Some(sink.server.send_to_clients(message + "\n").await.await)
-                        } else {
-                            None
-                        };
-                    // Return the sinks id to be pruned if it lost the client
-                    remaining.and_then(|r| {
-                        assert!(r <= 1, "Subscriber SSE exceeds 1 client");
-                        if r == 0 { Some(*sink_id) } else { None }
-                    })
-                },
-            }
+            let Event{event: event_type, properties, targets} = event;
+            let remaining =
+                // Message was a normal message
+                if sink.subscription.matches_event(&event_type) {
+                    // Serialize the fields to JSON
+                    let message = serde_json::to_string(&json!({
+                        "event": event_type,
+                        "properties": properties,
+                        "targets": targets,
+                    })).expect("Serializing to a string shouldn't fail");
+                    Some(sink.server.send_to_clients(message + "\n").await.await)
+                } else {
+                    None
+                };
+            // Return the sinks id to be pruned if it lost the client
+            remaining.and_then(|r| {
+                assert!(r <= 1, "Subscriber SSE exceeds 1 client");
+                if r == 0 { Some(*sink_id) } else { None }
+            })
         }
     });
 

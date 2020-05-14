@@ -3,7 +3,6 @@ use hyper::body::Bytes;
 use hyper_usse::EventBuilder;
 use std::mem;
 
-use super::id::{Id, Frame};
 use super::{sse, subscription::AggregateSubscription};
 use super::RefreshMode;
 
@@ -144,7 +143,7 @@ impl Content {
     /// existed, if any. Returns `true` if the page content was changed (either
     /// converted from static, or altered whilst dynamic).
     pub(in super) async fn set_title(
-        &mut self, frame_id: Id<Frame>, new_title: impl Into<String>
+        &mut self, new_title: impl Into<String>
     ) -> bool {
         let mut changed = false;
         loop {
@@ -153,19 +152,14 @@ impl Content {
                     let new_title = new_title.into();
                     if new_title != *title {
                         *title = new_title;
+                        changed = true;
                         let event = if title != "" {
                             EventBuilder::new(title).event_type("title")
                         } else {
                             EventBuilder::new(".").event_type("clear-title")
-                        }.id(&frame_id.to_string()).build();
+                        }.build();
                         // We're ignoring this future because we don't care how
                         // many clients there are
-                        let _unused = updates.send_to_clients(event).await;
-                        changed = true;
-                    } else {
-                        let event = EventBuilder::new(".")
-                            .event_type("frame")
-                            .id(&frame_id.to_string()).build();
                         let _unused = updates.send_to_clients(event).await;
                     }
                     break; // title has been set
@@ -186,7 +180,6 @@ impl Content {
     /// converted from static, or altered whilst dynamic).
     pub(in super) async fn set_body(
         &mut self,
-        frame_id: Id<Frame>,
         new_body: impl Into<String>,
         refresh: RefreshMode,
     ) -> bool {
@@ -212,17 +205,12 @@ impl Content {
                                         })
                                 } else {
                                     EventBuilder::new(".").event_type("clear-body")
-                                }.id(&frame_id.to_string()).build();
+                                }.build();
                                 // We're ignoring this future because we don't care how
                                 // many clients of the page there are
                                 let _unused = updates.send_to_clients(event).await;
                             }
                         }
-                    } else {
-                        let event = EventBuilder::new(".")
-                            .event_type("frame")
-                            .id(&frame_id.to_string()).build();
-                        let _unused = updates.send_to_clients(event).await;
                     }
                     break; // body has been set
                 },
@@ -244,14 +232,12 @@ impl Content {
     /// of these contexts.
     pub(in super) async fn set_subscriptions(
         &mut self,
-        frame_id: Id<Frame>,
         subscription: AggregateSubscription
     ) -> bool {
         let data = serde_json::to_string(&subscription)
             .expect("Serializing subscriptions to JSON shouldn't fail");
         let event = EventBuilder::new(&data)
             .event_type("subscribe")
-            .id(&frame_id.to_string())
             .build();
         if let Content::Dynamic{ref mut updates, ..} = self {
             // We're not using the future returned here because we don't care

@@ -1,4 +1,4 @@
-export function activate(initialFrameId, initialSubscription, debugMode) {
+export function activate(initialSubscription, debugMode) {
 
     // Print debug info if in debug build mode
     const debug = (debugMode ? console.log : function () { /* do nothing */ });
@@ -12,12 +12,6 @@ export function activate(initialFrameId, initialSubscription, debugMode) {
     // The global list of all events and their properties
     let allEventDescriptions;
 
-    // The current frame ID, to be updated each time an update event comes in
-    let currentFrameId = initialFrameId;
-    // The *visible* frame ID, which is updated only after each body redraw
-    let visibleFrameId = initialFrameId;
-    debug("Initial frame id:", currentFrameId);
-
     // NOTE: Why do we use separate workers for events and query results, but
     // only one worker for all events? Well, it matters that events arrive in
     // order so using one worker forces them to be linearized. And having a
@@ -28,9 +22,8 @@ export function activate(initialFrameId, initialSubscription, debugMode) {
     // Actually send an event back to the server
     let sendEventWorker = new window.Worker("/.myxine/assets/post.js");
 
-    function sendEvent(frameId, type, path, properties) {
-        let url = window.location.href
-            + "?page-event&page-frame=" + encodeURIComponent(frameId);
+    function sendEvent(type, path, properties) {
+        let url = window.location.href + "?page-event";
         let data = JSON.stringify({
             event: type,
             targets: path,
@@ -76,9 +69,6 @@ export function activate(initialFrameId, initialSubscription, debugMode) {
         // Redraw the body before the next repaint (but not right now yet)
         animationId = window.requestAnimationFrame(timestamp => {
             window.diff.innerHTML(document.body, body);
-            visibleFrameId = currentFrameId;
-            // only now we set the visibleFrameId, because we've just updated
-            // the body to match the currentFrameId
         });
     }
 
@@ -94,39 +84,18 @@ export function activate(initialFrameId, initialSubscription, debugMode) {
         setupListeners(subscription);
     }
 
-    // Wrap an event handler so that it sets the current frame ID when it fires
-    function settingFrameId(f) {
-        return function(event) {
-            if (typeof event.lastEventId !== "undefined"
-                && event.lastEventId !== "") {
-                currentFrameId = event.lastEventId;
-            } else {
-                debug("Couldn't set current frame id during:", f);
-            }
-            return f(event);
-        };
-    }
-
     // Changing the DOM contents
     function setBody(event)         { setBodyTo(event.data); }
     function setBodyDirectly(event) { document.body.innerHTML = event.data; }
     function clearBody(event)       { setBodyTo(""); }
     function setTitle(event)        { document.title = event.data; }
     function clearTitle(event)      { document.title = ""; }
-    function newFrame(event)        { visibleFrameId = currentFrameId;  }
-
-    // Reload the *whole* page from the server
-    // Called when transitioning to static page, among other situations
-    function refresh(event) {
-        window.location.reload();
-    }
-
-    // The evaluate-* type events should **NOT** set the current frame ID
-    // This is because they are "global" and not frame-bound
+    function refresh(event)         { window.location.reload(); }
 
     // Evaluate a JavaScript expression in the global environment
     function evaluate(expression, statementMode) {
-        // TODO: LRU-limited memoization (using memoizee?)
+        // TODO: LRU-limited memoization of functions themselves (not their
+        // results), possibly using memoizee?
         if (!statementMode) {
             return Function("return (" + expression + ")")();
         } else {
@@ -238,7 +207,7 @@ export function activate(initialFrameId, initialSubscription, debugMode) {
                         .forEach(([property, formatter]) => {
                             data[property] = formatter(event[property]);
                         });
-                    sendEvent(visibleFrameId, eventName, path, data);
+                    sendEvent(eventName, path, data);
                 };
                 debug("Adding listener:", eventName);
                 window.addEventListener(eventName, listener);
@@ -274,12 +243,11 @@ export function activate(initialFrameId, initialSubscription, debugMode) {
     };
 
     // The listeners:
-    sse.addEventListener("body",        settingFrameId(setBody));
-    sse.addEventListener("set-body",    settingFrameId(setBodyDirectly));
-    sse.addEventListener("clear-body",  settingFrameId(clearBody));
-    sse.addEventListener("title",       settingFrameId(setTitle));
-    sse.addEventListener("clear-title", settingFrameId(clearTitle));
-    sse.addEventListener("frame",       settingFrameId(newFrame));
+    sse.addEventListener("body",        setBody);
+    sse.addEventListener("set-body",    setBodyDirectly);
+    sse.addEventListener("clear-body",  clearBody);
+    sse.addEventListener("title",       setTitle);
+    sse.addEventListener("clear-title", clearTitle);
     sse.addEventListener("refresh",     refresh);
     sse.addEventListener("subscribe",   resubscribe);
     sse.addEventListener("evaluate",    event => evaluateAndRespond(false, event));
