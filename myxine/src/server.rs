@@ -18,7 +18,7 @@ mod params;
 mod heartbeat;
 
 use crate::page::Page;
-use params::{GetParams, PostParams};
+pub(crate) use params::{GetParams, PostParams, RefreshMode};
 
 lazy_static! {
     /// The current contents of the server, indexed by path
@@ -264,7 +264,7 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                     }
                 },
                 // Client wants to publish some HTML to a dynamic page:
-                Some(PostParams::DynamicPage{title, subscription}) => {
+                Some(PostParams::DynamicPage{title, refresh, subscription}) => {
                     if writeable_path {
                         let body_bytes = body::to_bytes(body).await?.as_ref().into();
                         match String::from_utf8(body_bytes) {
@@ -273,7 +273,7 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                                     eprintln!("\n{}", body);
                                 }
                                 let event_stream =
-                                    page.set_content(title, body, subscription).await;
+                                    page.set_content(title, body, refresh, subscription).await;
                                 Response::new(event_stream)
                             },
                             Err(_) => response_with_status(
@@ -389,7 +389,7 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
             if query != "" {
                 return Ok(response_with_status(StatusCode::BAD_REQUEST, "Invalid query string in DELETE."));
             }
-            Response::new(page.set_content("", "", None).await)
+            Response::new(page.set_content("", "", RefreshMode::Diff, None).await)
         },
 
         _ => Response::builder()

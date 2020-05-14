@@ -19,6 +19,7 @@ pub use id::{Id, Global, Frame};
 use subscription::Subscribers;
 use query::Queries;
 use content::Content;
+use super::server::RefreshMode;
 
 /// A `Page` pairs some page `Content` (either dynamic or static) with a set of
 /// `Subscribers` to the events on the page.
@@ -250,6 +251,13 @@ impl Page {
         content.update_stream().await
     }
 
+    /// Tell the content of the page to do a full refresh from the server. This
+    /// can be invoked by the client in the case of "poorly-behaved" HTML (such
+    /// as that containing SVGs) that don't play well with incremental diffing.
+    pub async fn refresh(&self) {
+        self.content.lock().await.refresh().await
+    }
+
     /// Set the contents of the page to be a static raw set of bytes with no
     /// self-refreshing functionality. All clients will be told to refresh their
     /// page to load the new static content (which will not be able to update
@@ -276,10 +284,12 @@ impl Page {
         &self,
         new_title: impl Into<String>,
         new_body: impl Into<String>,
+        refresh: RefreshMode,
         frame_subscription: Option<Subscription>,
     ) -> Body {
         // Get the next frame id for this page
         let frame_id = self.next_frame().await;
+
         // If the user wants to subscribe to events only on this frame, then set
         // up that transient subscription and return the event stream for the
         // single specified subscription. If there was no subscription
@@ -304,14 +314,14 @@ impl Page {
             drop(subscribers);
             // Update the title and body and note whether they've changed
             content.set_title(frame_id, new_title).await;
-            content.set_body(frame_id, new_body).await;
+            content.set_body(frame_id, new_body, refresh).await;
             event_stream
         } else {
             // If there's no transient subscription required, then just set the
             // content and return the empty body
             let mut content = self.content.lock().await;
             content.set_title(frame_id, new_title).await;
-            content.set_body(frame_id, new_body).await;
+            content.set_body(frame_id, new_body, refresh).await;
             Body::empty()
         }
     }
@@ -340,6 +350,6 @@ impl Page {
         let frame_id = self.next_frame().await;
         content.set_subscriptions(frame_id, AggregateSubscription::empty()).await;
         content.set_title(frame_id, "").await;
-        content.set_body(frame_id, "").await;
+        content.set_body(frame_id, "", RefreshMode::Diff).await;
     }
 }
