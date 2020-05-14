@@ -46,7 +46,8 @@ pub async fn run(socket_addr: SocketAddr) -> Result<(), hyper::Error> {
 
     // Signals to shut down the server
     let serve = server.with_graceful_shutdown(async {
-        tokio::signal::ctrl_c().await.unwrap_or(());
+        wait_any_shutdown_signal().await;
+        
         // Clean-up after the server is killed: set every extant page to the
         // empty page and remove all their subscriptions
         let mut pages = PAGES.lock().await;
@@ -207,7 +208,10 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                     builder.body(body).unwrap()
                 },
                 None => {
-                    response_with_status(StatusCode::BAD_REQUEST, "Invalid query string in GET.")
+                    response_with_status(
+                        StatusCode::BAD_REQUEST,
+                        "Invalid query string in GET."
+                    )
                 },
             }
         },
@@ -397,6 +401,46 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
             .body(format!("Method not allowed: {}", method).into())
             .unwrap(),
     })
+}
+
+// Shutdown signal handling
+
+/// Wait for the SIGTERM signal to be sent to the process.
+#[cfg(all(unix))]
+async fn wait_platform_term_signal() {
+    let sig = tokio::signal::unix::SignalKind::terminate();
+    tokio::signal::unix::signal(sig)
+        .unwrap_or_else(|e| {
+            panic!("Internal error: issue with SIGTERM handler: {}", e)
+        })
+        .recv()
+        .await;
+}
+
+/// Wait for the CTRL-BREAK signal to be sent to the process.
+#[cfg(windows)]
+async fn wait_platform_term_signal() {
+    tokio::signal::windows::ctrl_break()
+        .unwrap_or_else(|e| {
+            panic!("Internal error: issue with CTRL-BREAK handler: {}", e)
+        })
+        .recv()
+        .await
+}
+
+/// Wait for either Ctrl-C or the platform's native termination signal to be
+/// sent to the process (either SIGTERM on Unix or CTRL-BREAK on Windows).
+async fn wait_any_shutdown_signal() {
+    // Wait for either Ctrl-C or the platform-native termination signal
+    let ctrl_c = async {
+        tokio::signal::ctrl_c().await.unwrap_or(())
+    }.fuse();
+    let term = wait_platform_term_signal().fuse();
+    pin_mut!(term, ctrl_c);
+    select! {
+        () = ctrl_c => (),
+        () = term => (),
+    }
 }
 
 // Some utilities for this module:
