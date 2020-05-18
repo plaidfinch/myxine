@@ -71,7 +71,7 @@ def events(path: str,
                 pass
     except RequestException as e:
         msg = "Connection issue with myxine server (is it running?)"
-        raise ValueError(msg, e)
+        raise ValueError(msg) from e
 
 
 def evaluate(path: str, *,
@@ -106,7 +106,7 @@ def evaluate(path: str, *,
             raise ValueError(r.text)
     except RequestException as e:
         msg = "Connection issue with myxine server (is it running?)"
-        raise ValueError(msg, e)
+        raise ValueError(msg) from e
 
 
 def update(path: str,
@@ -121,7 +121,7 @@ def update(path: str,
         requests.post(url, data=body.encode(), params={'title': title})
     except RequestException as e:
         msg = "Connection issue with myxine server (is it running?)"
-        raise ValueError(msg, e)
+        raise ValueError(msg) from e
 
 
 def static(path: str,
@@ -137,4 +137,4 @@ def static(path: str,
         requests.post(url, data=body, headers={'Content-Type': content_type})
     except RequestException as e:
         msg = "Connection issue with myxine server (is it running?)"
-        raise ValueError(msg, e)
+        raise ValueError(msg) from e
