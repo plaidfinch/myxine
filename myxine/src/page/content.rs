@@ -3,8 +3,9 @@ use hyper::body::Bytes;
 use hyper_usse::EventBuilder;
 use std::mem;
 
-use super::{sse, subscription::AggregateSubscription};
+use super::subscription::AggregateSubscription;
 use super::RefreshMode;
+use super::sse::BroadcastBody;
 
 /// The `Content` of a page is either `Dynamic` or `Static`. If it's dynamic, it
 /// has a title, body, and a set of SSE event listeners who are waiting for
@@ -19,7 +20,7 @@ pub(in super) enum Content {
     Dynamic {
         title: String,
         body: String,
-        updates: sse::BufferedServer,
+        updates: BroadcastBody,
     },
     Static {
         content_type: Option<String>,
@@ -27,34 +28,28 @@ pub(in super) enum Content {
     }
 }
 
-/// The maximum number of messages to buffer before blocking a send. This means
-/// a client can send a burst of up to this many "frames" of HTML before it
-/// experiences backpressure.
+/// The maximum number of messages to buffer before dropping an update. This is
+/// set to 1, because dropped updates are okay (the most recent update will
+/// always get through once things quiesce).
 const UPDATE_BUFFER_SIZE: usize = 1;
-// TODO: Should this be client-configurable? Larger values are good for "bursty"
-// workloads where many frames will be sent, followed by relative sparsity, but
-// smaller values lead to smoother movement by more consistently rate-limiting
-// the client's frames dynamically based on the speed of the browser's rending
-// engine. Right now this is set to optimize for browser smoothness rather than
-// bursty throughput from the client.
 
 impl Content {
     /// Make a new empty (dynamic) page
-    pub(in super) async fn new() -> Content {
+    pub(in super) fn new() -> Content {
         Content::Dynamic {
             title: String::new(),
             body: String::new(),
-            updates: sse::BufferedServer::new(UPDATE_BUFFER_SIZE).await,
+            updates: BroadcastBody::new(UPDATE_BUFFER_SIZE),
         }
     }
 
     /// Test if this page is empty, where "empty" means that it is dynamic, with
     /// an empty title, empty body, and no subscribers waiting on its page
     /// events: that is, it's identical to `Content::new()`.
-    pub(in super) async fn is_empty(&mut self) -> bool {
+    pub(in super) fn is_empty(&mut self) -> bool {
         match self {
             Content::Dynamic{title, body, ref mut updates}
-            if title == "" && body == "" => updates.connections().await == 0,
+            if title == "" && body == "" => updates.connections() == 0,
             _ => false,
         }
     }
@@ -62,10 +57,9 @@ impl Content {
     /// Add a client to the dynamic content of a page, if it is dynamic. If it
     /// is static, this has no effect and returns None. Otherwise, returns the
     /// Body stream to give to the new client.
-    pub(in super) async fn update_stream(&mut self) -> Option<Body> {
+    pub(in super) fn update_stream(&mut self) -> Option<Body> {
         match self {
             Content::Dynamic{updates, title, body} => {
-                let (channel, stream_body) = Body::channel();
                 let title_event = if *title != "" {
                     EventBuilder::new(&title).event_type("title")
                 } else {
@@ -76,11 +70,9 @@ impl Content {
                 } else {
                     EventBuilder::new(".").event_type("clear-body")
                 }.build();
-                updates.add_client(channel).await;
-                // We're ignoring these futures because we don't care what
-                // number of clients there are
-                let _unused = updates.send_to_clients(title_event).await;
-                let _unused = updates.send_to_clients(body_event).await;
+                let stream_body = updates.body();
+                updates.send(title_event.into());
+                updates.send(body_event.into());
                 Some(stream_body)
             },
             Content::Static{..} => None
@@ -91,11 +83,11 @@ impl Content {
     /// dynamic. This has no effect if it is (currently) static, and returns
     /// `None` if so, otherwise returns the current number of clients getting
     /// live updates to the page.
-    pub(in super) async fn send_heartbeat(&mut self) -> Option<usize> {
+    pub(in super) fn send_heartbeat(&mut self) -> Option<usize> {
         match self {
             Content::Dynamic{updates, ..} => {
                 // Send a heartbeat to pages waiting on <body> updates
-                Some(updates.send_heartbeat().await.await)
+                Some(updates.send(":\n\n".into()))
             },
             Content::Static{..} => None,
         }
@@ -103,13 +95,11 @@ impl Content {
 
     /// Tell all clients to refresh the contents of a page, if it is dynamic.
     /// This has no effect if it is (currently) static.
-    pub(in super) async fn refresh(&mut self) {
+    pub(in super) fn refresh(&mut self) {
         match self {
             Content::Dynamic{updates, ..} => {
                 let event = EventBuilder::new(".").event_type("refresh").build();
-                // We're ignoring this future because we don't care what number
-                // of clients there are
-                let _unused = updates.send_to_clients(event).await;
+                updates.send(event.into());
             },
             Content::Static{..} => { },
         }
@@ -119,13 +109,10 @@ impl Content {
     /// self-refreshing functionality. All clients will be told to refresh their
     /// page to load the new static content (which will not be able to update
     /// itself until a client refreshes their page again).
-    pub(in super) async fn set_static(&mut self,
-                            content_type: Option<String>,
-                            raw_contents: Bytes) {
-        let mut page =
-            Content::Static{content_type, raw_contents};
+    pub(in super) fn set_static(&mut self, content_type: Option<String>, raw_contents: Bytes) {
+        let mut page = Content::Static{content_type, raw_contents};
         mem::swap(&mut page, self);
-        page.refresh().await;
+        page.refresh();
     }
 
     /// Get the content type of a page, or return `None` if none has been set
@@ -142,7 +129,7 @@ impl Content {
     /// page into a dynamic page, overwriting any static content that previously
     /// existed, if any. Returns `true` if the page content was changed (either
     /// converted from static, or altered whilst dynamic).
-    pub(in super) async fn set_title(
+    pub(in super) fn set_title(
         &mut self, new_title: impl Into<String>
     ) -> bool {
         let mut changed = false;
@@ -158,14 +145,12 @@ impl Content {
                         } else {
                             EventBuilder::new(".").event_type("clear-title")
                         }.build();
-                        // We're ignoring this future because we don't care how
-                        // many clients there are
-                        let _unused = updates.send_to_clients(event).await;
+                        updates.send(event.into());
                     }
                     break; // title has been set
                 },
                 Content::Static{..} => {
-                    *self = Content::new().await;
+                    *self = Content::new();
                     changed = true;
                     // and loop again to actually set the title
                 }
@@ -178,7 +163,7 @@ impl Content {
     /// page into a dynamic page, overwriting any static content that previously
     /// existed, if any. Returns `true` if the page content was changed (either
     /// converted from static, or altered whilst dynamic).
-    pub(in super) async fn set_body(
+    pub(in super) fn set_body(
         &mut self,
         new_body: impl Into<String>,
         refresh: RefreshMode,
@@ -194,7 +179,7 @@ impl Content {
                         // If refreshing whole page, do so; otherwise,
                         // diff-update
                         match refresh {
-                            RefreshMode::FullReload => self.refresh().await,
+                            RefreshMode::FullReload => self.refresh(),
                             RefreshMode::SetBody | RefreshMode::Diff => {
                                 let event = if body != "" {
                                     EventBuilder::new(body)
@@ -206,16 +191,14 @@ impl Content {
                                 } else {
                                     EventBuilder::new(".").event_type("clear-body")
                                 }.build();
-                                // We're ignoring this future because we don't care how
-                                // many clients of the page there are
-                                let _unused = updates.send_to_clients(event).await;
+                                updates.send(event.into());
                             }
                         }
                     }
                     break; // body has been set
                 },
                 Content::Static{..} => {
-                    *self = Content::new().await;
+                    *self = Content::new();
                     changed = true;
                     // and loop again to actually set the body
                 }
@@ -230,7 +213,7 @@ impl Content {
     /// sending an event, or sending a heartbeat! It will cause unexpected loss
     /// of messages if you arbitrarily set the subscriptions of a page outside
     /// of these contexts.
-    pub(in super) async fn set_subscriptions(
+    pub(in super) fn set_subscriptions(
         &mut self,
         subscription: AggregateSubscription
     ) -> bool {
@@ -240,10 +223,7 @@ impl Content {
             .event_type("subscribe")
             .build();
         if let Content::Dynamic{ref mut updates, ..} = self {
-            // We're not using the future returned here because we don't care
-            // what the number of client connections is, so we don't need to
-            // wait to find out
-            let _unused_response = updates.send_to_clients(event).await;
+            updates.send(event.into());
             true // the page was dynamic
         } else {
             false // the page was static

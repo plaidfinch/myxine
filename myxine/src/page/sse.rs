@@ -1,85 +1,53 @@
-use hyper_usse;
 use bytes::Bytes;
-use futures::Future;
-use tokio::sync::{Mutex, mpsc, oneshot};
+use tokio::sync::broadcast;
+use tokio::stream::StreamExt;
+use hyper::body::Body;
 
-/// An SSE server implementing buffering, so "bursty" events can be sent without
-/// lagging from the sender.
-#[derive(Debug)]
-pub struct BufferedServer {
-    commands: Mutex<mpsc::Sender<Command>>,
+/// A broadcast channel allowing atomic writes of [`Bytes`] to any number of
+/// streaming [`Body`] subscribers. This can be used to implement, for example,
+/// an SSE mechanism.
+#[derive(Debug, Clone)]
+pub struct BroadcastBody {
+    broadcast: broadcast::Sender<Bytes>,
 }
 
-pub enum Command {
-    Connections(oneshot::Sender<usize>),
-    SendToClients(Bytes, oneshot::Sender<usize>),
-    SendHeartbeat(oneshot::Sender<usize>),
-    DisconnectAll,
-    AddClient(hyper::body::Sender),
-}
+impl BroadcastBody {
+    /// Create a new `BroadcastBody` with a maximum lag of `size`. Consumers of
+    /// `Body`s produced by this `BroadcastBody` will skip writes that lag by
+    /// more than `size`.
+    pub fn new(size: usize) -> Self {
+        BroadcastBody {
+            broadcast: broadcast::channel(size).0,
+        }
+    }
 
-impl BufferedServer {
-    pub async fn new(buffer_size: usize) -> BufferedServer {
-        let (commands, mut receiver) = mpsc::channel(buffer_size);
-        tokio::spawn(async move {
-            let mut server = hyper_usse::Server::new();
-            while let Some(command) = receiver.recv().await {
-                match command {
-                    Command::SendHeartbeat(ret) => {
-                        ret.send(server.send_heartbeat().await).unwrap_or(());
-                    },
-                    Command::SendToClients(bytes, ret) => {
-                        ret.send(server.send_to_clients(bytes).await).unwrap_or(());
-                    },
-                    Command::Connections(ret) => {
-                        ret.send(server.connections()).unwrap_or(());
-                    },
-                    Command::AddClient(sender) =>
-                        server.add_client(sender),
-                    Command::DisconnectAll =>
-                        server.disconnect_all(),
-                }
+    /// Create a streaming [`Body`] that reflects all [`Bytes`] sent (except
+    /// those which lag). This `Body` ends when the `BroadcastBody` itself is
+    /// dropped.
+    pub fn body(&self) -> Body {
+        let rx = self.broadcast.subscribe();
+        Body::wrap_stream(rx.filter_map(|result| {
+            match result {
+                // We ignore lagged items in the stream! If we don't ignore
+                // these, we would terminate the Body on every lag, which is
+                // undesirable.
+                Err(broadcast::RecvError::Lagged(_)) => None,
+                // Otherwise, we leave the result alone.
+                result => Some(result),
             }
-        });
-        BufferedServer{commands: Mutex::new(commands)}
+        }))
     }
 
-    pub async fn add_client(&self, client: hyper::body::Sender) {
-        let mut commands = self.commands.lock().await.clone();
-        commands.send(Command::AddClient(client)).await.unwrap_or(())
+    /// Send some [`Bytes`] to all currently subscribed [`Body`]s. This is sent
+    /// atomically; that is, there will not be interleaving of `Bytes` between
+    /// the inputs to individual calls to `send`.
+    pub fn send(&self, text: Bytes) -> usize {
+        self.broadcast.send(text).unwrap_or(0)
     }
 
-    pub async fn send_to_clients<B: Into<Bytes>>(&self, text: B) -> impl Future<Output = usize> {
-        let (sender, receiver) = oneshot::channel();
-        let mut commands = self.commands.lock().await.clone();
-        commands.send(Command::SendToClients(text.into(), sender)).await.unwrap_or(());
-        async { receiver.await.expect("oneshot::Sender dropped before sending \
-                                       response from BufferedServer, which \
-                                       should be impossible") }
-    }
-
-    #[allow(unused)]
-    pub async fn send_heartbeat(&self) -> impl Future<Output = usize> {
-        let (sender, receiver) = oneshot::channel();
-        let mut commands = self.commands.lock().await.clone();
-        commands.send(Command::SendHeartbeat(sender)).await.unwrap_or(());
-        async { receiver.await.expect("oneshot::Sender dropped before sending \
-                                       response from BufferedServer, which \
-                                       should be impossible") }
-    }
-
-    #[allow(unused)]
-    pub async fn disconnect_all(&self) {
-        let mut commands = self.commands.lock().await.clone();
-        commands.send(Command::DisconnectAll).await.unwrap_or(())
-    }
-
-    pub async fn connections(&self) -> usize {
-        let (sender, receiver) = oneshot::channel();
-        let mut commands = self.commands.lock().await.clone();
-        commands.send(Command::Connections(sender)).await.unwrap_or(());
-        receiver.await.expect("oneshot::Sender dropped before sending \
-                               response from BufferedServer, which \
-                               should be impossible")
+    /// Count the number of [`Body`]s produced by this `BroadcastBody` which
+    /// are live and receiving sent `Bytes`.
+    pub fn connections(&self) -> usize {
+        self.broadcast.receiver_count()
     }
 }

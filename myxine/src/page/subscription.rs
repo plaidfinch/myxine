@@ -112,11 +112,8 @@ impl<'a> AggregateSubscription {
     }
 }
 
-/// The maximum number of messages to buffer before blocking a send. This means
-/// a client can send a burst of up to this number of UI events before it
-/// experiences backpressure. It usually makes sense for this to be much higher
-/// than the buffer size for page content, because page content is likely to be
-/// larger and less "bursty."
+/// The maximum number of messages to buffer before dropping a message (i.e. the
+/// maximum a client can lag in listening for subscribed events).
 const EVENT_BUFFER_SIZE: usize = 10_000;
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
@@ -130,7 +127,7 @@ pub struct Subscribers {
 #[derive(Debug)]
 struct Sink {
     subscription: Subscription,
-    server: sse::BufferedServer,
+    server: sse::BroadcastBody,
 }
 
 impl Subscribers {
@@ -154,9 +151,8 @@ impl Subscribers {
     ) -> (Option<AggregateSubscription>, Body) {
         // Create a new single-client SSE server (new clients will never be added
         // after this, because each event subscription is potentially unique).
-        let server = sse::BufferedServer::new(EVENT_BUFFER_SIZE).await;
-        let (sender, body) = Body::channel();
-        server.add_client(sender).await;
+        let server = sse::BroadcastBody::new(EVENT_BUFFER_SIZE);
+        let body = server.body();
 
         // Determine if the aggregate subscription has changed as a result of
         // this new subscription being added
@@ -264,7 +260,7 @@ async fn send_to_all<'a>(
                         "properties": properties,
                         "targets": targets,
                     })).expect("Serializing to a string shouldn't fail");
-                    Some(sink.server.send_to_clients(message + "\n").await.await)
+                    Some(sink.server.send((message + "\n").into()))
                 } else {
                     None
                 };

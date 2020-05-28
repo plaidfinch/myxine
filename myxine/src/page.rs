@@ -1,5 +1,4 @@
 use hyper::body::{Body, Bytes};
-use hyper_usse::EventBuilder;
 use std::time::Duration;
 use std::io::Write;
 use tokio::sync::Mutex;
@@ -72,9 +71,9 @@ const DEFAULT_EVAL_TIMEOUT: Duration = Duration::from_millis(1000);
 
 impl Page {
     /// Make a new empty (dynamic) page.
-    pub async fn new() -> Page {
+    pub fn new() -> Page {
         Page {
-            content: Mutex::new(Content::new().await),
+            content: Mutex::new(Content::new()),
             subscribers: Mutex::new(Subscribers::new()),
             queries: Mutex::new(Queries::new()),
         }
@@ -119,7 +118,7 @@ impl Page {
             subscribers.add_persistent_subscriber(subscription).await;
         let content = &mut *self.content.lock().await;
         if let Some(aggregate) = new_aggregate {
-            content.set_subscriptions(aggregate).await;
+            content.set_subscriptions(aggregate);
         }
         (id, event_stream)
     }
@@ -132,7 +131,7 @@ impl Page {
             self.subscribers.lock().await
             .send_event(event).await {
                 let content = &mut *self.content.lock().await;
-                content.set_subscriptions(total_subscription).await;
+                content.set_subscriptions(total_subscription);
             }
     }
 
@@ -142,7 +141,7 @@ impl Page {
     /// live updates to the page.
     pub async fn send_heartbeat(&self) -> Option<usize> {
         let mut content = self.content.lock().await;
-        content.send_heartbeat().await
+        content.send_heartbeat()
         // TODO: Send heartbeat to subscribers also? What heartbeat format to
         // use, given that it's not text/event-stream anymore?
     }
@@ -163,13 +162,13 @@ impl Page {
                 let event = EventBuilder::new(expression)
                     .event_type(if statement_mode { "run" } else { "evaluate" })
                     .id(&id_string);
-                let get_client_count = updates.send_to_clients(event.build()).await;
+                let client_count = updates.send(event.into());
                 // All the below gets executed *after* the lock on content is
                 // released, because it's a returned async block that is
                 // .await-ed after the scope of the match closes.
                 async move {
                     // If nobody's listening, give up now and report the issue
-                    if get_client_count.await == 0 {
+                    if client_count == 0 {
                         self.queries.lock().await.cancel(id);
                         Err(EvalError::NoBrowser)
                     } else {
@@ -217,7 +216,7 @@ impl Page {
     pub async fn is_empty(&self) -> bool {
         let (content_empty, subscribers_empty, queries_empty) =
             join!(
-                async { self.content.lock().await.is_empty().await },
+                async { self.content.lock().await.is_empty() },
                 async { self.subscribers.lock().await.is_empty() },
                 async { self.queries.lock().await.is_empty() },
             );
@@ -229,7 +228,7 @@ impl Page {
     /// Body stream to give to the new client.
     pub async fn update_stream(&self) -> Option<Body> {
         let mut content = self.content.lock().await;
-        content.update_stream().await
+        content.update_stream()
     }
 
     /// Set the contents of the page to be a static raw set of bytes with no
@@ -240,7 +239,7 @@ impl Page {
                             content_type: Option<String>,
                             raw_contents: Bytes) {
         let mut content = self.content.lock().await;
-        content.set_static(content_type, raw_contents).await
+        content.set_static(content_type, raw_contents)
     }
 
     /// Get the content type of a page, or return `None` if none has been set
@@ -260,8 +259,8 @@ impl Page {
         refresh: RefreshMode,
     ) -> Body {
         let mut content = self.content.lock().await;
-        content.set_title(new_title).await;
-        content.set_body(new_body, refresh).await;
+        content.set_title(new_title);
+        content.set_body(new_body, refresh);
         Body::empty()
     }
 
@@ -271,7 +270,7 @@ impl Page {
     pub async fn change_subscription(&self, id: Unique, subscription: Subscription) -> Result<(), ()> {
         match self.subscribers.lock().await.change_subscription(id, subscription) {
             Ok(Some(new_aggregate)) => {
-                self.content.lock().await.set_subscriptions(new_aggregate).await;
+                self.content.lock().await.set_subscriptions(new_aggregate);
                 Ok(())
             },
             Ok(None) => Ok(()),
@@ -285,8 +284,8 @@ impl Page {
         let subscribers = &mut *self.subscribers.lock().await;
         *subscribers = Subscribers::new();
         let content = &mut *self.content.lock().await;
-        content.set_subscriptions(AggregateSubscription::empty()).await;
-        content.set_title("").await;
-        content.set_body("", RefreshMode::Diff).await;
+        content.set_subscriptions(AggregateSubscription::empty());
+        content.set_title("");
+        content.set_body("", RefreshMode::Diff);
     }
 }
