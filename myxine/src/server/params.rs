@@ -58,7 +58,6 @@ pub(crate) enum PostParams {
     DynamicPage{title: String, refresh: RefreshMode},
     StaticPage,
     Evaluate{expression: Option<String>, timeout: Option<Duration>},
-    ChangeSubscription{id: Unique, subscription: Subscription},
     // TODO: Add validation key to page-sent events to prevent MITM?
     PageEvent,
     EvalResult{id: Unique},
@@ -86,12 +85,6 @@ impl PostParams {
             if param_as_flag("static", &params)? {
                 return Some(PostParams::StaticPage);
             }
-        } else if let Some(id) =
-            param_as_str("subscription", &params)
-            .and_then(|s| Unique::parse_str(s))
-        {
-            let subscription = parse_subscription(&params);
-            return Some(PostParams::ChangeSubscription{id, subscription})
         } else if constrained_to_keys(&params, &["page-result"]) {
             let id = Unique::parse_str(param_as_str("page-result", &params)?)?;
             return Some(PostParams::EvalResult{id})
@@ -168,10 +161,8 @@ fn param_as_strs<'a, 'b: 'a>(
 }
 
 /// Parse a query string into a mapping from key to list of values. The syntax
-/// expected for an individual key-value mapping is one of `k`, `k=`, `k=v`,
-/// `k=v1,v2`, etc., and mappings are concatenated by `&`, as in:
-/// `k1=v1,v2&k2=v3,v4`. Values are URL-percent-decoded prior to being returned,
-/// whereas keys are required to be URL-safe strings.
+/// expected for an individual key-value mapping is one of `k`, `k=`, `k=v`, and
+/// mappings are concatenated by `&`, as in: `k1=v1&k2=v2`.
 fn query_params<'a>(query: &'a str) -> Option<HashMap<String, Vec<String>>> {
     let mut map: HashMap<String, Vec<String>> = HashMap::new();
     let raw: Vec<(String, String)> = serde_urlencoded::from_str(query).unwrap();

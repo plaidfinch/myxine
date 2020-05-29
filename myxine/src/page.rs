@@ -1,4 +1,5 @@
 use hyper::body::{Body, Bytes};
+use hyper_usse::EventBuilder;
 use std::time::Duration;
 use std::io::Write;
 use tokio::sync::Mutex;
@@ -12,7 +13,7 @@ mod query;
 mod content;
 mod sse;
 
-pub use subscription::{Subscription, AggregateSubscription, Event};
+pub use subscription::{Subscription, Event};
 use crate::unique::Unique;
 use subscription::Subscribers;
 use query::Queries;
@@ -84,22 +85,16 @@ impl Page {
         match &*self.content.lock().await {
             Content::Dynamic{title, body, ..} => {
                 let debug = cfg!(debug_assertions).to_string();
-                let subscription = {
-                    let subscribers = self.subscribers.lock().await;
-                    let aggregate_subscription = subscribers.total_subscription();
-                    serde_json::to_string(&aggregate_subscription).unwrap()
-                };
 
                 // Pre-allocate a buffer exactly the right size
                 let buffer_size =
-                    TEMPLATE_SIZE + subscription.len() + debug.len() + title.len() + body.len();
+                    TEMPLATE_SIZE + debug.len() + title.len() + body.len();
                 let mut bytes = Vec::with_capacity(buffer_size);
 
                 write!(&mut bytes,
                        include_str!("page/dynamic.html"),
                        debug = debug,
                        title = title,
-                       subscription = subscription,
                        body = body)
                     .expect("Internal error: write!() failed on a Vec<u8>");
                 Body::from(bytes)
@@ -112,27 +107,16 @@ impl Page {
 
     /// Subscribe another page event listener to this page, given a subscription
     /// specification for what events to listen to.
-    pub async fn event_stream(&self, subscription: Subscription) -> (Unique, Body) {
+    pub async fn event_stream(&self, subscription: Subscription) -> Body {
         let mut subscribers = self.subscribers.lock().await;
-        let (id, new_aggregate, event_stream) =
-            subscribers.add_persistent_subscriber(subscription).await;
-        let content = &mut *self.content.lock().await;
-        if let Some(aggregate) = new_aggregate {
-            content.set_subscriptions(aggregate);
-        }
-        (id, event_stream)
+        subscribers.add_subscriber(subscription, true).await
     }
 
     /// Send an event to all subscribers. This should only be called with events
     /// that have come from the corresponding page itself, or confusion will
     /// result!
-    pub async fn send_event(&self, event: Event) {
-        if let Some(total_subscription) =
-            self.subscribers.lock().await
-            .send_event(event).await {
-                let content = &mut *self.content.lock().await;
-                content.set_subscriptions(total_subscription);
-            }
+    pub async fn send_event(&self, event: &Event) {
+        self.subscribers.lock().await.send_event(&event).await
     }
 
     /// Send an empty "heartbeat" message to all clients of a page, if it is
@@ -142,8 +126,6 @@ impl Page {
     pub async fn send_heartbeat(&self) -> Option<usize> {
         let mut content = self.content.lock().await;
         content.send_heartbeat()
-        // TODO: Send heartbeat to subscribers also? What heartbeat format to
-        // use, given that it's not text/event-stream anymore?
     }
 
     /// Tell the page to evaluate a given piece of JavaScript, as either an
@@ -214,13 +196,13 @@ impl Page {
     /// an empty title, empty body, and no subscribers waiting on its page
     /// events: that is, it's identical to `Page::new()`.
     pub async fn is_empty(&self) -> bool {
-        let (content_empty, subscribers_empty, queries_empty) =
+        let (content, subscribers, queries) =
             join!(
-                async { self.content.lock().await.is_empty() },
-                async { self.subscribers.lock().await.is_empty() },
-                async { self.queries.lock().await.is_empty() },
+                async { self.content.lock().await },
+                async { self.subscribers.lock().await },
+                async { self.queries.lock().await },
             );
-        content_empty && subscribers_empty && queries_empty
+        content.is_empty() && subscribers.is_empty() && queries.is_empty()
     }
 
     /// Add a client to the dynamic content of a page, if it is dynamic. If it
@@ -264,27 +246,12 @@ impl Page {
         Body::empty()
     }
 
-    /// Change a particular existing subscription stream's subscription,
-    /// updating the aggregate subscription in the browser if necessary. Returns
-    /// `Err(())` if the id given does not correspond to an extant stream.
-    pub async fn change_subscription(&self, id: Unique, subscription: Subscription) -> Result<(), ()> {
-        match self.subscribers.lock().await.change_subscription(id, subscription) {
-            Ok(Some(new_aggregate)) => {
-                self.content.lock().await.set_subscriptions(new_aggregate);
-                Ok(())
-            },
-            Ok(None) => Ok(()),
-            Err(()) => Err(()),
-        }
-    }
-
     /// Clear the page entirely, removing all subscribers and resetting the page
     /// title and body to empty.
     pub async fn clear(&self) {
         let subscribers = &mut *self.subscribers.lock().await;
         *subscribers = Subscribers::new();
         let content = &mut *self.content.lock().await;
-        content.set_subscriptions(AggregateSubscription::empty());
         content.set_title("");
         content.set_body("", RefreshMode::Diff);
     }

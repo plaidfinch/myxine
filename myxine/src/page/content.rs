@@ -3,7 +3,6 @@ use hyper::body::Bytes;
 use hyper_usse::EventBuilder;
 use std::mem;
 
-use super::subscription::AggregateSubscription;
 use super::RefreshMode;
 use super::sse::BroadcastBody;
 
@@ -46,9 +45,9 @@ impl Content {
     /// Test if this page is empty, where "empty" means that it is dynamic, with
     /// an empty title, empty body, and no subscribers waiting on its page
     /// events: that is, it's identical to `Content::new()`.
-    pub(in super) fn is_empty(&mut self) -> bool {
+    pub(in super) fn is_empty(&self) -> bool {
         match self {
-            Content::Dynamic{title, body, ref mut updates}
+            Content::Dynamic{title, body, ref updates}
             if title == "" && body == "" => updates.connections() == 0,
             _ => false,
         }
@@ -205,28 +204,5 @@ impl Content {
             }
         }
         changed // report whether the page was changed
-    }
-
-    /// Send a new total set of subscriptions to the page, so it can update its
-    /// event hooks. This function should *only* ever be called *directly* after
-    /// obtaining such a new set of subscriptions from adding a subscriber,
-    /// sending an event, or sending a heartbeat! It will cause unexpected loss
-    /// of messages if you arbitrarily set the subscriptions of a page outside
-    /// of these contexts.
-    pub(in super) fn set_subscriptions(
-        &mut self,
-        subscription: AggregateSubscription
-    ) -> bool {
-        let data = serde_json::to_string(&subscription)
-            .expect("Serializing subscriptions to JSON shouldn't fail");
-        let event = EventBuilder::new(&data)
-            .event_type("subscribe")
-            .build();
-        if let Content::Dynamic{ref mut updates, ..} = self {
-            updates.send(event.into());
-            true // the page was dynamic
-        } else {
-            false // the page was static
-        }
     }
 }

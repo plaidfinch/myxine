@@ -1,4 +1,4 @@
-export function activate(initialSubscription, debugMode) {
+export function activate(debugMode) {
 
     // Print debug info if in debug build mode
     const debug = (debugMode ? console.log : function () { /* do nothing */ });
@@ -8,9 +8,6 @@ export function activate(initialSubscription, debugMode) {
 
     // Current animation frame callback ID, if any
     let animationId = null;
-
-    // The global list of all events and their properties
-    let allEventDescriptions;
 
     // NOTE: Why do we use separate workers for events and query results, but
     // only one worker for all events? Well, it matters that events arrive in
@@ -71,26 +68,6 @@ export function activate(initialSubscription, debugMode) {
             window.diff.innerHTML(document.body, body);
         });
     }
-
-    // These are the handlers for SSE events...
-    function resubscribe(event) {
-        debug("Received new subscription:", event.data);
-        const subscription = JSON.parse(event.data);
-        Object.entries(listeners).forEach(([eventName, listener]) => {
-            debug("Removing listener:", eventName);
-            window.removeEventListener(eventName, listener);
-        });
-        listeners = {};
-        setupListeners(subscription);
-    }
-
-    // Changing the DOM contents
-    function setBody(event)         { setBodyTo(event.data); }
-    function setBodyDirectly(event) { document.body.innerHTML = event.data; }
-    function clearBody(event)       { setBodyTo(""); }
-    function setTitle(event)        { document.title = event.data; }
-    function clearTitle(event)      { document.title = ""; }
-    function refresh(event)         { window.location.reload(); }
 
     // Evaluate a JavaScript expression in the global environment
     function evaluate(expression, statementMode) {
@@ -170,17 +147,13 @@ export function activate(initialSubscription, debugMode) {
         return events;
     }
 
-    // Given a mapping from events -> mappings from properties -> formatters for
-    // those properties, set up listeners for all those events which send back
-    // the appropriately formatted results when they fire
-    function setupListeners(subscription) {
-        if (subscription === null) {
-            // Client requested universal subscription, so turn on all events
-            subscription = Object.keys(allEventDescriptions);
-        }
+    // Set up listeners for all those events which send back the appropriately
+    // formatted results when they fire
+    function setupPageEventListeners(descriptions) {
+        const subscription = Object.keys(descriptions);
         // Set up event handlers
         subscription.forEach(eventName => {
-            if (typeof allEventDescriptions[eventName] !== "undefined") {
+            if (typeof descriptions[eventName] !== "undefined") {
                 const listener = event => {
                     // Calculate the id path
                     const path =
@@ -203,7 +176,7 @@ export function activate(initialSubscription, debugMode) {
 
                     // Extract the relevant properties
                     const data = {};
-                    Object.entries(allEventDescriptions[eventName])
+                    Object.entries(descriptions[eventName])
                         .forEach(([property, formatter]) => {
                             data[property] = formatter(event[property]);
                         });
@@ -218,38 +191,38 @@ export function activate(initialSubscription, debugMode) {
         });
     }
 
-    // Fetch the description of the events we wish to support
+    // Fetch the description of the events we wish to support, and add listeners
+    // for them to the window object of the page
     const r = new XMLHttpRequest();
     r.onerror = () => debug("Could not fetch list of enabled events!");
     r.onload = () => {
         const enabledEvents = JSON.parse(r.responseText);
         debug(enabledEvents);
-        allEventDescriptions = parseEventDescriptions(enabledEvents);
-        setupListeners(initialSubscription);
+        setupPageEventListeners(parseEventDescriptions(enabledEvents));
     };
     r.open("GET", "/.myxine/assets/enabled-events.json");
     r.send();
 
+    // The handlers for events coming from the server:
+    function setupServerEventListeners(sse) {
+        sse.addEventListener("body",        (event) => { setBodyTo(event.data); });
+        sse.addEventListener("set-body",    (event) => { document.body.innerHTML = event.data; });
+        sse.addEventListener("clear-body",  (event) => { setBodyTo(""); });
+        sse.addEventListener("title",       (event) => { document.title = event.data; });
+        sse.addEventListener("clear-title", (event) => { document.title = ""; });
+        sse.addEventListener("refresh",     (event) => { window.location.reload(); });
+        sse.addEventListener("evaluate",    (event) => { evaluateAndRespond(false, event); });
+        sse.addEventListener("run",         (event) => { evaluateAndRespond(true, event); });
+    }
+
     // Actually set up SSE...
     let sse = new window.EventSource(window.location.href + "?updates");
+    setupServerEventListeners(sse);
     sse.onerror = () => {
-        // When we disconnect from the server, stop trying to send it events
-        // until we reconnect and receive a new subscription
-        setupListeners([]);
         // Set up retry interval to attempt reconnection
         window.setTimeout(() => {
             sse = new window.EventSource(window.location.href + "?updates");
+            setupServerEventListeners(sse);
         }, 500); // half a second between retries
     };
-
-    // The listeners:
-    sse.addEventListener("body",        setBody);
-    sse.addEventListener("set-body",    setBodyDirectly);
-    sse.addEventListener("clear-body",  clearBody);
-    sse.addEventListener("title",       setTitle);
-    sse.addEventListener("clear-title", clearTitle);
-    sse.addEventListener("refresh",     refresh);
-    sse.addEventListener("subscribe",   resubscribe);
-    sse.addEventListener("evaluate",    event => evaluateAndRespond(false, event));
-    sse.addEventListener("run",         event => evaluateAndRespond(true, event));
 }
