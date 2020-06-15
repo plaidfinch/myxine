@@ -1,7 +1,7 @@
 use bytes::Bytes;
-use tokio::sync::broadcast;
-use tokio::stream::StreamExt;
 use hyper::body::Body;
+use tokio::stream::StreamExt;
+use tokio::sync::broadcast;
 
 /// A broadcast channel allowing atomic writes of [`Bytes`] to any number of
 /// streaming [`Body`] subscribers. This can be used to implement, for example,

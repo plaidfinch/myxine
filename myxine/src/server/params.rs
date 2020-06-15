@@ -9,7 +9,10 @@ use crate::unique::Unique;
 pub(crate) enum GetParams {
     FullPage,
     PageUpdates,
-    Subscribe(Subscription),
+    Subscribe {
+        subscription: Subscription,
+        stream_or_after: Option<u64>,
+    },
 }
 
 impl GetParams {
@@ -20,8 +23,22 @@ impl GetParams {
             Some(GetParams::FullPage)
         } else if param_as_flag("updates", &params)? && constrained_to_keys(&params, &["updates"]) {
             Some(GetParams::PageUpdates)
-        } else if constrained_to_keys(&params, &["events", "event"]) {
-            Some(GetParams::Subscribe(parse_subscription(&params)))
+        } else if constrained_to_keys(&params, &["events", "event", "stream"]) {
+            if param_as_flag("stream", &params)? {
+                Some(GetParams::Subscribe {
+                    subscription: parse_subscription(&params),
+                    stream_or_after: None,
+                })
+            } else {
+                None
+            }
+        } else if constrained_to_keys(&params, &["events", "event", "after", "next"]) {
+            let after = u64::from_str_radix(param_as_str("after", &params)?, 10).ok()?
+                + if param_as_flag("next", &params)? { 1 } else { 0 };
+            Some(GetParams::Subscribe {
+                subscription: parse_subscription(&params),
+                stream_or_after: Some(after)
+            })
         } else {
             None
         }
@@ -55,13 +72,23 @@ pub enum RefreshMode {
 
 /// Parsed parameters from a query string for a POST request.
 pub(crate) enum PostParams {
-    DynamicPage{title: String, refresh: RefreshMode},
+    DynamicPage {
+        title: String,
+        refresh: RefreshMode,
+    },
     StaticPage,
-    Evaluate{expression: Option<String>, timeout: Option<Duration>},
+    Evaluate {
+        expression: Option<String>,
+        timeout: Option<Duration>,
+    },
     // TODO: Add validation key to page-sent events to prevent MITM?
     PageEvent,
-    EvalResult{id: Unique},
-    EvalError{id: Unique},
+    EvalResult {
+        id: Unique,
+    },
+    EvalError {
+        id: Unique,
+    },
 }
 
 impl PostParams {
@@ -78,22 +105,22 @@ impl PostParams {
                     "set" => RefreshMode::SetBody,
                     "diff" => RefreshMode::Diff,
                     _ => return None,
-                }
+                },
             };
-            return Some(PostParams::DynamicPage{title, refresh})
+            return Some(PostParams::DynamicPage { title, refresh });
         } else if constrained_to_keys(&params, &["static"]) {
             if param_as_flag("static", &params)? {
                 return Some(PostParams::StaticPage);
             }
         } else if constrained_to_keys(&params, &["page-result"]) {
             let id = Unique::parse_str(param_as_str("page-result", &params)?)?;
-            return Some(PostParams::EvalResult{id})
+            return Some(PostParams::EvalResult { id });
         } else if constrained_to_keys(&params, &["page-error"]) {
             let id = Unique::parse_str(param_as_str("page-error", &params)?)?;
-            return Some(PostParams::EvalError{id})
+            return Some(PostParams::EvalError { id });
         } else if constrained_to_keys(&params, &["page-event"]) {
             if param_as_flag("page-event", &params)? {
-                return Some(PostParams::PageEvent)
+                return Some(PostParams::PageEvent);
             }
         } else if constrained_to_keys(&params, &["evaluate", "timeout"]) {
             let timeout = if let Some(timeout_str) = param_as_str("timeout", &params) {
@@ -111,7 +138,7 @@ impl PostParams {
                 if param_as_flag("evaluate", &params)? {
                     None
                 } else {
-                    return None
+                    return None;
                 }
             };
             return Some(PostParams::Evaluate {
@@ -126,10 +153,7 @@ impl PostParams {
 /// Parse a given parameter as a boolean, where its presence without a mapping
 /// is interpreted as true. If it is mapped to multiple values, or mapped to
 /// something other than "true" or "false", return `None`.
-fn param_as_flag<'a, 'b>(
-    param: &'b str,
-    params: &'a HashMap<String, Vec<String>>,
-) -> Option<bool> {
+fn param_as_flag<'a, 'b>(param: &'b str, params: &'a HashMap<String, Vec<String>>) -> Option<bool> {
     match params.get(param).map(Vec::as_slice) {
         Some([]) => Some(true),
         None => Some(false),

@@ -1,11 +1,11 @@
+use futures::{future, join};
 use lazy_static::lazy_static;
 use std::collections::HashSet;
 use std::iter::Iterator;
-use std::time::Duration;
 use std::sync::Arc;
-use tokio::sync::{Mutex, mpsc};
+use std::time::Duration;
+use tokio::sync::{mpsc, Mutex};
 use tokio::time;
-use futures::{join, future};
 
 use super::PAGES;
 
@@ -38,7 +38,6 @@ pub fn hold_path(path: String) {
 /// Send a heartbeat message to keep all page connections alive, simultaneously
 /// pruning all pages from memory which have no content and no subscribers.
 pub async fn heartbeat_loop() {
-
     // Receive all new paths into the set of known active paths
     let recv_paths = async {
         let mut new_paths = TOUCHED_PATHS.1.lock().await;
@@ -72,7 +71,8 @@ pub async fn heartbeat_loop() {
                         }
                     }
                 }
-            })).await;
+            }))
+            .await;
 
             // Remove all paths that are identical to the empty page
             for path in pruned.lock().await.iter() {

@@ -1,6 +1,6 @@
+use futures::Future;
 use std::collections::HashMap;
 use tokio::sync::oneshot;
-use futures::Future;
 
 use crate::unique::Unique;
 
@@ -14,7 +14,7 @@ impl<T> Queries<T> {
     /// Create a new empty set of pending queries.
     pub fn new() -> Self {
         Queries {
-            pending: HashMap::new()
+            pending: HashMap::new(),
         }
     }
 

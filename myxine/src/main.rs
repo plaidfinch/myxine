@@ -1,7 +1,7 @@
 use structopt::StructOpt;
 
-mod server;
 mod page;
+mod server;
 mod unique;
 
 #[derive(Debug, StructOpt)]
@@ -14,7 +14,8 @@ struct Options {
 #[tokio::main]
 async fn main() {
     let options = Options::from_args();
-    server::run(([127, 0, 0, 1], options.port).into()).await
+    server::run(([127, 0, 0, 1], options.port).into())
+        .await
         .unwrap_or_else(|e| {
             eprintln!("Error: {}", e);
             std::process::exit(1);

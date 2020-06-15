@@ -1,5 +1,5 @@
-use uuid::Uuid;
 use std::fmt;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct Unique(Uuid);

@@ -169,20 +169,44 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                 Some(GetParams::PageUpdates) => {
                     let body = page.update_stream().await.unwrap_or_else(Body::empty);
                     Response::builder()
-                        .header("Content-Type", "text/event-stream")
+                        .header("Content-Type", "text/event-stream; charset=utf8")
                         .header("Cache-Control", "no-cache")
                         .header("Access-Control-Allow-Origin", "*")
                         .body(body)
                         .unwrap()
                 },
-                // Client wants to subscribe to events on this page:
-                Some(GetParams::Subscribe(subscription)) => {
+                // Client wants a json-lines stream of events on this page
+                Some(GetParams::Subscribe{subscription, stream_or_after: None}) => {
                     let body = page.event_stream(subscription).await;
                     Response::builder()
                         .header("Cache-Control", "no-cache")
-                        .header("Access-Control-Allow-Origin", "*")
                         .body(body)
                         .unwrap()
+                },
+                // Client wants the event matching this subscription, after this time
+                Some(GetParams::Subscribe{subscription, stream_or_after: Some(after)}) => {
+                    match page.event(subscription, after).await {
+                        // TODO: use the "after" time to delay fulfillment of
+                        // times in the future!
+                        Ok((moment, body)) => {
+                            let location = format!("{}?after={}", uri.path(), moment);
+                            Response::builder()
+                                .header("Cache-Control", "no-cache")
+                                .header("Content-Type", "application/json; charset=utf8")
+                                .header("Content-Location", location)
+                                .body(body)
+                                .unwrap()
+                        },
+                        Err(moment) => {
+                            let location = format!("{}?after={}", uri.path(), moment);
+                            Response::builder()
+                                .header("Cache-Control", "no-cache")
+                                .header("Location", location)
+                                .status(StatusCode::PERMANENT_REDIRECT)
+                                .body(format!("Client request lagged by {} events.", moment - after).into())
+                                .unwrap()
+                        }
+                    }
                 },
                 // Browser wants to load the full page
                 Some(GetParams::FullPage) => {
@@ -293,7 +317,7 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                 Some(PostParams::PageEvent) => {
                     match serde_json::from_slice(body::to_bytes(body).await?.as_ref()) {
                         Ok(event) => {
-                            page.send_event(&event).await;
+                            page.send_event(event).await;
                             Response::new(Body::empty())
                         },
                         Err(err) => {

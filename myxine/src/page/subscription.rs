@@ -1,8 +1,9 @@
 use std::collections::HashSet;
-use serde::Deserialize;
-use serde_json::{Value, json};
+use serde::{Serialize, Deserialize};
+use serde_json::Value;
 use hyper::Body;
-use futures::future;
+use tokio::sync::oneshot;
+use futures::Future;
 
 use super::sse::BroadcastBody;
 
@@ -10,7 +11,7 @@ use super::sse::BroadcastBody;
 /// to listeners. While there is more structure here than merely a triple of
 /// JSON values, we don't bother to parse it because the client will be parsing
 /// it again, so this will be a waste of resources.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Event {
     pub event: String,
     pub targets: Value,
@@ -57,7 +58,10 @@ pub struct Subscribers {
 #[derive(Debug)]
 pub enum SinkSender {
     Persistent(BroadcastBody),
-    Once(hyper::body::Sender),
+    Once {
+        sender: oneshot::Sender<(u64, hyper::body::Body)>,
+        after: u64,
+    },
 }
 
 #[derive(Debug)]
@@ -80,24 +84,17 @@ impl Subscribers {
         self.sinks.is_empty()
     }
 
-    /// Add a subscriber for the given subscription, either persistent or
-    /// one-off. If persistent, the returned `Body` will stream
-    /// newline-separated events, and will not terminate until the consumer
-    /// disconnects or the server exits. If not persistent, the returned `Body`
-    /// will result in precisely one event, and then end.
-    pub async fn add_subscriber(
-        &mut self, subscription: Subscription, persistent: bool,
+    /// Add a persistent subscriber for the given subscription. The returned
+    /// `Body` will stream newline-separated events, and will not terminate
+    /// until the consumer disconnects or the server exits.
+    pub fn add_subscriber(
+        &mut self, subscription: Subscription,
     ) -> Body {
         // Create a new single-client SSE server (new clients will never be added
         // after this, because each event subscription is potentially unique).
-        let (sender, body) = if persistent {
-            let server = BroadcastBody::new(EVENT_BUFFER_SIZE);
-            let body = server.body();
-            (SinkSender::Persistent(server), body)
-        } else {
-            let (sender, body) = hyper::body::Body::channel();
-            (SinkSender::Once(sender), body)
-        };
+        let server = BroadcastBody::new(EVENT_BUFFER_SIZE);
+        let body = server.body();
+        let sender = SinkSender::Persistent(server);
 
         // Insert the server into the sinks map
         self.sinks.push(Sink{sender, subscription});
@@ -106,49 +103,65 @@ impl Subscribers {
         body
     }
 
+    /// Add a one-off subscriber which gives the moment it was fulfilled, as
+    /// well as the body of the event to which it corresponds. This `Body` will
+    /// be a single valid JSON string.
+    pub fn add_one_off(
+        &mut self, subscription: Subscription,
+        after: u64,
+    ) -> impl Future<Output = (u64, hyper::body::Body)> {
+        let (sender, receiver) = oneshot::channel();
+        self.sinks.push(Sink{sender: SinkSender::Once{sender, after}, subscription});
+        async move {
+            receiver.await.expect("Receivers for one-off subscriptions shouldn't be dropped")
+        }
+    }
+
     /// Send an event to all subscribers to that event, giving each subscriber
     /// only those fields of the event which that subscriber cares about. If the
     /// list of subscribers has changed (that is, by client disconnection),
     /// returns the union of all now-current subscriptions.
-    pub async fn send_event<'a>(&'a mut self, event: &Event) {
-        // The collection of futures for sending the event Each future has
-        // Output = bool, where `false` indicates that the sink should be
-        // pruned.
-        let send_futures = self.sinks.iter_mut().map(move |sink| {
-            // Make a future for sending the message to the subscriber
-            async move {
-                let Event{event: event_type, properties, targets} = event;
-                // Message was a normal message
-                if sink.subscription.matches_event(&event_type) {
-                    // Serialize the fields to JSON
-                    let message = serde_json::to_string(&json!({
-                        "event": event_type,
-                        "properties": properties,
-                        "targets": targets,
-                    })).expect("Serializing to a string shouldn't fail");
-                    match sink.sender {
-                        SinkSender::Persistent(ref server) =>
-                            0 < server.send((message + "\n").into()),
-                            // we should prune if no more clients
-                        SinkSender::Once(ref mut sender) => {
-                            sender.send_data(message.into()).await.unwrap_or(());
-                            false // we should prune the sink, it's fulfilled
-                        },
-                    }
-                } else {
-                    true // we should keep this sink, it didn't match
-                }
+    pub fn send_event<'a>(&'a mut self, moment: u64, event: &Event) {
+        let message = serde_json::to_string(&event)
+            .expect("Serializing to a string shouldn't fail");
+        let mut i = 0;
+        loop {
+            if i >= self.sinks.len() {
+                break;
             }
-        });
+            if self.sinks[i].subscription.matches_event(&event.event) {
+                let Sink{sender, subscription} = self.sinks.swap_remove(i);
+                match sender {
+                    SinkSender::Persistent(server)
+                        // NOTE: this is an if-guard, not an expression, so it
+                        // falls through to the default case if there are still
+                        // clients after the message is sent
+                        if 0 == server.send((message.clone() + "\n").into()) => {
+                            // if there are no more subscribers to a persistent
+                            // sink, remove it from the list of sinks
+                        },
+                    SinkSender::Once{sender, after} if moment >= after => {
+                        // if the current moment is later than or equal to the
+                        // time this one-off sink is waiting for, dispatch it
+                        // and remove it from the list of sinks
+                        sender.send((moment, message.clone().into())).unwrap_or(());
+                    },
+                    sender => {
+                        // otherwise, re-insert the sink and move forward, by
+                        // pushing the current sink onto the end of the vector
+                        // and swapping it back into place, then incrementing
+                        // the index by one
+                        self.sinks.push(Sink{sender, subscription});
+                        let end = self.sinks.len() - 1;
+                        self.sinks.swap(i, end);
+                        i += 1;  // move on to the next element
+                    },
+                }
+            } else {
+                i += 1;  // move onto the next element
+            }
+        }
 
-        // Send all the events and remove all sinks that failed to send (client
-        // disconnected), or which were one-off sinks that got fulfilled.
-        let which_to_keep = future::join_all(send_futures).await;
-        let mut keep = which_to_keep.iter();
-        self.sinks.retain(|_| *keep.next().expect(
-            "sinks lenth always matches length of futures from sending to sinks"
-        ));
-        
         // Shrink down the sinks so we don't bloat memory
         self.sinks.shrink_to_fit();
     }

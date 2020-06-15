@@ -2,11 +2,12 @@ use hyper::body::{Body, Bytes};
 use hyper_usse::EventBuilder;
 use std::time::Duration;
 use std::io::Write;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use futures::join;
 use serde_json::Value;
 use std::fmt::{Display, self};
 use futures::{select, pin_mut, FutureExt};
+use hopscotch::{self, ArcK};
 
 mod subscription;
 mod query;
@@ -27,6 +28,7 @@ pub struct Page {
     content: Mutex<Content>,
     subscribers: Mutex<Subscribers>,
     queries: Mutex<Queries<Result<Value, String>>>,
+    events: RwLock<hopscotch::Queue<String, Event, ArcK>>, // TODO: preload events and use u16 tags
 }
 
 /// The possible errors that can occur while evaluating JavaScript in the
@@ -68,7 +70,12 @@ const TEMPLATE_SIZE: usize = include_str!("page/dynamic.html").len();
 
 /// The default timeout for evaluating JavaScript expressions in the page,
 /// measured in milliseconds
-const DEFAULT_EVAL_TIMEOUT: Duration = Duration::from_millis(1000);
+const DEFAULT_EVAL_TIMEOUT: Duration = Duration::from_secs(1);
+
+/// The maximum size of the event buffer for each page: a consumer of events via
+/// the long-polling interface can lag by this many events before events get
+/// dropped.
+const MAX_EVENT_BUFFER_LEN: usize = 1_000;
 
 impl Page {
     /// Make a new empty (dynamic) page.
@@ -77,6 +84,7 @@ impl Page {
             content: Mutex::new(Content::new()),
             subscribers: Mutex::new(Subscribers::new()),
             queries: Mutex::new(Queries::new()),
+            events: RwLock::new(hopscotch::Queue::new()),
         }
     }
 
@@ -109,14 +117,57 @@ impl Page {
     /// specification for what events to listen to.
     pub async fn event_stream(&self, subscription: Subscription) -> Body {
         let mut subscribers = self.subscribers.lock().await;
-        subscribers.add_subscriber(subscription, true).await
+        subscribers.add_subscriber(subscription)
+    }
+
+    /// Get a specific event, at or after a particular moment in time, given a
+    /// subscription specification that it must match. If the event is available
+    /// in the buffer, this returns immediately, otherwise it may block until
+    /// the event is available.
+    pub async fn event(&self, subscription: Subscription, moment: u64) -> Result<(u64, Body), u64> {
+        {
+            // Scope for ensuring we drop events read-lock
+            let events = self.events.read().await;
+            match &subscription {
+                Subscription::Universal => {
+                    if let Some(earliest) = events.earliest() {
+                        if moment < earliest.index() {
+                            return Err(earliest.index());
+                        } else if let Some(found) = events.get(moment) {
+                            let body = serde_json::to_string(found.value()).unwrap().into();
+                            return Ok((moment, body));
+                        }
+                    }
+                },
+                Subscription::Specific(tags) => {
+                    if let Some(found) = events.after(moment, tags) {
+                        let body = serde_json::to_string(found.value()).unwrap().into();
+                        return Ok((found.index(), body));
+                    }
+                }
+            }
+        }
+        // If we couldn't find it in the buffered events, then wait for it:
+        let result = {
+            // Scope for ensuring we drop subscriber lock before awaiting the
+            // result of the subscription
+            let mut subscribers = self.subscribers.lock().await;
+            subscribers.add_one_off(subscription, moment)
+        };
+        Ok(result.await)
     }
 
     /// Send an event to all subscribers. This should only be called with events
     /// that have come from the corresponding page itself, or confusion will
     /// result!
-    pub async fn send_event(&self, event: &Event) {
-        self.subscribers.lock().await.send_event(&event).await
+    pub async fn send_event(&self, event: Event) {
+        let mut events = self.events.write().await;
+        self.subscribers.lock().await.send_event(events.next_index(), &event);
+        let tag = event.event.clone();
+        events.push(tag, event);
+        if events.len() > MAX_EVENT_BUFFER_LEN {
+            events.pop();
+        }
     }
 
     /// Send an empty "heartbeat" message to all clients of a page, if it is
