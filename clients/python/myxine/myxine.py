@@ -50,12 +50,12 @@ def events(path: str,
     """
     url = page_url(path, port)
     try:
-        params: Dict[str, List[str]]
+        params: Dict[str, Any]
         if subscription is None:
-            url = url + "?events"
+            url = url + "?events&stream"
             params = {}
         else:
-            params = {'events': subscription}
+            params = {'events': subscription, 'stream': ''}
         response = requests.get(url, stream=True, params=params)
         if response.encoding is None:
             response.encoding = 'utf-8'
