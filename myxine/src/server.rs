@@ -4,83 +4,39 @@ use hyper::server::conn::AddrStream;
 use hyper::body;
 use http::request::Parts;
 use http::header::{HeaderMap, HeaderValue};
-use lazy_static::lazy_static;
 use std::sync::Arc;
-use std::collections::{hash_map::Entry, HashMap};
 use std::net::SocketAddr;
-use tokio::sync::Mutex;
-use futures::future::FutureExt;
-use futures::{future, select, pin_mut};
 use itertools::Itertools;
-use void::Void;
 
 mod params;
-mod heartbeat;
 
-use crate::page::Page;
+use crate::session::Session;
 pub(crate) use params::{GetParams, PostParams, RefreshMode};
-
-lazy_static! {
-    /// The current contents of the server, indexed by path
-    pub(crate) static ref PAGES:
-    Mutex<HashMap<String, Arc<Page>>>
-        = Mutex::new(HashMap::new());
-}
 
 /// Run the main server loop alongside the heartbeat to all SSE clients
 #[allow(clippy::unnecessary_mut_passed)]
 pub async fn run(socket_addr: SocketAddr) -> Result<(), hyper::Error> {
 
+    // The session holding all the pages for this instantiation of the server
+    let session = Arc::new(Session::start().await);
+
     // The regular server
     let server = hyper::Server::try_bind(&socket_addr)?
-        .serve(make_service_fn(|_socket: &AddrStream| {
-            async { Ok::<_, Void>(service_fn(process_request)) }
-        }));
-
-    // The heartbeat loop
-    let heartbeat = heartbeat::heartbeat_loop().fuse();
+    .serve(make_service_fn(|_socket: &AddrStream| {
+        let session = session.clone();
+        async move {
+            Ok::<_, std::convert::Infallible>(service_fn(move |request| {
+                process_request(session.clone(), request)
+            }))
+        }
+    }));
 
     // Note the local address to the user
     println!("Running at: http://{}",
              server.local_addr().to_string().trim_end_matches('/'));
 
-    // Signals to shut down the server
-    let serve = server.with_graceful_shutdown(async {
-        wait_any_shutdown_signal().await;
-        
-        // Clean-up after the server is killed: set every extant page to the
-        // empty page and remove all their subscriptions
-        let mut pages = PAGES.lock().await;
-        let all_pages = pages.values().cloned().collect::<Vec<_>>();
-        pages.clear();
-        future::join_all(all_pages.iter().map(move |page| page.clear())).await;
-    }).fuse();
-
-    // Run the heartbeat loop and server concurrently
-    pin_mut!(serve, heartbeat);
-    select! {
-        result = serve => result,
-        () = heartbeat => Ok(()),
-    }
-}
-
-/// Get a page from the global table (creating it if it does not yet exist) and
-/// make sure that it receives heartbeats in the future
-async fn get_page(path: &str) -> Arc<Page> {
-    // Make sure this path receives heartbeats
-    heartbeat::hold_path(path.to_string());
-
-    // Get (or create) the page at this path. Note that this does *not* hold the
-    // lock on PAGES, but rather extracts a clone of the `Arc<Mutex<Page>>` at
-    // this path.
-    match PAGES.lock().await.entry(path.to_string()) {
-        Entry::Vacant(e) => {
-            let page = Arc::new(Page::new());
-            e.insert(page.clone());
-            page
-        },
-        Entry::Occupied(e) => e.get().clone(),
-    }
+    // Run the server until the process is killed
+    server.await
 }
 
 /// The response for serving a particular file as a static asset with liberal
@@ -123,7 +79,9 @@ fn process_special_request(
 // (this path and its subpaths cannot be treated as ordinary
 const MYXINE_SPECIAL_PATH: &str = "/.myxine/";
 
-async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper::Error> {
+async fn process_request(
+    session: Arc<Session>, request: Request<Body>
+) -> Result<Response<Body>, hyper::Error> {
 
     // Disassemble the request into the parts we care about
     let (parts, body) = request.into_parts();
@@ -158,7 +116,7 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
     }
 
     // Get the page at this path
-    let page = get_page(&path).await;
+    let page = session.page(&path).await;
 
     // Just one big dispatch on the HTTP method...
     Ok(match method {
@@ -169,7 +127,7 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                 Some(GetParams::PageUpdates) => {
                     let body = page.update_stream().await.unwrap_or_else(Body::empty);
                     Response::builder()
-                        .header("Content-Type", "text/event-stream; charset=utf8")
+                        .header("Content-Type", "text/event-stream")
                         .header("Cache-Control", "no-cache")
                         .header("Access-Control-Allow-Origin", "*")
                         .body(body)
@@ -186,8 +144,6 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                 // Client wants the event matching this subscription, after this time
                 Some(GetParams::Subscribe{subscription, stream_or_after: Some(after)}) => {
                     match page.event(subscription, after).await {
-                        // TODO: use the "after" time to delay fulfillment of
-                        // times in the future!
                         Ok((moment, body)) => {
                             let location = format!("{}?after={}", uri.path(), moment);
                             Response::builder()
@@ -297,9 +253,8 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                                 if cfg!(debug_assertions) {
                                     eprintln!("\n{}", body);
                                 }
-                                let event_stream =
-                                    page.set_content(title, body, refresh).await;
-                                Response::new(event_stream)
+                                page.set_content(title, body, refresh).await;
+                                Response::new(Body::empty())
                             },
                             Err(_) => response_with_status(
                                 StatusCode::BAD_REQUEST,
@@ -348,7 +303,7 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
                     match result {
                         Err(err) => {
                             response_with_status(
-                                StatusCode::BAD_REQUEST,
+                                StatusCode::BAD_REQUEST, // TODO: use 408: timeout here?
                                 format!("JavaScript evaluation error: {}", err)
                             )
                         },
@@ -403,7 +358,8 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
             if query != "" {
                 return Ok(response_with_status(StatusCode::BAD_REQUEST, "Invalid query string in DELETE."));
             }
-            Response::new(page.set_content("", "", RefreshMode::Diff).await)
+            page.clear().await;
+            Response::new(Body::empty())
         },
 
         _ => Response::builder()
@@ -411,46 +367,6 @@ async fn process_request(request: Request<Body>) -> Result<Response<Body>, hyper
             .body(format!("Method not allowed: {}", method).into())
             .unwrap(),
     })
-}
-
-// Shutdown signal handling
-
-/// Wait for the SIGTERM signal to be sent to the process.
-#[cfg(all(unix))]
-async fn wait_platform_term_signal() {
-    let sig = tokio::signal::unix::SignalKind::terminate();
-    tokio::signal::unix::signal(sig)
-        .unwrap_or_else(|e| {
-            panic!("Internal error: issue with SIGTERM handler: {}", e)
-        })
-        .recv()
-        .await;
-}
-
-/// Wait for the CTRL-BREAK signal to be sent to the process.
-#[cfg(windows)]
-async fn wait_platform_term_signal() {
-    tokio::signal::windows::ctrl_break()
-        .unwrap_or_else(|e| {
-            panic!("Internal error: issue with CTRL-BREAK handler: {}", e)
-        })
-        .recv()
-        .await
-}
-
-/// Wait for either Ctrl-C or the platform's native termination signal to be
-/// sent to the process (either SIGTERM on Unix or CTRL-BREAK on Windows).
-async fn wait_any_shutdown_signal() {
-    // Wait for either Ctrl-C or the platform-native termination signal
-    let ctrl_c = async {
-        tokio::signal::ctrl_c().await.unwrap_or(())
-    }.fuse();
-    let term = wait_platform_term_signal().fuse();
-    pin_mut!(term, ctrl_c);
-    select! {
-        () = ctrl_c => (),
-        () = term => (),
-    }
 }
 
 // Some utilities for this module:

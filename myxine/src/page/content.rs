@@ -1,9 +1,10 @@
 use hyper::body::Bytes;
 use hyper::Body;
 use hyper_usse::EventBuilder;
+use tokio::sync::broadcast;
+use tokio::stream::StreamExt;
 use std::mem;
 
-use super::sse::BroadcastBody;
 use super::RefreshMode;
 
 /// The `Content` of a page is either `Dynamic` or `Static`. If it's dynamic, it
@@ -15,11 +16,11 @@ use super::RefreshMode;
 /// direction, it requires a manual refresh (because a static page has no
 /// injected javascript to make it update itself).
 #[derive(Debug)]
-pub(super) enum Content {
+pub enum Content {
     Dynamic {
         title: String,
         body: String,
-        updates: BroadcastBody,
+        updates: broadcast::Sender<Bytes>,
     },
     Static {
         content_type: Option<String>,
@@ -34,24 +35,24 @@ const UPDATE_BUFFER_SIZE: usize = 1;
 
 impl Content {
     /// Make a new empty (dynamic) page
-    pub(super) fn new() -> Content {
+    pub fn new() -> Content {
         Content::Dynamic {
             title: String::new(),
             body: String::new(),
-            updates: BroadcastBody::new(UPDATE_BUFFER_SIZE),
+            updates: broadcast::channel(UPDATE_BUFFER_SIZE).0,
         }
     }
 
     /// Test if this page is empty, where "empty" means that it is dynamic, with
     /// an empty title, empty body, and no subscribers waiting on its page
     /// events: that is, it's identical to `Content::new()`.
-    pub(super) fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         match self {
             Content::Dynamic {
                 title,
                 body,
                 ref updates,
-            } if title == "" && body == "" => updates.connections() == 0,
+            } if title == "" && body == "" => updates.receiver_count() == 0,
             _ => false,
         }
     }
@@ -59,13 +60,17 @@ impl Content {
     /// Add a client to the dynamic content of a page, if it is dynamic. If it
     /// is static, this has no effect and returns None. Otherwise, returns the
     /// Body stream to give to the new client.
-    pub(super) fn update_stream(&mut self) -> Option<Body> {
+    pub fn update_stream(&self) -> Option<Body> {
         match self {
             Content::Dynamic {
                 updates,
                 title,
                 body,
             } => {
+                // Composing the events to send: we send these in case the page
+                // spontaneously reconnects to the server without having
+                // refreshed cleanly, to make sure it gets an updated page right
+                // away.
                 let title_event = if *title != "" {
                     EventBuilder::new(&title).event_type("title")
                 } else {
@@ -78,9 +83,27 @@ impl Content {
                     EventBuilder::new(".").event_type("clear-body")
                 }
                 .build();
-                let stream_body = updates.body();
-                updates.send(title_event.into());
-                updates.send(body_event.into());
+
+                // NOTE: It's important that we construct the stream body here,
+                // so that this update gets sent to the new stream as well
+                let stream_body =
+                    Body::wrap_stream(updates.subscribe().filter(|result| {
+                        match result {
+                            // We ignore lagged items in the stream! If we don't
+                            // ignore these, we would terminate the Body on
+                            // every lag, which is undesirable.
+                            Err(broadcast::RecvError::Lagged(_)) => false,
+                            // Otherwise, we leave the result alone.
+                            _ => true,
+                        }
+                    }));
+
+                // Then, send the events and return the stream body for
+                // consumption by the client. We don't care about whether the
+                // sends succeed, or how many clients they report -- if nobody's
+                // connected, then that's fine.
+                let _ = updates.send(title_event.into());
+                let _ = updates.send(body_event.into());
                 Some(stream_body)
             }
             Content::Static { .. } => None,
@@ -91,11 +114,11 @@ impl Content {
     /// dynamic. This has no effect if it is (currently) static, and returns
     /// `None` if so, otherwise returns the current number of clients getting
     /// live updates to the page.
-    pub(super) fn send_heartbeat(&mut self) -> Option<usize> {
+    pub fn send_heartbeat(&self) -> Option<usize> {
         match self {
             Content::Dynamic { updates, .. } => {
                 // Send a heartbeat to pages waiting on <body> updates
-                Some(updates.send(":\n\n".into()))
+                Some(updates.send(":\n\n".into()).unwrap_or(0))
             }
             Content::Static { .. } => None,
         }
@@ -103,11 +126,14 @@ impl Content {
 
     /// Tell all clients to refresh the contents of a page, if it is dynamic.
     /// This has no effect if it is (currently) static.
-    pub(super) fn refresh(&mut self) {
+    pub fn refresh(&self) {
         match self {
             Content::Dynamic { updates, .. } => {
                 let event = EventBuilder::new(".").event_type("refresh").build();
-                updates.send(event.into());
+                // We don't care about whether the send succeeds, or how many
+                // clients they report -- if nobody's connected, then that's
+                // fine.
+                let _ = updates.send(event.into());
             }
             Content::Static { .. } => {}
         }
@@ -117,19 +143,19 @@ impl Content {
     /// self-refreshing functionality. All clients will be told to refresh their
     /// page to load the new static content (which will not be able to update
     /// itself until a client refreshes their page again).
-    pub(super) fn set_static(&mut self, content_type: Option<String>, raw_contents: Bytes) {
-        let mut page = Content::Static {
+    pub fn set_static(&mut self, content_type: Option<String>, raw_contents: Bytes) {
+        let mut content = Content::Static {
             content_type,
             raw_contents,
         };
-        mem::swap(&mut page, self);
-        page.refresh();
+        mem::swap(&mut content, self);
+        content.refresh();
     }
 
     /// Get the content type of a page, or return `None` if none has been set
     /// (as in the case of a dynamic page, where the content type is not
     /// client-configurable).
-    pub(super) fn content_type(&self) -> Option<String> {
+    pub fn content_type(&self) -> Option<String> {
         match self {
             Content::Dynamic { .. } => None,
             Content::Static { content_type, .. } => content_type.clone(),
@@ -140,7 +166,7 @@ impl Content {
     /// page into a dynamic page, overwriting any static content that previously
     /// existed, if any. Returns `true` if the page content was changed (either
     /// converted from static, or altered whilst dynamic).
-    pub(super) fn set_title(&mut self, new_title: impl Into<String>) -> bool {
+    pub fn set_title(&mut self, new_title: impl Into<String>) -> bool {
         let mut changed = false;
         loop {
             match self {
@@ -159,7 +185,10 @@ impl Content {
                             EventBuilder::new(".").event_type("clear-title")
                         }
                         .build();
-                        updates.send(event.into());
+                        // We don't care about whether the send succeeds, or how
+                        // many clients they report -- if nobody's connected,
+                        // then that's fine.
+                        let _ = updates.send(event.into());
                     }
                     break; // title has been set
                 }
@@ -177,7 +206,7 @@ impl Content {
     /// page into a dynamic page, overwriting any static content that previously
     /// existed, if any. Returns `true` if the page content was changed (either
     /// converted from static, or altered whilst dynamic).
-    pub(super) fn set_body(&mut self, new_body: impl Into<String>, refresh: RefreshMode) -> bool {
+    pub fn set_body(&mut self, new_body: impl Into<String>, refresh: RefreshMode) -> bool {
         let mut changed = false;
         loop {
             match self {
@@ -207,7 +236,10 @@ impl Content {
                                     EventBuilder::new(".").event_type("clear-body")
                                 }
                                 .build();
-                                updates.send(event.into());
+                                // We don't care about whether the send
+                                // succeeds, or how many clients they report --
+                                // if nobody's connected, then that's fine.
+                                let _ = updates.send(event.into());
                             }
                         }
                     }

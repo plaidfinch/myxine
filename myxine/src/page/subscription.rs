@@ -2,10 +2,10 @@ use std::collections::HashSet;
 use serde::{Serialize, Deserialize};
 use serde_json::Value;
 use hyper::Body;
-use tokio::sync::oneshot;
-use futures::Future;
-
-use super::sse::BroadcastBody;
+use tokio::sync::{oneshot, mpsc};
+use futures::{Future, StreamExt};
+use bytes::Bytes;
+use std::convert::Infallible;
 
 /// An incoming event sent from the browser, intended to be forwarded directly
 /// to listeners. While there is more structure here than merely a triple of
@@ -46,10 +46,6 @@ impl Subscription {
     }
 }
 
-/// The maximum number of messages to buffer before dropping a message (i.e. the
-/// maximum a client can lag in listening for subscribed events).
-const EVENT_BUFFER_SIZE: usize = 10_000;
-
 #[derive(Debug)]
 pub struct Subscribers {
     sinks: Vec<Sink>,
@@ -57,10 +53,11 @@ pub struct Subscribers {
 
 #[derive(Debug)]
 pub enum SinkSender {
-    Persistent(BroadcastBody),
+    Persistent(mpsc::UnboundedSender<Bytes>),
     Once {
-        sender: oneshot::Sender<(u64, hyper::body::Body)>,
+        sender: oneshot::Sender<Result<(u64, hyper::Body), u64>>,
         after: u64,
+        lagged: bool,
     },
 }
 
@@ -92,9 +89,9 @@ impl Subscribers {
     ) -> Body {
         // Create a new single-client SSE server (new clients will never be added
         // after this, because each event subscription is potentially unique).
-        let server = BroadcastBody::new(EVENT_BUFFER_SIZE);
-        let body = server.body();
-        let sender = SinkSender::Persistent(server);
+        let (tx, rx) = mpsc::unbounded_channel::<Bytes>();
+        let body = hyper::Body::wrap_stream(rx.map(|b| Ok::<_, Infallible>(b)));
+        let sender = SinkSender::Persistent(tx);
 
         // Insert the server into the sinks map
         self.sinks.push(Sink{sender, subscription});
@@ -109,9 +106,10 @@ impl Subscribers {
     pub fn add_one_off(
         &mut self, subscription: Subscription,
         after: u64,
-    ) -> impl Future<Output = (u64, hyper::body::Body)> {
+        lagged: bool,
+    ) -> impl Future<Output = Result<(u64, hyper::Body), u64>> {
         let (sender, receiver) = oneshot::channel();
-        self.sinks.push(Sink{sender: SinkSender::Once{sender, after}, subscription});
+        self.sinks.push(Sink{sender: SinkSender::Once{sender, after, lagged}, subscription});
         async move {
             receiver.await.expect("Receivers for one-off subscriptions shouldn't be dropped")
         }
@@ -122,8 +120,9 @@ impl Subscribers {
     /// list of subscribers has changed (that is, by client disconnection),
     /// returns the union of all now-current subscriptions.
     pub fn send_event<'a>(&'a mut self, moment: u64, event: &Event) {
-        let message = serde_json::to_string(&event)
-            .expect("Serializing to a string shouldn't fail");
+        let message: Bytes =
+            (serde_json::to_string(&event)
+             .expect("Serializing to a string shouldn't fail") + "\n").into();
         let mut i = 0;
         loop {
             if i >= self.sinks.len() {
@@ -136,15 +135,23 @@ impl Subscribers {
                         // NOTE: this is an if-guard, not an expression, so it
                         // falls through to the default case if there are still
                         // clients after the message is sent
-                        if 0 == server.send((message.clone() + "\n").into()) => {
-                            // if there are no more subscribers to a persistent
-                            // sink, remove it from the list of sinks
+                        if server.send(message.clone()).is_err() => {
+                            // if the receiver of a persistent sink has been
+                            // dropped, remove it from the list
                         },
-                    SinkSender::Once{sender, after} if moment >= after => {
+                    SinkSender::Once{sender, after, lagged} if moment >= after => {
                         // if the current moment is later than or equal to the
                         // time this one-off sink is waiting for, dispatch it
                         // and remove it from the list of sinks
-                        sender.send((moment, message.clone().into())).unwrap_or(());
+                        let result = if lagged {
+                            // If the original request was lagging, we don't
+                            // send back an actual response; we signal to the
+                            // client via a redirect that lag occurred.
+                            Err(moment)
+                        } else {
+                            Ok((moment, message.clone().into()))
+                        };
+                        sender.send(result).unwrap_or(());
                     },
                     sender => {
                         // otherwise, re-insert the sink and move forward, by

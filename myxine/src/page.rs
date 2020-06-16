@@ -1,7 +1,6 @@
 use hyper::body::{Body, Bytes};
 use hyper_usse::EventBuilder;
 use std::time::Duration;
-use std::io::Write;
 use tokio::sync::{Mutex, RwLock};
 use futures::join;
 use serde_json::Value;
@@ -12,7 +11,6 @@ use hopscotch::{self, ArcK};
 mod subscription;
 mod query;
 mod content;
-mod sse;
 
 pub use subscription::{Subscription, Event};
 use crate::unique::Unique;
@@ -39,8 +37,6 @@ pub enum EvalError {
     NoBrowser,
     /// The page was static, so could not run JavaScript.
     StaticPage,
-    /// An internal error caused the page handle to be dropped.
-    NoResponsePossible,
     /// The page took too long to respond.
     Timeout { duration: Duration, was_custom: bool },
     /// The code threw some kind of exception in JavaScript.
@@ -53,7 +49,6 @@ impl Display for EvalError {
         match self {
             NoBrowser => write!(w, "No browser is currently viewing the page"),
             StaticPage => write!(w, "The page is static, which means it cannot run scripts"),
-            NoResponsePossible => write!(w, "Internal error: page handle dropped"),
             Timeout{duration, was_custom} =>
                 if *was_custom {
                     write!(w, "Exceeded custom timeout of {}ms", duration.as_millis())
@@ -64,9 +59,6 @@ impl Display for EvalError {
         }
     }
 }
-
-/// The size of the dynamic page template in bytes
-const TEMPLATE_SIZE: usize = include_str!("page/dynamic.html").len();
 
 /// The default timeout for evaluating JavaScript expressions in the page,
 /// measured in milliseconds
@@ -91,21 +83,8 @@ impl Page {
     /// Render a whole page as HTML (for first page load).
     pub async fn render(&self) -> Body {
         match &*self.content.lock().await {
-            Content::Dynamic{title, body, ..} => {
-                let debug = cfg!(debug_assertions).to_string();
-
-                // Pre-allocate a buffer exactly the right size
-                let buffer_size =
-                    TEMPLATE_SIZE + debug.len() + title.len() + body.len();
-                let mut bytes = Vec::with_capacity(buffer_size);
-
-                write!(&mut bytes,
-                       include_str!("page/dynamic.html"),
-                       debug = debug,
-                       title = title,
-                       body = body)
-                    .expect("Internal error: write!() failed on a Vec<u8>");
-                Body::from(bytes)
+            Content::Dynamic{..} => {
+                include_str!("page/dynamic.html").into()
             },
             Content::Static{raw_contents, ..} => {
                 raw_contents.clone().into()
@@ -123,38 +102,72 @@ impl Page {
     /// Get a specific event, at or after a particular moment in time, given a
     /// subscription specification that it must match. If the event is available
     /// in the buffer, this returns immediately, otherwise it may block until
-    /// the event is available.
+    /// the event is available. If the request is for a moment which lies
+    /// *before* the buffer, returns `Err(u64)`, to indicate the canonical
+    /// moment for the event requested. The user-agent is responsible for
+    /// retrying a request redirected to this moment.
     pub async fn event(&self, subscription: Subscription, moment: u64) -> Result<(u64, Body), u64> {
-        {
+        let lagged = {
             // Scope for ensuring we drop events read-lock
             let events = self.events.read().await;
+
+            // Determine if the event was lagging the buffer
+            let earliest_index = if let Some(earliest) = events.earliest() {
+                earliest.index()
+            } else {
+                events.next_index()
+            };
+            let lagged = moment < earliest_index;
+
             match &subscription {
                 Subscription::Universal => {
-                    if let Some(earliest) = events.earliest() {
-                        if moment < earliest.index() {
-                            return Err(earliest.index());
-                        } else if let Some(found) = events.get(moment) {
-                            let body = serde_json::to_string(found.value()).unwrap().into();
-                            return Ok((moment, body));
-                        }
+                    if lagged {
+                        // Immediately report lag: since any event will do, the
+                        // place to retry (after the user-agent re-issues the
+                        // request) should be the earliest index represented.
+                        return Err(earliest_index);
+                    } else if let Some(found) = events.get(moment) {
+                        // If no lag, and there is an event to send, send back
+                        // the body we desire, and its found index.
+                        let body = serde_json::to_string(found.value()).unwrap().into();
+                        return Ok((moment, body));
+                    } else {
+                        // Block until we get a matching event (see below).
                     }
                 },
                 Subscription::Specific(tags) => {
                     if let Some(found) = events.after(moment, tags) {
-                        let body = serde_json::to_string(found.value()).unwrap().into();
-                        return Ok((found.index(), body));
+                        if lagged {
+                            // Immediately report lag: since it was found, the
+                            // place to retry (after the user-agent re-issues
+                            // the request) should be this very same index.
+                            return Err(found.index());
+                        } else {
+                            // If no lag, send back the body we desire, and its
+                            // found index.
+                            let body = serde_json::to_string(found.value()).unwrap().into();
+                            return Ok((found.index(), body));
+                        }
+                    } else {
+                        // Block until we get a matching event (see below).
                     }
                 }
             }
-        }
+
+            // This computed value will be used below to determine whether to
+            // report that lag occurred if there was both (1) lag, and (2) no
+            // matching event yet.
+            lagged
+        };
+        
         // If we couldn't find it in the buffered events, then wait for it:
         let result = {
             // Scope for ensuring we drop subscriber lock before awaiting the
             // result of the subscription
             let mut subscribers = self.subscribers.lock().await;
-            subscribers.add_one_off(subscription, moment)
+            subscribers.add_one_off(subscription, moment, lagged)
         };
-        Ok(result.await)
+        result.await
     }
 
     /// Send an event to all subscribers. This should only be called with events
@@ -175,7 +188,7 @@ impl Page {
     /// `None` if so, otherwise returns the current number of clients getting
     /// live updates to the page.
     pub async fn send_heartbeat(&self) -> Option<usize> {
-        let mut content = self.content.lock().await;
+        let content = self.content.lock().await;
         content.send_heartbeat()
     }
 
@@ -195,7 +208,7 @@ impl Page {
                 let event = EventBuilder::new(expression)
                     .event_type(if statement_mode { "run" } else { "evaluate" })
                     .id(&id_string);
-                let client_count = updates.send(event.into());
+                let client_count = updates.send(event.into()).unwrap_or(0);
                 // All the below gets executed *after* the lock on content is
                 // released, because it's a returned async block that is
                 // .await-ed after the scope of the match closes.
@@ -216,7 +229,7 @@ impl Page {
                         // Wait for the result
                         let wait_result = async {
                             match result.await {
-                                None => Err(EvalError::NoResponsePossible),
+                                None => panic!("Internal error: query handle dropped before response"),
                                 Some(result) => result.map_err(EvalError::JsError),
                             }
                         }.fuse();
@@ -260,7 +273,7 @@ impl Page {
     /// is static, this has no effect and returns None. Otherwise, returns the
     /// Body stream to give to the new client.
     pub async fn update_stream(&self) -> Option<Body> {
-        let mut content = self.content.lock().await;
+        let content = self.content.lock().await;
         content.update_stream()
     }
 
@@ -268,9 +281,11 @@ impl Page {
     /// self-refreshing functionality. All clients will be told to refresh their
     /// page to load the new static content (which will not be able to update
     /// itself until a client refreshes their page again).
-    pub async fn set_static(&self,
-                            content_type: Option<String>,
-                            raw_contents: Bytes) {
+    pub async fn set_static(
+        &self,
+        content_type: Option<String>,
+        raw_contents: Bytes
+    ) {
         let mut content = self.content.lock().await;
         content.set_static(content_type, raw_contents)
     }
@@ -290,11 +305,10 @@ impl Page {
         new_title: impl Into<String>,
         new_body: impl Into<String>,
         refresh: RefreshMode,
-    ) -> Body {
+    ) {
         let mut content = self.content.lock().await;
         content.set_title(new_title);
         content.set_body(new_body, refresh);
-        Body::empty()
     }
 
     /// Clear the page entirely, removing all subscribers and resetting the page
@@ -305,5 +319,11 @@ impl Page {
         let content = &mut *self.content.lock().await;
         content.set_title("");
         content.set_body("", RefreshMode::Diff);
+    }
+
+    /// Tell the page, if it is dynamic, to refresh its content in full from the
+    /// server.
+    pub async fn refresh(&self) {
+        self.content.lock().await.refresh()
     }
 }

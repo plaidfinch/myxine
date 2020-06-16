@@ -1,7 +1,12 @@
-export function activate(debugMode) {
+(() => {
 
-    // Print debug info if in debug build mode
-    const debug = (debugMode ? console.log : function () { /* do nothing */ });
+    // Print debug info if the user sets window.myxine = true
+    window.myxine = { "debug": false };
+    function debug(...args) {
+        if (window.myxine.debug === true) {
+            console.log(...args);
+        }
+    }
 
     // The initial set of listeners is empty
     let listeners = {};
@@ -225,4 +230,4 @@ export function activate(debugMode) {
             setupServerEventListeners(sse);
         }, 500); // half a second between retries
     };
-}
+})();

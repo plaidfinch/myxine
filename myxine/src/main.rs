@@ -1,6 +1,7 @@
 use structopt::StructOpt;
 
 mod page;
+mod session;
 mod server;
 mod unique;
 
