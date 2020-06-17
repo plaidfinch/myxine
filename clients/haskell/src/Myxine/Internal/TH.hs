@@ -272,7 +272,7 @@ mkDecodeEventProperties cons = do
   let event = pure (ConT eventTypeName)
   let cases = flip map cons \(GadtC [con] _ _) ->
         match (conP con []) (normalB [|Dict|]) []
-  sig <- sigD decodeEventPropertiesName [t| forall d. $event d -> Dict (JSON.FromJSON d)|]
+  sig <- sigD decodeEventPropertiesName [t| forall d. $event d -> Dict (JSON.FromJSON d, Show d)|]
   arg <- newName "event"
   dec <- funD decodeEventPropertiesName
            [clause [varP arg] (normalB (caseE (varE arg) cases)) []]
