@@ -10,6 +10,10 @@ import json
 MYXINE_DEFAULT_PORT = 1123
 
 
+# The global session for all requests
+MYXINE_GLOBAL_SESSION = requests.Session()
+
+
 @dataclass
 class Target:
     """A Target corresponds to an element in the browser's document. It
@@ -42,6 +46,21 @@ def page_url(path: str, port: int = MYXINE_DEFAULT_PORT) -> str:
     return 'http://localhost:' + str(port) + '/' + path
 
 
+def parse_event(line: str) -> Optional[Event]:
+    """Parse a JSON-encoded event. Returns None if it can't be parsed."""
+    try:
+        parsed = json.loads(line)
+        return Event(type=parsed['event'],
+                     targets=[Target(tag=j['tagName'],
+                                     attributes=j['attributes'])
+                              for j in parsed['targets']],
+                     properties=parsed['properties'])
+    except json.JSONDecodeError:
+        return None
+    except KeyError:
+        return None
+
+
 def events(path: str,
            subscription: Optional[List[str]] = None,
            port: int = MYXINE_DEFAULT_PORT) -> Iterator[Event]:
@@ -56,19 +75,13 @@ def events(path: str,
             params = {}
         else:
             params = {'events': subscription, 'stream': ''}
-        response = requests.get(url, stream=True, params=params)
+        response = MYXINE_GLOBAL_SESSION.get(url, stream=True, params=params)
         if response.encoding is None:
             response.encoding = 'utf-8'
         for line in response.iter_lines(decode_unicode=True):
-            try:
-                parsed = json.loads(line)
-                yield Event(type=parsed['event'],
-                            targets=[Target(tag=j['tagName'],
-                                            attributes=j['attributes'])
-                                     for j in parsed['targets']],
-                            properties=parsed['properties'])
-            except json.JSONDecodeError:
-                pass
+            event = parse_event(line)
+            if event is not None:
+                yield event
     except RequestException as e:
         msg = "Connection issue with myxine server (is it running?)"
         raise ValueError(msg) from e
@@ -99,7 +112,7 @@ def evaluate(path: str, *,
     if timeout is not None:
         params['timeout'] = str(timeout)
     try:
-        r = requests.post(url, data=data, params=params)
+        r = MYXINE_GLOBAL_SESSION.post(url, data=data, params=params)
         if r.status_code == 200:
             return r.json()
         else:
@@ -118,7 +131,7 @@ def update(path: str,
     """
     url = page_url(path, port)
     try:
-        requests.post(url, data=body.encode(), params={'title': title})
+        MYXINE_GLOBAL_SESSION.post(url, data=body.encode(), params={'title': title})
     except RequestException as e:
         msg = "Connection issue with myxine server (is it running?)"
         raise ValueError(msg) from e
@@ -134,7 +147,7 @@ def static(path: str,
     """
     url = page_url(path, port) + '?static'
     try:
-        requests.post(url, data=body, headers={'Content-Type': content_type})
+        MYXINE_GLOBAL_SESSION.post(url, data=body, headers={'Content-Type': content_type})
     except RequestException as e:
         msg = "Connection issue with myxine server (is it running?)"
         raise ValueError(msg) from e
