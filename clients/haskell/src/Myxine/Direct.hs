@@ -350,6 +350,7 @@ events PageLocation{pageLocationPort = Last maybePort,
         fixedOptions :: Req.Option 'Req.Http
         fixedOptions =
           portOption <> eventParams <> Req.queryFlag "next"
+          <> Req.responseTimeout maxBound  -- important, because long-polling!
 
         portOption :: Req.Option 'Req.Http
         portOption = Req.port (maybe defaultPort (\(PagePort p) -> p) maybePort)
