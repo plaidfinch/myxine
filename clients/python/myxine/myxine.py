@@ -76,6 +76,7 @@ def events(path: str,
             params = {'events': ''}
         else:
             params = {'events': subscription}
+        params['next'] = ''  # The first time around, /?next&events=...
 
         # The earliest event we will be willing to accept
         moment: str = ''
@@ -88,11 +89,10 @@ def events(path: str,
             event = parse_event(response.text)
             if event is not None:
                 yield event
-                
+
             # Set up the next request
-            params['next'] = ''
             moment = response.headers['Content-Location']
-            
+
     except RequestException as e:
         msg = "Connection issue with myxine server (is it running?)"
         raise ValueError(msg) from e
