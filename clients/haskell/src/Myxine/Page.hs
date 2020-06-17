@@ -136,10 +136,11 @@ do Right width <- evalInPage (JsExpression "window.innerWidth")
   , JavaScript(..), evalInPage
   ) where
 
-import Data.IORef
-import Control.Exception (SomeException, throwIO, try)
+import Control.Monad
+import Control.Exception (SomeException, throwIO, catch)
 import qualified Data.Aeson as JSON
 import Control.Concurrent
+import Data.List.NonEmpty (nonEmpty)
 
 import Myxine.Direct
 import Myxine.Target (Target)
@@ -179,86 +180,53 @@ runPage :: forall model.
   IO (Page model)
     {- ^ A 'Page' handle to permit further interaction with the running page -}
 runPage pageLocation initialModel handlersFor draw =
-  do pageActions       <- newChan  -- channel for model-modifying actions
-     eventsAndHandlers <- newChan  -- channel for streams of events + handlers
-     pageFinished      <- newEmptyMVar  -- result of the page is held here
+  do pageActions  :: Chan (Maybe (model -> IO model))  <- newChan
+     models       :: Chan model                        <- newChan
+     models'      :: Chan model                        <- dupChan models
+     pageFinished :: MVar (Either SomeException model) <- newEmptyMVar
 
-     -- Loop through all the events on the page, translating them to actions
-     pageEventThread <- forkIO $
-       listen (readChan eventsAndHandlers)
-              (writeChan pageActions . Just)
+     -- The stream of events from the page
+     nextEvent <- events pageLocation
 
-     -- Loop through all the actions, doing them
-     _pageModelThread <- forkIO
-       do result <- try @SomeException $
-            act (readChan pageActions)
-                (writeChan eventsAndHandlers)
-                initialModel
-          killThread pageEventThread
-          putMVar pageFinished result
+     renderThread <- forkIO $
+       catch @SomeException
+         (forever $
+          do model <- readChan models
+             update pageLocation (Dynamic (draw model)))
+         (putMVar pageFinished . Left)
 
-     -- Get the cycle started by sparking the initial render
+     pollThread <- forkIO $
+       catch @SomeException
+         (forever $
+          do model <- readChan models'
+             let handlers = handlersFor model
+             case SomeEvents <$> nonEmpty (handledEvents handlers) of
+               Nothing -> pure ()
+               Just eventList ->
+                 do event <- nextEvent eventList
+                    writeChan pageActions (Just (handle handlers event)))
+         (putMVar pageFinished . Left)
+
+     _modelThread <- forkIO $
+       let loop model =
+             readChan pageActions >>= \case
+               Nothing ->
+                 do putMVar pageFinished (Right model)
+                    killThread renderThread
+                    killThread pollThread
+               Just action ->
+                 do model' <- action model
+                    writeChan models model
+                    loop model'
+       in catch @SomeException
+            (loop initialModel)
+            (putMVar pageFinished . Left)
+
+     -- Kick off the cycle by "updating" the intial model
      writeChan pageActions (Just pure)
 
      pure (Page{..})
 
-  where
-    listen ::
-      IO (Handlers model, IO (Maybe PageEvent))
-        {- ^ input stream: handlers paired with their event streams -} ->
-      ((model -> IO model) -> IO ())
-        {- ^ output stream: actions to perform on the model -} ->
-      IO ()
-    listen dequeueEvents enqueueAction =
-      do (handlers, nextEvent) <- dequeueEvents
-         handleUntilDone handlers nextEvent  -- send (zero or more) output(s)
-         listen dequeueEvents enqueueAction  -- loop
-      where
-        -- Handle each event in a page-fream stream in sequence, sending each
-        -- resultant action along to the actions thread to perform it
-        handleUntilDone :: Handlers model -> IO (Maybe PageEvent) -> IO ()
-        handleUntilDone handlers nextEvent = go Fresh
-          where
-            go freshness =
-              -- putStrLn "[listen] Receiving event" >>
-              nextEvent >>= \case
-                Nothing -> pure ()
-                Just PageEvent{event, properties, targets} ->
-                  do -- putStrLn "[listen] Enqueueing new action"
-                     enqueueAction $
-                       handle handlers freshness event properties targets
-                     go Stale
-
-    act ::
-      IO (Maybe (model -> IO model))
-        {- ^ input stream: actions to perform on the model  -} ->
-      ((Handlers model, IO (Maybe PageEvent)) -> IO ())
-        {- ^ output stream: handlers paired with their event streams -} ->
-      model
-        {- ^ initial model -} ->
-      IO model
-        {- ^ final model   -}
-    act dequeueAction enqueueEvents model =
-      dequeueAction >>= \case               -- get latest action
-        Nothing -> pure model               -- return the final model
-        Just action ->
-          do -- putStrLn "[act] Performing action"
-             model' <- action model
-             let newContent = draw model'          -- view of new model
-                 newHandlers = handlersFor model'  -- handlers for new model
-             thisFrameEvents <- newChan
-             forkIO $
-               do tid <- myThreadId
-                  -- putStrLn $ "[act][" <> show tid <> "]" <> "Updating view, reading stream"
-                  sendUpdate pageLocation
-                    (Dynamic newContent)
-                    (SomeEvents (handledEvents newHandlers))
-                    (writeChan thisFrameEvents . Just)
-                  -- putStrLn $ "[act][" <> show tid <> "]" <> "Closing stream"
-                  writeChan thisFrameEvents Nothing
-             -- putStrLn "[act] Enqueueing new event stream"
-             enqueueEvents (newHandlers, readChan thisFrameEvents)
-             act dequeueAction enqueueEvents model'  -- loop
 
 -- | Wait for a 'Page' to finish executing and return its resultant @model@, or
 -- re-throw any exception the page encountered.

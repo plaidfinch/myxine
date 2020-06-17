@@ -29,6 +29,7 @@ import Data.String
 import Data.List
 import Data.List.NonEmpty (NonEmpty(..))
 import Control.Monad.IO.Class
+import Control.Exception
 import Data.Constraint
 import Data.Dependent.Map (Some(..))
 import qualified Data.ByteString.Lazy.Char8 as ByteString
@@ -184,6 +185,7 @@ update ::
   IO ()
 update PageLocation{pageLocationPort = Last maybePort,
                         pageLocationPath = Last maybePath} updateContent =
+  wrapCaughtReqException $
   do _ <- Req.runReq Req.defaultHttpConfig $
        Req.req Req.POST url body Req.ignoreResponse options
      pure ()
@@ -248,6 +250,7 @@ evaluateJs ::
   IO (Either String a)
 evaluateJs PageLocation{pageLocationPort = Last maybePort,
                         pageLocationPath = Last maybePath} timeout js =
+  wrapCaughtReqException $
   do result <- Req.runReq Req.defaultHttpConfig $
        Req.req Req.POST url body Req.lbsResponse options
      pure if Req.responseStatusCode result == 200
@@ -274,7 +277,9 @@ evaluateJs PageLocation{pageLocationPort = Last maybePort,
 -- | Given a page location and list of events, create an IO action that acts as
 -- a "stream" of sequential events matching the event list. The state maintained
 -- within the stream is used to coordinate with the server to return a
--- sequential event from each poll of the stream.
+-- sequential event from each poll of the stream. It is strongly recommended to
+-- create one such "get next" action and poll it repeatedly. The latter, unlike
+-- the former, might skip arbitrary numbers of events when repeatedly invoked!
 --
 -- Calls to the "get next" action returned will block until the next event
 -- matching the given description is available. Provided that the "get next"
@@ -286,19 +291,21 @@ evaluateJs PageLocation{pageLocationPort = Last maybePort,
 events ::
   PageLocation
     {- ^ The location of the page to listen for events from -} ->
-  EventList
-    {- ^ The list of events for which to listen -} ->
-  IO (IO PageEvent)
+  IO (EventList -> IO PageEvent)
 events PageLocation{pageLocationPort = Last maybePort,
-                    pageLocationPath = Last maybePath} eventList =
+                    pageLocationPath = Last maybePath} =
   do moment <- newIORef Nothing
-     pure (Req.runReq Req.defaultHttpConfig (go moment))
+     pure (\eventList -> wrapCaughtReqException $
+            Req.runReq Req.defaultHttpConfig (go moment eventList))
   where
-    go :: IORef (Maybe Text) -> Req.Req PageEvent
-    go moment =
+    go :: IORef (Maybe Text) -> EventList -> Req.Req PageEvent
+    go moment eventList =
       do currentMoment <- liftIO (readIORef moment)
          (url, options) <-
-           maybe undefined pure (urlAndOptions currentMoment)
+           maybe (liftIO . throwIO . ProtocolException $
+                  "Invalid Content-Location:" <> show currentMoment)
+                 pure
+                 (urlAndOptions currentMoment eventList)
          response <- Req.req Req.GET url Req.NoReqBody Req.jsonResponse options
          let nextMoment =
                Text.decodeUtf8 <$>
@@ -306,8 +313,11 @@ events PageLocation{pageLocationPort = Last maybePort,
          liftIO (writeIORef moment nextMoment)
          pure (Req.responseBody response)
 
-    urlAndOptions :: Maybe Text -> Maybe (Req.Url 'Req.Http, Req.Option 'Req.Http)
-    urlAndOptions maybeMoment =
+    urlAndOptions ::
+      Maybe Text ->
+      EventList ->
+      Maybe (Req.Url 'Req.Http, Req.Option 'Req.Http)
+    urlAndOptions maybeMoment eventList =
       case maybeMoment of
         Nothing ->
           pure (pageUrl (fromMaybe "" maybePath), fixedOptions)
@@ -350,4 +360,36 @@ events PageLocation{pageLocationPort = Last maybePort,
           SomeEvents es -> flip foldMap es
             \(Some e) -> "event" Req.=: ByteString.unpack (encodeEventType e)
 
--- TODO: Catch HTTPExceptions in this module
+wrapCaughtReqException :: IO a -> IO a
+wrapCaughtReqException action =
+  catch @Req.HttpException action $
+  \case
+    Req.VanillaHttpException e -> throwIO e
+    Req.JsonHttpException message -> throwIO (ProtocolException message)
+
+-- | If the response from the server cannot be processed appropriately, this
+-- exception is thrown. This should never happen in ordinary circumstances; if
+-- it does, your version of the client library may mismatch the version of the
+-- Myxine server you are running, or there may be a bug in the Myxine server or
+-- this library.
+--
+-- If you encounter this exception in the wild, please file a bug report at
+-- <https://github.com/GaloisInc/myxine/issues/new>. Thanks!
+newtype ProtocolException
+  = ProtocolException String
+  deriving stock (Eq, Ord)
+  deriving anyclass (Exception)
+
+instance Show ProtocolException where
+  show (ProtocolException details) =
+       "*** Myxine client panic: Failed to process event! This means one of:\n\n"
+    <> "  1) You connected to an event source that is not the Myxine server\n"
+    <> "  2) You connected to a Myxine server process with an incompatible version\n"
+    <> "  3) There is a bug in the Myxine server or client library (totally possible!)\n\n"
+    <> "  If you suspect it's (3), please file a bug report at:\n\n    " <> bugReportURL <> "\n\n"
+    <> "  Please include the version of this library, the version of the Myxine server,\n"
+    <> "  and the following error message:\n\n"
+    <> details
+    where
+      bugReportURL :: String
+      bugReportURL = "https://github.com/GaloisInc/myxine/issues/new"
