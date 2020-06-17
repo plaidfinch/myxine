@@ -170,6 +170,18 @@ impl Page {
         result.await
     }
 
+    /// Get the next event for a particular subscription, bypassing the buffer
+    /// of existing events and blocking until a new event arrives.
+    pub async fn next_event(&self, subscription: Subscription) -> (u64, Body) {
+        let result = {
+            // Scope for ensuring we drop subscriber lock before awaiting the
+            // result of the subscription
+            let mut subscribers = self.subscribers.lock().await;
+            subscribers.add_one_off(subscription, 0, false)
+        };
+        result.await.expect("Page::next_event can't lag")
+    }
+
     /// Send an event to all subscribers. This should only be called with events
     /// that have come from the corresponding page itself, or confusion will
     /// result!

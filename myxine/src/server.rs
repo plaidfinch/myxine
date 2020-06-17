@@ -11,7 +11,7 @@ use itertools::Itertools;
 mod params;
 
 use crate::session::Session;
-pub(crate) use params::{GetParams, PostParams, RefreshMode};
+pub(crate) use params::{GetParams, PostParams, SubscribeParams, RefreshMode};
 
 /// Run the main server loop alongside the heartbeat to all SSE clients
 #[allow(clippy::unnecessary_mut_passed)]
@@ -134,7 +134,7 @@ async fn process_request(
                         .unwrap()
                 },
                 // Client wants a json-lines stream of events on this page
-                Some(GetParams::Subscribe{subscription, stream_or_after: None}) => {
+                Some(GetParams::Subscribe{subscription, stream_or_after: SubscribeParams::Stream}) => {
                     let body = page.event_stream(subscription).await;
                     Response::builder()
                         .header("Cache-Control", "no-cache")
@@ -142,7 +142,7 @@ async fn process_request(
                         .unwrap()
                 },
                 // Client wants the event matching this subscription, after this time
-                Some(GetParams::Subscribe{subscription, stream_or_after: Some(after)}) => {
+                Some(GetParams::Subscribe{subscription, stream_or_after: SubscribeParams::After(after)}) => {
                     match page.event(subscription, after).await {
                         Ok((moment, body)) => {
                             let location = format!("{}?after={}", uri.path(), moment);
@@ -163,6 +163,18 @@ async fn process_request(
                                 .unwrap()
                         }
                     }
+                },
+                // Client wants the next event matching this subscription, but
+                // not any events which have already arrived.
+                Some(GetParams::Subscribe{subscription, stream_or_after: SubscribeParams::Next}) => {
+                    let (moment, body) = page.next_event(subscription).await;
+                    let location = format!("{}?after={}", uri.path(), moment);
+                    Response::builder()
+                        .header("Cache-Control", "no-cache")
+                        .header("Content-Type", "application/json; charset=utf8")
+                        .header("Content-Location", location)
+                        .body(body)
+                        .unwrap()
                 },
                 // Browser wants to load the full page
                 Some(GetParams::FullPage) => {

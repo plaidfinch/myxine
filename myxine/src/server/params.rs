@@ -6,13 +6,25 @@ use crate::page::Subscription;
 use crate::unique::Unique;
 
 /// Parsed parameters from a query string for a GET/HEAD request.
-pub(crate) enum GetParams {
+pub enum GetParams {
     FullPage,
     PageUpdates,
     Subscribe {
         subscription: Subscription,
-        stream_or_after: Option<u64>,
+        stream_or_after: SubscribeParams,
     },
+}
+
+/// The manner in which a subscription should be handled.
+pub enum SubscribeParams {
+    /// Stream all events to the client.
+    Stream,
+    /// Return the earliest event after the given moment to the client, as soon
+    /// as it is available.
+    After(u64),
+    /// Return the next event matching the subscription, but don't return any
+    /// events that have already been registered.
+    Next,
 }
 
 impl GetParams {
@@ -23,22 +35,29 @@ impl GetParams {
             Some(GetParams::FullPage)
         } else if param_as_flag("updates", &params)? && constrained_to_keys(&params, &["updates"]) {
             Some(GetParams::PageUpdates)
-        } else if constrained_to_keys(&params, &["events", "event", "stream"]) {
-            if param_as_flag("stream", &params)? {
+        } else if param_as_flag("stream", &params)? {
+            if constrained_to_keys(&params, &["events", "event", "stream"]) {
                 Some(GetParams::Subscribe {
                     subscription: parse_subscription(&params),
-                    stream_or_after: None,
+                    stream_or_after: SubscribeParams::Stream,
                 })
             } else {
                 None
             }
         } else if constrained_to_keys(&params, &["events", "event", "after", "next"]) {
-            let after = u64::from_str_radix(param_as_str("after", &params)?, 10).ok()?
-                + if param_as_flag("next", &params)? { 1 } else { 0 };
-            Some(GetParams::Subscribe {
-                subscription: parse_subscription(&params),
-                stream_or_after: Some(after)
-            })
+            if let Some(after_str) = param_as_str("after", &params) {
+                let after = u64::from_str_radix(after_str, 10).ok()?
+                    + if param_as_flag("next", &params)? { 1 } else { 0 };
+                Some(GetParams::Subscribe {
+                    subscription: parse_subscription(&params),
+                    stream_or_after: SubscribeParams::After(after)
+                })
+            } else {
+                Some(GetParams::Subscribe {
+                    subscription: parse_subscription(&params),
+                    stream_or_after: SubscribeParams::Next,
+                })
+            }
         } else {
             None
         }

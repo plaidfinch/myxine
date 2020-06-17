@@ -3,6 +3,7 @@ import requests
 from dataclasses import dataclass
 from requests import RequestException
 import json
+import urllib.parse
 
 
 # The default port on which myxine operates; can be overridden in the below
@@ -67,21 +68,31 @@ def events(path: str,
     """Subscribe to a stream of page events from a myxine server, returning an
     iterator over the events returned by the stream as they become available.
     """
-    url = page_url(path, port)
+    base_url = page_url(path, port)
     try:
+        # The base parameters of the request
         params: Dict[str, Any]
         if subscription is None:
-            url = url + "?events&stream"
-            params = {}
+            params = {'events': ''}
         else:
-            params = {'events': subscription, 'stream': ''}
-        response = MYXINE_GLOBAL_SESSION.get(url, stream=True, params=params)
-        if response.encoding is None:
-            response.encoding = 'utf-8'
-        for line in response.iter_lines(decode_unicode=True):
-            event = parse_event(line)
+            params = {'events': subscription}
+
+        # The earliest event we will be willing to accept
+        moment: str = ''
+
+        while True:
+            url = urllib.parse.urljoin(base_url, moment)
+            response = MYXINE_GLOBAL_SESSION.get(url, params=params)
+            if response.encoding is None:
+                response.encoding = 'utf-8'
+            event = parse_event(response.text)
             if event is not None:
                 yield event
+                
+            # Set up the next request
+            params['next'] = ''
+            moment = response.headers['Content-Location']
+            
     except RequestException as e:
         msg = "Connection issue with myxine server (is it running?)"
         raise ValueError(msg) from e
@@ -131,7 +142,8 @@ def update(path: str,
     """
     url = page_url(path, port)
     try:
-        MYXINE_GLOBAL_SESSION.post(url, data=body.encode(), params={'title': title})
+        params = {'title': title}
+        MYXINE_GLOBAL_SESSION.post(url, data=body.encode(), params=params)
     except RequestException as e:
         msg = "Connection issue with myxine server (is it running?)"
         raise ValueError(msg) from e
@@ -147,7 +159,8 @@ def static(path: str,
     """
     url = page_url(path, port) + '?static'
     try:
-        MYXINE_GLOBAL_SESSION.post(url, data=body, headers={'Content-Type': content_type})
+        headers = {'Content-Type': content_type}
+        MYXINE_GLOBAL_SESSION.post(url, data=body, headers=headers)
     except RequestException as e:
         msg = "Connection issue with myxine server (is it running?)"
         raise ValueError(msg) from e
