@@ -3,6 +3,7 @@ use hyper::Body;
 use hyper_usse::EventBuilder;
 use tokio::sync::broadcast;
 use tokio::stream::StreamExt;
+use serde_json::json;
 use std::mem;
 
 use super::RefreshMode;
@@ -61,31 +62,8 @@ impl Content {
     /// is static, this has no effect and returns None. Otherwise, returns the
     /// Body stream to give to the new client.
     pub fn update_stream(&self) -> Option<Body> {
-        match self {
-            Content::Dynamic {
-                updates,
-                title,
-                body,
-            } => {
-                // Composing the events to send: we send these in case the page
-                // spontaneously reconnects to the server without having
-                // refreshed cleanly, to make sure it gets an updated page right
-                // away.
-                let title_event = if *title != "" {
-                    EventBuilder::new(&title).event_type("title")
-                } else {
-                    EventBuilder::new(".").event_type("clear-title")
-                }
-                .build();
-                let body_event = if *body != "" {
-                    EventBuilder::new(body).event_type("body")
-                } else {
-                    EventBuilder::new(".").event_type("clear-body")
-                }
-                .build();
-
-                // NOTE: It's important that we construct the stream body here,
-                // so that this update gets sent to the new stream as well
+        let result = match self {
+            Content::Dynamic { updates, .. } => {
                 let stream_body =
                     Body::wrap_stream(updates.subscribe().filter(|result| {
                         match result {
@@ -97,17 +75,13 @@ impl Content {
                             _ => true,
                         }
                     }));
-
-                // Then, send the events and return the stream body for
-                // consumption by the client. We don't care about whether the
-                // sends succeed, or how many clients they report -- if nobody's
-                // connected, then that's fine.
-                let _ = updates.send(title_event.into());
-                let _ = updates.send(body_event.into());
                 Some(stream_body)
             }
             Content::Static { .. } => None,
-        }
+        };
+        // Make sure the page is up to date
+        self.refresh(RefreshMode::Diff);
+        result
     }
 
     /// Send an empty "heartbeat" message to all clients of a page, if it is
@@ -126,14 +100,31 @@ impl Content {
 
     /// Tell all clients to refresh the contents of a page, if it is dynamic.
     /// This has no effect if it is (currently) static.
-    pub fn refresh(&self) {
+    pub fn refresh(&self, refresh: RefreshMode) {
         match self {
-            Content::Dynamic { updates, .. } => {
-                let event = EventBuilder::new(".").event_type("refresh").build();
-                // We don't care about whether the send succeeds, or how many
-                // clients they report -- if nobody's connected, then that's
-                // fine.
-                let _ = updates.send(event.into());
+            Content::Dynamic { updates, title, body } => {
+                match refresh {
+                    RefreshMode::FullReload => {
+                        let event =
+                            EventBuilder::new(".")
+                            .event_type("refresh")
+                            .build();
+                        let _ = updates.send(event.into());
+                    },
+                    RefreshMode::SetBody | RefreshMode::Diff => {
+                        let data = json!({
+                            "title": title,
+                            "body": body,
+                            "diff": refresh == RefreshMode::Diff,
+                        });
+                        let message = serde_json::to_string(&data).unwrap();
+                        let event =
+                            EventBuilder::new(&message)
+                            .event_type("set")
+                            .build();
+                        let _ = updates.send(event.into());
+                    }
+                }
             }
             Content::Static { .. } => {}
         }
@@ -149,7 +140,7 @@ impl Content {
             raw_contents,
         };
         mem::swap(&mut content, self);
-        content.refresh();
+        content.refresh(RefreshMode::FullReload);
     }
 
     /// Get the content type of a page, or return `None` if none has been set
@@ -162,96 +153,43 @@ impl Content {
         }
     }
 
-    /// Tell all clients to change the title, if necessary. This converts the
+    /// Tell all clients to change the body, if necessary. This converts the
     /// page into a dynamic page, overwriting any static content that previously
     /// existed, if any. Returns `true` if the page content was changed (either
     /// converted from static, or altered whilst dynamic).
-    pub fn set_title(&mut self, new_title: impl Into<String>) -> bool {
+    pub fn set(
+        &mut self,
+        new_title: impl Into<String>,
+        new_body: impl Into<String>,
+        refresh: RefreshMode
+    ) -> bool {
         let mut changed = false;
         loop {
             match self {
                 Content::Dynamic {
                     ref mut title,
-                    ref mut updates,
+                    ref mut body,
                     ..
                 } => {
                     let new_title = new_title.into();
-                    if new_title != *title {
-                        *title = new_title;
-                        changed = true;
-                        let event = if title != "" {
-                            EventBuilder::new(title).event_type("title")
-                        } else {
-                            EventBuilder::new(".").event_type("clear-title")
-                        }
-                        .build();
-                        // We don't care about whether the send succeeds, or how
-                        // many clients they report -- if nobody's connected,
-                        // then that's fine.
-                        let _ = updates.send(event.into());
-                    }
-                    break; // title has been set
-                }
-                Content::Static { .. } => {
-                    *self = Content::new();
-                    changed = true;
-                    // and loop again to actually set the title
-                }
-            }
-        }
-        changed // report whether the page was changed
-    }
-
-    /// Tell all clients to change the body, if necessary. This converts the
-    /// page into a dynamic page, overwriting any static content that previously
-    /// existed, if any. Returns `true` if the page content was changed (either
-    /// converted from static, or altered whilst dynamic).
-    pub fn set_body(&mut self, new_body: impl Into<String>, refresh: RefreshMode) -> bool {
-        let mut changed = false;
-        loop {
-            match self {
-                Content::Dynamic {
-                    ref mut body,
-                    ref mut updates,
-                    ..
-                } => {
                     let new_body = new_body.into();
-                    if new_body != *body {
-                        *body = new_body;
+                    if new_title != *title || new_body != *body {
                         changed = true;
-                        // If refreshing whole page, do so; otherwise,
-                        // diff-update
-                        match refresh {
-                            RefreshMode::FullReload => self.refresh(),
-                            RefreshMode::SetBody | RefreshMode::Diff => {
-                                let event = if body != "" {
-                                    EventBuilder::new(body).event_type(
-                                        if refresh == RefreshMode::Diff {
-                                            "body"
-                                        } else {
-                                            "set-body"
-                                        },
-                                    )
-                                } else {
-                                    EventBuilder::new(".").event_type("clear-body")
-                                }
-                                .build();
-                                // We don't care about whether the send
-                                // succeeds, or how many clients they report --
-                                // if nobody's connected, then that's fine.
-                                let _ = updates.send(event.into());
-                            }
-                        }
                     }
-                    break; // body has been set
+                    *title = new_title;
+                    *body = new_body;
+                    break; // values have been set
                 }
                 Content::Static { .. } => {
                     *self = Content::new();
                     changed = true;
-                    // and loop again to actually set the body
+                    // and loop again to actually set
                 }
             }
         }
-        changed // report whether the page was changed
+        if changed {
+            self.refresh(refresh);
+        }
+        changed
     }
 }

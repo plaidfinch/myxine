@@ -1,4 +1,4 @@
-(() => {
+window.addEventListener("load", () => {
 
     // Print debug info if the user sets window.myxine = true
     window.myxine = { "debug": false };
@@ -210,14 +210,18 @@
 
     // The handlers for events coming from the server:
     function setupServerEventListeners(sse) {
-        sse.addEventListener("body",        (event) => { setBodyTo(event.data); });
-        sse.addEventListener("set-body",    (event) => { document.body.innerHTML = event.data; });
-        sse.addEventListener("clear-body",  (event) => { setBodyTo(""); });
-        sse.addEventListener("title",       (event) => { document.title = event.data; });
-        sse.addEventListener("clear-title", (event) => { document.title = ""; });
-        sse.addEventListener("refresh",     (event) => { window.location.reload(); });
-        sse.addEventListener("evaluate",    (event) => { evaluateAndRespond(false, event); });
-        sse.addEventListener("run",         (event) => { evaluateAndRespond(true, event); });
+        sse.addEventListener("set", (event) => {
+            let data = JSON.parse(event.data);
+            document.title = data.title;
+            if (data.diff) {
+                setBodyTo(data.body);
+            } else {
+                document.body.innerHTML = data.body;
+            }
+        });
+        sse.addEventListener("refresh", () => window.location.reload());
+        sse.addEventListener("evaluate", (event) => evaluateAndRespond(false, event));
+        sse.addEventListener("run",      (event) => evaluateAndRespond(true, event));
     }
 
     // Actually set up SSE...
@@ -230,4 +234,4 @@
             setupServerEventListeners(sse);
         }, 500); // half a second between retries
     };
-})();
+});

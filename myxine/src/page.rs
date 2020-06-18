@@ -318,9 +318,7 @@ impl Page {
         new_body: impl Into<String>,
         refresh: RefreshMode,
     ) {
-        let mut content = self.content.lock().await;
-        content.set_title(new_title);
-        content.set_body(new_body, refresh);
+        self.content.lock().await.set(new_title, new_body, refresh);
     }
 
     /// Clear the page entirely, removing all subscribers and resetting the page
@@ -329,13 +327,12 @@ impl Page {
         let subscribers = &mut *self.subscribers.lock().await;
         *subscribers = Subscribers::new();
         let content = &mut *self.content.lock().await;
-        content.set_title("");
-        content.set_body("", RefreshMode::Diff);
+        content.set("", "", RefreshMode::Diff);
     }
 
     /// Tell the page, if it is dynamic, to refresh its content in full from the
     /// server.
     pub async fn refresh(&self) {
-        self.content.lock().await.refresh()
+        self.content.lock().await.refresh(RefreshMode::FullReload)
     }
 }
