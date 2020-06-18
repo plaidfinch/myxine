@@ -21,52 +21,13 @@ events](#interactivity) within that page to quickly prototype a reactive user
 interface—with only a knowledge of HTML and your favorite language.
 
 More precisely: `myxine` is a local server that gives you a RESTful API for
-creating model-view-controller style interactive applications in your browser
-from any programming language capable of sending an HTTP request.
+creating interactive applications in your web browser, using any programming
+language capable of sending an HTTP request.
 
 The intent of `myxine` is to make it easy and succinct to write idiomatic
 bindings to it in any programming language, or to use it from the shell
 directly. Currently, there are bindings for Python and Haskell, and work in
 progress toward bindings for Rust, JavaScript, and more.
-
-**Q:** Could you show me something cool, then tell me the details after?<br/>
-**A:** Happily, [let's get started](#show-me)!
-
-**Q:** I want to know all about how it works, then can you show me the demo after? <br/>
-**A:** Sure thing, [let's dig in](#getting-started)!
-
-## Show me!
-
-First, [install `myxine`](#installation) -- in short:
-
-```bash
-$ cargo install myxine
-  ... (things get compiled) ...
-$ myxine
-Running at: http://127.0.0.1:1123
-```
-
-Second, make sure you have [Python 3](https://www.python.org/) and the
-[`requests`](https://2.python-requests.org/en/master/) library installed. Myxine
-doesn't itself depend on them, but we'll need them presently because this example
-happens to be written in Python. If you have Python 3 (and therefore hopefully
-[`pip3`](https://pypi.org/project/pip/)) on your system, you can install
-`requests` with:
-
-```bash
-$ pip3 install requests
-```
-
-And in another window, run:
-
-```bash
-$ ./examples/circles.py
-```
-
-Then open up [http://localhost:1123/](http://localhost:1123/) in your web
-browser, and mouse around! See if you can figure out what's going on by reading
-[the Python source for this example](/examples/circles.py), or read on for [the
-full story...](#lets-play)
 
 ## Getting started
 
@@ -113,7 +74,7 @@ $ curl 'localhost:1123/' \
    `localhost:1123/some/arbitrary/path`: you'll see a web page with the HTML
    fragment you just posted set as the contents of its `<body>`.
 3. When you **POST** some more HTML to that same path, the changes will be
-   instantly updated on the web page before your eyes!
+   instantly updated on the web page.
 
 Some more things you can do:
 
@@ -160,85 +121,8 @@ Some more things you can do:
 
 ## Interactivity
 
-Interfaces are meant to be *interactive*: `myxine` lets you listen to events
+Interfaces are meant to be *interactive*: Myxine lets you listen to events
 happening in the page without writing a lick of JavaScript.
-
-### Listening to the event stream
-
-To listen to the events happening in a page, send a **GET** request to that
-page's URL, with the query string `?events`. Using `curl`, this might look like
-below (some data has been elided for brevity).
-
-```bash
-$ curl 'localhost:1123/some/path?events'
-id: [{"attributes":{},"tagName":"html"}]
-event: mousemove
-data: {"x":352,"y":237, ... }
-
-id: []
-event: blur
-data: {}
-
-:
-
-id: []
-event: focus
-data: {}
-
-id: [{"attributes":{"style":"margin: 0px; padding: 0px"},"tagName":"body"},{"attributes":{},"tagName":"html"}]
-event: keydown
-data: {"altKey":false,"ctrlKey":false,"key":"f","metaKey":false,"shiftKey":false, ... }
-```
-
-This will return an endless stream of events in the [`text/event-stream`
-format](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format),
-a line-based text format for streams of events with attached data.
-
-### Understanding events
-
-In `myxine`'s case, every event will have:
-
-1. `id`: A JSON list of "target" objects identifying the path from the most
-   specific location of the event in the document to the least specific. Each
-   target object in this path has a `tagName` string identifying the HTML tag of
-   the corresponding element, and an `attributes` dictionary giving the value of
-   each attribute of that element. The list of targets may be empty, in which
-   case it corresponds to an event that fired directly on some top-level object
-   in the browser (as is the case for the `blur` and `focus` events in the above
-   example).
-2. `event`: The name of the JavaScript event to which this item corresponds.
-3. `data`: A JSON dictionary holding the properties of the event. Different
-   events have different sets of properties associated with them, so the
-   contents of this dictionary may vary depending on the event you are
-   examining.
-
-So, for instance, you click on an element `<div id="something", class="cool"></div>`, the corresponding event will look something like:
-
-```
-id: [{"tagName":"div","attributes":{"id":"something","class":"cool"}}, ... ]
-event: click
-data: {"x":352,"y":237, ... }
-```
-
-If your language doesn't implement a parser for this format, check out [the
-17-line Python implementation](/examples/myxine.py#L14-L36) as a reference. For
-the technical details I used when writing this parser, see [the W3C
-Recommendation for Server-Sent Events](https://www.w3.org/TR/eventsource/) and
-look at the sections for
-[parsing](https://www.w3.org/TR/eventsource/#parsing-an-event-stream) and
-[interpretation](https://www.w3.org/TR/eventsource/#event-stream-interpretation).
-You can ignore everything about what to do "as a user-agent" because you are not
-a user-agent :)
-
-**Example:** For an example of an interactive page using event subscriptions,
-check out [the `circles` example in Python](/examples/circles.py). Make sure
-`myxine` is running, then run:
-
-```bash
-$ ./examples/circles.py
-```
-
-Then load up [http://localhost:1123/](http://localhost:1123/) and mouse around!
 
 ### Supported events
 
@@ -264,53 +148,267 @@ fields which are to be reported for each event interface. This list is
 intentionally conservative: if you are in need of support for another event or
 set of events, feel free to submit a PR with changes to this file.
 
-### Changing subscriptions
+### Event format
 
-Sometimes, especially when implementing higher-level bindings in some other
-programming language, it's useful to be able to change what events you are
-subscribed to. While you can just make another request for events on a page,
-this risks either duplicating or dropping events as you switch from one stream
-to another, since there's no way to determine whether two equal events in the
-stream represent the same user interaction, or if they are two separate
-interactions closely spaced in time.
+Events are returned as linebreak- and whitespace-free JSON dictionaries. When
+streaming, consecutive events are separated by newlines. Each event dictionary
+is of the form:
 
-To solve this, you can continue to listen for events on a single stream, but
-tell `myxine` to alter the events in the stream from those you were originally
-listening for. Every event stream from `myxine` is tagged with a unique
-`Content-Location` header that identifies a relative URL corresponding to that
-particular stream. For example:
+- `event`: a *string* giving the name of the event according to JavaScript
+- `targets`: a *list* of *dictionaries* representing an element in the DOM upon
+  which the event fired, in order from innermost to outermost, each of which is
+  of the form:
+  - `tagName`: a *string* giving the (lowercase) HTML tag name of the element
+  - `attributes`: a *dictionary* mapping the element's HTML attribute names to
+    their corresponding *string* values
+- `properties`: a *dictionary* of attributes of the event itself, whose names
+  and value types vary depending on the type of event
+
+For example, consider this event (formatted with spaces and newlines for reading
+convenience):
+
+``` json
+{
+    "event": "click",
+    "targets": [
+        {"tagName": "button", "attributes": {"id": "abc"}},
+        {"tagName": "body", "attributes": {"class": "xyz"}},
+        {"tagName": "html", "attributes": {}}
+    ],
+    "properties": {
+        "altKey": false,
+        "button": 0,
+        "buttons": 0,
+        "clientX": 911,
+        "clientY": 195,
+        "ctrlKey": false,
+        "detail": 1,
+        "metaKey": false,
+        "movementX": 0,
+        "movementY": 0,
+        "offsetX": 911,
+        "offsetY": 195,
+        "pageX": 911,
+        "pageY": 195,
+        "screenX": 749,
+        "screenY": 1914,
+        "shiftKey": false
+    }
+}
+```
+
+This represents a `click` event on an element `<button id="abc" />` contained in
+an element `<body class="xyz">` contained in the `<html>` page, with a variety
+of properties describing the location of the click, the state of keys being held
+down during the click, and other information. See [above](#supported-events) for
+resources to aid your understanding of these properties.
+
+### Listening to events
+
+There are two distinct APIs for accessing the events on a page:
+
+- **Streaming:** You can make a single request and receive an unending
+  newline-separated stream of events. One caveat: because this is a
+  line-oriented streaming HTTP body, your language of choice must allow
+  non-buffered access to the raw stream in order for this API to be useful. If
+  not, the long-polling API may be more suitable.
+- **Long-polling:** You can issue one request for each event you wish to
+  receive, and wait until such an event is available. Although it might seem
+  that repeated polling could run the risk of dropping events, Myxine will take
+  care of buffering events for you to ensure you will receive each event you
+  want in sequence. This API is slightly more complex than the streaming API, as
+  it requires you to keep track of the "moment in time" corresponding to the
+  latest event you received.
+
+#### Streaming events
+
+To listen to a stream of the events happening in a page, send a **GET** request
+to that page's URL, with the query flag `?stream` and a set of query parameters
+describing which events you wish to receive. If you don't specify any events,
+every page event will be included in the stream. Otherwise, you can ask for only
+specific events to be returned by listing their names using the `?event=...`
+query parameter (this may be repeated).
+
+Using `curl`, this might look like below:
 
 ```bash
-$ curl -v "http://localhost:1123/?event=click"
-...
-> GET /?event=click HTTP/1.1
+$ curl 'localhost:1123/some/path/?stream&event=click&event=keydown'
+{"event":"click","targets":[{"attributes":{},"tagName":"html"}],"properties":{"altKey":false,"button":0,"buttons":0,"clientX":911,"clientY":195,"ctrlKey":false,"detail":1,"metaKey":false,"movementX":0,"movementY":0,"offsetX":911,"offsetY":195,"pageX":911,"pageY":195,"screenX":749,"screenY":1914,"shiftKey":false}}
+{"event":"click","targets":[{"attributes":{},"tagName":"html"}],"properties":{"altKey":false,"button":0,"buttons":0,"clientX":1180,"clientY":338,"ctrlKey":false,"detail":1,"metaKey":false,"movementX":0,"movementY":0,"offsetX":1180,"offsetY":338,"pageX":1180,"pageY":338,"screenX":964,"screenY":2028,"shiftKey":false}}
+{"event":"keydown","targets":[{"attributes":{"style":"margin: 0px; padding: 0px"},"tagName":"body"},{"attributes":{},"tagName":"html"}],"properties":{"altKey":false,"code":"KeyA","ctrlKey":false,"detail":0,"isComposing":false,"key":"a","metaKey":false,"repeat":false,"shiftKey":false}}
+{"event":"keydown","targets":[{"attributes":{"style":"margin: 0px; padding: 0px"},"tagName":"body"},{"attributes":{},"tagName":"html"}],"properties":{"altKey":false,"code":"KeyB","ctrlKey":false,"detail":0,"isComposing":false,"key":"b","metaKey":false,"repeat":false,"shiftKey":false}}
+{"event":"click","targets":[{"attributes":{},"tagName":"html"}],"properties":{"altKey":false,"button":0,"buttons":0,"clientX":1180,"clientY":338,"ctrlKey":false,"detail":1,"metaKey":false,"movementX":0,"movementY":0,"offsetX":1180,"offsetY":338,"pageX":1180,"pageY":338,"screenX":964,"screenY":2028,"shiftKey":false}}
+```
+
+#### Long-polling for events
+
+Alternatively, you can repeatedly query for the next event matching a set of
+desired events, receiving an instant response if such an event has already
+happened without your having received it---or a response delayed until such an
+event occurs, if no such unseen event has yet happened.
+
+How it works: the Myxine server has an internal count of how many events have
+*ever* occurred in the lifetime of the page in question. When you make a request
+for an event, the `Content-Location` header of the response indicates a URL on
+the server which corresponds to the that event's unique sequence number. By
+directing your next query to that location, you inform the server to hand you
+the next event after that one---and by continuing to follow the links in the
+`Content-Location` headers, you skip forward one event at a time in the sequence
+of events that occurred in the page.
+
+Let's see an example. We'll use the `-v` mode for `curl`, which shows us the
+request and response headers, as well as other meta-information.
+
+To start, we make a request for the next event by using the `?next` query flag:
+
+```bash
+$ curl -v 'localhost:1123/some/path/?next&event=focus&event=keydown'
+*   Trying 127.0.0.1...
+* TCP_NODELAY set
+* Connected to localhost (127.0.0.1) port 1123 (#0)
+> GET /some/path/?next HTTP/1.1
 > Host: localhost:1123
-> User-Agent: curl/7.54.0
+> User-Agent: curl/7.64.1
 > Accept: */*
 >
 < HTTP/1.1 200 OK
-...
-< content-location: /?subscription=1ac911f9-d321-44fc-910e-64497e3095b4
-...
+< cache-control: no-cache
+< content-type: application/json; charset=utf8
+< content-location: /some/path/?after=227
+< content-length: 47
+< date: Thu, 18 Jun 2020 17:15:43 GMT
+<
+{"event":"focus","targets":[],"properties":{}}
+* Connection #0 to host localhost left intact
+* Closing connection 0
 ```
 
-If you then POST to this URL with query parameters describing a new event
-subscription, the *original stream* will begin to receive the events you
-specified (and *only* the events you specified). Suppose you were to run the
-following `curl` command:
+Notice the line:
 
 ```bash
-$ curl -X POST "http://localhost:1123/?subscription=1ac911f9-d321-44fc-910e-64497e3095b4&event=keydown"
+< content-location: /some/path/?after=227
 ```
 
-The moment before the command, the only events available on the stream would be
-`"click"` events. The moment after the command returns, the only events
-published on the stream would be `"keydown"` events (though some `"click"`
-events might remain in the stream yet to be processed, if your client-side HTTP
-library uses some kind of buffering).
+If we request that exact path, we will receive the same event. In other words,
+the parameter `?after=227` represents the canonical reference to this particular
+event, and we can retrieve it as many times as we like (until it leaves the
+server's buffer):
 
-This method of changing event subscriptions ensures that you will never see
-duplicated or dropped events.
+```bash
+$ curl 'localhost:1123/some/path/?after=227'
+{"event":"focus","targets":[],"properties":{}}
+```
+
+To get the next event, however, we again use the `?next` query flag and repeat
+our request for the specific events we're interested in (in this case, `focus`
+and `keydown`):
+
+```bash
+$ curl -v 'localhost:1123/some/path/?after=227&next&event=focus&event=keydown'
+*   Trying 127.0.0.1...
+* TCP_NODELAY set
+* Connected to localhost (127.0.0.1) port 1123 (#0)
+> GET /some/path/?after=227&next&event=focus&event=keydown HTTP/1.1
+> Host: localhost:1123
+> User-Agent: curl/7.64.1
+> Accept: */*
+>
+< HTTP/1.1 200 OK
+< cache-control: no-cache
+< content-type: application/json; charset=utf8
+< content-location: /some/path/?after=228
+< content-length: 291
+< date: Thu, 18 Jun 2020 17:51:07 GMT
+<
+* Connection #0 to host localhost left intact
+{"event":"keydown","targets":[{"attributes":{"style":"margin: 0px; padding: 0px"},"tagName":"body"},{"attributes":{},"tagName":"html"}],"properties":{"altKey":false,"code":"MetaLeft","ctrlKey":false,"detail":0,"isComposing":false,"key":"Meta","metaKey":true,"repeat":false,"shiftKey":false}}* Closing connection 0
+```
+
+Notice the line:
+
+```bash
+< content-location: /some/path/?after=228
+```
+
+If we were to continue this example, we would query again starting at this
+point---but hopefully you get the rhythm of the thing by now!
+
+**One more thing:** Keep in mind that although the server has a generously sized
+event buffer, if you lag too far behind in requests, the event you're looking
+for may already have been evicted from the server's buffer. In this case, the
+server will issue a **308: Permanent Redirect** response pointing to the
+earliest known event matching the request, and noting in human-readable format
+how far behind the buffer's tail the request fell:
+
+``` bash
+$ curl -v 'localhost:1123/some/path/?after=0'
+*   Trying 127.0.0.1...
+* TCP_NODELAY set
+* Connected to localhost (127.0.0.1) port 1123 (#0)
+> GET /some/path/?after=0 HTTP/1.1
+> Host: localhost:1123
+> User-Agent: curl/7.64.1
+> Accept: */*
+>
+< HTTP/1.1 308 Permanent Redirect
+< cache-control: no-cache
+< location: /some/path/?after=391
+< content-length: 36
+< date: Thu, 18 Jun 2020 17:57:19 GMT
+<
+* Connection #0 to host localhost left intact
+Client request lagged by 391 events.* Closing connection 0
+```
+
+If we follow redirects (in `curl` this means using the `-L` flag), the server
+will return this event we asked for, and we can again continue using the
+`Content-Location` header field to pick up the sequence of events:
+
+``` bash
+*   Trying 127.0.0.1...
+* TCP_NODELAY set
+* Connected to localhost (127.0.0.1) port 1123 (#0)
+> GET /some/path/?after=0 HTTP/1.1
+> Host: localhost:1123
+> User-Agent: curl/7.64.1
+> Accept: */*
+>
+< HTTP/1.1 308 Permanent Redirect
+< cache-control: no-cache
+< location: /some/path/?after=396
+< content-length: 36
+< date: Thu, 18 Jun 2020 18:01:30 GMT
+<
+* Ignoring the response-body
+* Connection #0 to host localhost left intact
+* Issue another request to this URL: 'http://localhost:1123/some/path/?after=396'
+* Found bundle for host localhost: 0x7fe220c1c000 [can pipeline]
+* Could pipeline, but not asked to!
+* Re-using existing connection! (#0) with host localhost
+* Connected to localhost (127.0.0.1) port 1123 (#0)
+> GET /some/path/?after=396 HTTP/1.1
+> Host: localhost:1123
+> User-Agent: curl/7.64.1
+> Accept: */*
+>
+< HTTP/1.1 200 OK
+< cache-control: no-cache
+< content-type: application/json; charset=utf8
+< content-location: /some/path/?after=396
+< content-length: 319
+< date: Thu, 18 Jun 2020 18:01:30 GMT
+<
+* Connection #0 to host localhost left intact
+{"event":"mousemove","targets":[{"attributes":{},"tagName":"html"}],"properties":{"altKey":false,"button":0,"buttons":0,"clientX":745,"clientY":733,"ctrlKey":false,"detail":0,"metaKey":false,"movementX":86,"movementY":30,"offsetX":746,"offsetY":733,"pageX":745,"pageY":733,"screenX":616,"screenY":708,"shiftKey":false}}* Closing connection 0
+```
+
+The default in most HTTP client libraries is to transparently follow redirects,
+which means by default, you'll just miss events if you lag too far behind the
+server's buffer. In the cases where you might want to alter your client code's
+behavior based on the fact that lag occurred, your HTTP client library of choice
+likely offers some options for inspecting the response to determine how many
+redirects were followed. If this is more than zero, then your client lagged
+behind the server's buffer.
 
 ## The escape hatch: evaluating arbitrary JavaScript
 
