@@ -1,10 +1,10 @@
 use hyper::body::Bytes;
 use hyper::Body;
 use hyper_usse::EventBuilder;
-use tokio::sync::broadcast;
-use tokio::stream::StreamExt;
 use serde_json::json;
 use std::mem;
+use tokio::stream::StreamExt;
+use tokio::sync::broadcast;
 
 use super::RefreshMode;
 
@@ -64,17 +64,16 @@ impl Content {
     pub fn update_stream(&self) -> Option<Body> {
         let result = match self {
             Content::Dynamic { updates, .. } => {
-                let stream_body =
-                    Body::wrap_stream(updates.subscribe().filter(|result| {
-                        match result {
-                            // We ignore lagged items in the stream! If we don't
-                            // ignore these, we would terminate the Body on
-                            // every lag, which is undesirable.
-                            Err(broadcast::RecvError::Lagged(_)) => false,
-                            // Otherwise, we leave the result alone.
-                            _ => true,
-                        }
-                    }));
+                let stream_body = Body::wrap_stream(updates.subscribe().filter(|result| {
+                    match result {
+                        // We ignore lagged items in the stream! If we don't
+                        // ignore these, we would terminate the Body on
+                        // every lag, which is undesirable.
+                        Err(broadcast::RecvError::Lagged(_)) => false,
+                        // Otherwise, we leave the result alone.
+                        _ => true,
+                    }
+                }));
                 Some(stream_body)
             }
             Content::Static { .. } => None,
@@ -102,30 +101,26 @@ impl Content {
     /// This has no effect if it is (currently) static.
     pub fn refresh(&self, refresh: RefreshMode) {
         match self {
-            Content::Dynamic { updates, title, body } => {
-                match refresh {
-                    RefreshMode::FullReload => {
-                        let event =
-                            EventBuilder::new(".")
-                            .event_type("refresh")
-                            .build();
-                        let _ = updates.send(event.into());
-                    },
-                    RefreshMode::SetBody | RefreshMode::Diff => {
-                        let data = json!({
-                            "title": title,
-                            "body": body,
-                            "diff": refresh == RefreshMode::Diff,
-                        });
-                        let message = serde_json::to_string(&data).unwrap();
-                        let event =
-                            EventBuilder::new(&message)
-                            .event_type("set")
-                            .build();
-                        let _ = updates.send(event.into());
-                    }
+            Content::Dynamic {
+                updates,
+                title,
+                body,
+            } => match refresh {
+                RefreshMode::FullReload => {
+                    let event = EventBuilder::new(".").event_type("refresh").build();
+                    let _ = updates.send(event.into());
                 }
-            }
+                RefreshMode::SetBody | RefreshMode::Diff => {
+                    let data = json!({
+                        "title": title,
+                        "body": body,
+                        "diff": refresh == RefreshMode::Diff,
+                    });
+                    let message = serde_json::to_string(&data).unwrap();
+                    let event = EventBuilder::new(&message).event_type("set").build();
+                    let _ = updates.send(event.into());
+                }
+            },
             Content::Static { .. } => {}
         }
     }
@@ -161,7 +156,7 @@ impl Content {
         &mut self,
         new_title: impl Into<String>,
         new_body: impl Into<String>,
-        refresh: RefreshMode
+        refresh: RefreshMode,
     ) -> bool {
         let mut changed = false;
         loop {

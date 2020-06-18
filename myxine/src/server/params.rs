@@ -47,10 +47,14 @@ impl GetParams {
         } else if constrained_to_keys(&params, &["events", "event", "after", "next"]) {
             if let Some(after_str) = param_as_str("after", &params) {
                 let after = u64::from_str_radix(after_str, 10).ok()?
-                    + if param_as_flag("next", &params)? { 1 } else { 0 };
+                    + if param_as_flag("next", &params)? {
+                        1
+                    } else {
+                        0
+                    };
                 Some(GetParams::Subscribe {
                     subscription: parse_subscription(&params),
-                    stream_or_after: SubscribeParams::After(after)
+                    stream_or_after: SubscribeParams::After(after),
                 })
             } else {
                 Some(GetParams::Subscribe {

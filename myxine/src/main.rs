@@ -1,8 +1,8 @@
 use structopt::StructOpt;
 
 mod page;
-mod session;
 mod server;
+mod session;
 mod unique;
 
 #[derive(Debug, StructOpt)]

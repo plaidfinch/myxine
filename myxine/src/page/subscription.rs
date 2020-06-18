@@ -1,11 +1,11 @@
-use std::collections::HashSet;
-use serde::{Serialize, Deserialize};
-use serde_json::Value;
-use hyper::Body;
-use tokio::sync::{oneshot, mpsc};
-use futures::{Future, StreamExt};
 use bytes::Bytes;
+use futures::{Future, StreamExt};
+use hyper::Body;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::HashSet;
 use std::convert::Infallible;
+use tokio::sync::{mpsc, oneshot};
 
 /// An incoming event sent from the browser, intended to be forwarded directly
 /// to listeners. While there is more structure here than merely a triple of
@@ -70,9 +70,7 @@ struct Sink {
 impl Subscribers {
     /// Make a new empty set of subscribers.
     pub fn new() -> Subscribers {
-        Subscribers {
-            sinks: Vec::new(),
-        }
+        Subscribers { sinks: Vec::new() }
     }
 
     /// Returns `true` if there are no subscribers to any events in this set of
@@ -84,9 +82,7 @@ impl Subscribers {
     /// Add a persistent subscriber for the given subscription. The returned
     /// `Body` will stream newline-separated events, and will not terminate
     /// until the consumer disconnects or the server exits.
-    pub fn add_subscriber(
-        &mut self, subscription: Subscription,
-    ) -> Body {
+    pub fn add_subscriber(&mut self, subscription: Subscription) -> Body {
         // Create a new single-client SSE server (new clients will never be added
         // after this, because each event subscription is potentially unique).
         let (tx, rx) = mpsc::unbounded_channel::<Bytes>();
@@ -94,7 +90,10 @@ impl Subscribers {
         let sender = SinkSender::Persistent(tx);
 
         // Insert the server into the sinks map
-        self.sinks.push(Sink{sender, subscription});
+        self.sinks.push(Sink {
+            sender,
+            subscription,
+        });
 
         // Return the body, for sending to whoever subscribed
         body
@@ -104,14 +103,24 @@ impl Subscribers {
     /// well as the body of the event to which it corresponds. This `Body` will
     /// be a single valid JSON string.
     pub fn add_one_off(
-        &mut self, subscription: Subscription,
+        &mut self,
+        subscription: Subscription,
         after: u64,
         lagged: bool,
     ) -> impl Future<Output = Result<(u64, hyper::Body), u64>> {
         let (sender, receiver) = oneshot::channel();
-        self.sinks.push(Sink{sender: SinkSender::Once{sender, after, lagged}, subscription});
+        self.sinks.push(Sink {
+            sender: SinkSender::Once {
+                sender,
+                after,
+                lagged,
+            },
+            subscription,
+        });
         async move {
-            receiver.await.expect("Receivers for one-off subscriptions shouldn't be dropped")
+            receiver
+                .await
+                .expect("Receivers for one-off subscriptions shouldn't be dropped")
         }
     }
 
@@ -121,15 +130,18 @@ impl Subscribers {
     /// returns the union of all now-current subscriptions.
     pub fn send_event<'a>(&'a mut self, moment: u64, event: &Event) {
         let message: Bytes =
-            (serde_json::to_string(&event)
-             .expect("Serializing to a string shouldn't fail") + "\n").into();
+            (serde_json::to_string(&event).expect("Serializing to a string shouldn't fail") + "\n")
+                .into();
         let mut i = 0;
         loop {
             if i >= self.sinks.len() {
                 break;
             }
             if self.sinks[i].subscription.matches_event(&event.event) {
-                let Sink{sender, subscription} = self.sinks.swap_remove(i);
+                let Sink {
+                    sender,
+                    subscription,
+                } = self.sinks.swap_remove(i);
                 match sender {
                     SinkSender::Persistent(server)
                         // NOTE: this is an if-guard, not an expression, so it
@@ -165,7 +177,7 @@ impl Subscribers {
                     },
                 }
             } else {
-                i += 1;  // move onto the next element
+                i += 1; // move onto the next element
             }
         }
 

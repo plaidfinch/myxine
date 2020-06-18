@@ -1,5 +1,5 @@
-use futures::{future, select, pin_mut, FutureExt};
-use std::collections::{HashSet, HashMap, hash_map::Entry};
+use futures::{future, pin_mut, select, FutureExt};
+use std::collections::{hash_map::Entry, HashMap, HashSet};
 use std::iter::Iterator;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -33,7 +33,7 @@ impl Session {
         let heartbeat = heartbeat_loop(
             recv_path,
             session.active_paths.clone(),
-            session.pages.clone()
+            session.pages.clone(),
         );
         tokio::spawn(heartbeat);
         session
@@ -46,12 +46,12 @@ impl Session {
                 let page = Arc::new(Page::new());
                 e.insert((Instant::now(), page.clone()));
                 page
-            },
+            }
             Entry::Occupied(mut e) => {
                 let (last_access, page) = e.get_mut();
                 *last_access = Instant::now();
                 page.clone()
-            },
+            }
         };
 
         // Make sure to send heartbeats to this page now
@@ -73,7 +73,8 @@ async fn heartbeat_loop(
         while let Some(path) = recv_path.recv().await {
             active_paths.lock().await.insert(path);
         }
-    }.fuse();
+    }
+    .fuse();
 
     // At the specified `HEARTBEAT_INTERVAL`, traverse all active paths, sending
     // heartbeats to all pages, and removing all pages which are identical to
@@ -94,9 +95,7 @@ async fn heartbeat_loop(
                     let mut pages = pages.lock().await;
                     if let Some((path, (last_access, page))) = pages.remove_entry(path) {
                         page.send_heartbeat().await;
-                        if last_access.elapsed() < KEEP_ALIVE_DURATION
-                            || !page.is_empty().await
-                        {
+                        if last_access.elapsed() < KEEP_ALIVE_DURATION || !page.is_empty().await {
                             pages.insert(path, (last_access, page));
                         } else {
                             pruned.lock().await.push(path);
@@ -115,7 +114,8 @@ async fn heartbeat_loop(
             paths.shrink_to_fit();
             pages.lock().await.shrink_to_fit();
         }
-    }.fuse();
+    }
+    .fuse();
 
     // Run them both concurrently, quit when session is dropped
     pin_mut!(recv_paths, heartbeat);
