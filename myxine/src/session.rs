@@ -2,7 +2,7 @@ use futures::{future, select, pin_mut, FutureExt};
 use std::collections::{HashSet, HashMap, hash_map::Entry};
 use std::iter::Iterator;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, Mutex};
 use tokio::time;
 
@@ -11,10 +11,13 @@ use crate::page::Page;
 /// The interval between heartbeats.
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(10);
 
+/// The duration we should wait before marking a page as stale.
+const KEEP_ALIVE_DURATION: Duration = Duration::from_secs(10);
+
 pub struct Session {
     touch_path: mpsc::UnboundedSender<String>,
     active_paths: Arc<Mutex<HashSet<String>>>,
-    pages: Arc<Mutex<HashMap<String, Arc<Page>>>>,
+    pages: Arc<Mutex<HashMap<String, (Instant, Arc<Page>)>>>,
 }
 
 impl Session {
@@ -41,10 +44,14 @@ impl Session {
         let page = match self.pages.lock().await.entry(path.to_string()) {
             Entry::Vacant(e) => {
                 let page = Arc::new(Page::new());
-                e.insert(page.clone());
+                e.insert((Instant::now(), page.clone()));
                 page
             },
-            Entry::Occupied(e) => e.get().clone(),
+            Entry::Occupied(mut e) => {
+                let (last_access, page) = e.get_mut();
+                *last_access = Instant::now();
+                page.clone()
+            },
         };
 
         // Make sure to send heartbeats to this page now
@@ -59,7 +66,7 @@ impl Session {
 async fn heartbeat_loop(
     mut recv_path: mpsc::UnboundedReceiver<String>,
     active_paths: Arc<Mutex<HashSet<String>>>,
-    pages: Arc<Mutex<HashMap<String, Arc<Page>>>>,
+    pages: Arc<Mutex<HashMap<String, (Instant, Arc<Page>)>>>,
 ) {
     // Receive all new paths into the set of known active paths
     let recv_paths = async {
@@ -85,10 +92,12 @@ async fn heartbeat_loop(
                 let pages = pages.clone();
                 async move {
                     let mut pages = pages.lock().await;
-                    if let Some((path, page)) = pages.remove_entry(path) {
+                    if let Some((path, (last_access, page))) = pages.remove_entry(path) {
                         page.send_heartbeat().await;
-                        if !page.is_empty().await {
-                            pages.insert(path, page);
+                        if last_access.elapsed() < KEEP_ALIVE_DURATION
+                            || !page.is_empty().await
+                        {
+                            pages.insert(path, (last_access, page));
                         } else {
                             pruned.lock().await.push(path);
                         }
