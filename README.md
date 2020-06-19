@@ -13,9 +13,8 @@
 </table>
 
 Myxine is a local web server that enables you to create interactive applications
-in your web browser from the comfort of your favorite programming language.
-
-Myxine is designed with three explicit goals, in order of decreasing priority:
+in your web browser from the comfort of your favorite programming language. It's
+designed to satisfy three explicit goals:
 
 1. To enable programmers who don't necessarily specialize in UI design to build
    appealing interactive applications without learning a complex UI framework.
@@ -23,7 +22,7 @@ Myxine is designed with three explicit goals, in order of decreasing priority:
    from almost any programming language.
 3. To be as fast as possible while consuming as few resources as possible.
 
-Here's how it works:
+**Here's how it works:**
 
 1. You start Myxine and open your browser to a page it is serving.
 2. From your programming language of choice, you send some HTML to Myxine, and
@@ -77,12 +76,6 @@ If you're interested in writing Myxine bindings for a new language, you'll want
 to read the [API documentation](API.md). Don't be afraid to ask for help by
 [opening an issue](https://github.com/GaloisInc/myxine/issues/new), and please
 do contribute back your bindings by submitting a pull request!
-
-If a client library already exists for the language you're using, you'll want to
-read the documentation for that specific library to find out how to use it.
-Typically, a client library does not manage the `myxine` server process itself;
-rather, it expects you to make sure it's running (either in your application
-code, or as a user).
 
 ### An example in Python
 
@@ -194,9 +187,4 @@ class Page:
 if __name__ == '__main__':
     Page().run('/')  # Run the page on the root path.
 ```
-
-This example demonstrates that a straightforward minimal Myxine application has
-very little input lag, despite the simplicity of Myxine's design: try moving
-your mouse as fast as possible, and you'll find that it's quite difficult to
-outrun the circle by very much!
 
