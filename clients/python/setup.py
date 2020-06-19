@@ -13,7 +13,7 @@ from typing import List, Dict
 from setuptools import find_packages, setup, Command
 
 # Package meta-data.
-NAME = 'myxine'
+NAME = 'myxine-client'
 DESCRIPTION = 'A Python client for the Myxine GUI server.'
 URL = 'https://github.com/GaloisInc/myxine'
 EMAIL = 'kwf@very.science'
@@ -107,7 +107,7 @@ setup(
     url=URL,
     packages=find_packages(exclude=["tests", "*.tests", "*.tests.*", "tests.*"]),
     # If your package is a single module, use this instead of 'packages':
-    # py_modules=['mypackage'],
+    # py_modules=['myxine'],
 
     # entry_points={
     #     'console_scripts': ['mycli=mymodule:cli'],

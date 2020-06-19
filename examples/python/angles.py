@@ -12,13 +12,13 @@ class Page:
         self.w, self.h = None, None
 
     def update(self, event):
-        if event.type == 'mousemove':
+        if event.event() == 'mousemove':
             self.x = event.clientX
             self.y = event.clientY
             if self.w is None or self.h is None:
                 self.resize()
             myxine.update(self.path, self.draw())
-        elif event.type == 'resize':
+        elif event.event() == 'resize':
             self.resize()
             myxine.update(self.path, self.draw())
 

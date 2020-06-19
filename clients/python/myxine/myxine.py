@@ -3,16 +3,17 @@ import requests
 from dataclasses import dataclass
 from requests import RequestException
 import json
+from copy import deepcopy
 import urllib.parse
 
 
 # The default port on which myxine operates; can be overridden in the below
 # functions if the server is running on another port.
-MYXINE_DEFAULT_PORT = 1123
+DEFAULT_PORT = 1123
 
 
 # The global session for all requests
-MYXINE_GLOBAL_SESSION = requests.Session()
+__GLOBAL_SESSION = requests.Session()
 
 
 @dataclass
@@ -24,47 +25,69 @@ class Target:
     attributes: Dict[str, str]
 
 
-@dataclass
 class Event:
     """An Event from a page has a type, a list of targets, and a set of
-    properties keyed by strings, which may be any type.
+    properties keyed by strings, which may be any type. All properties of an
+    event are accessible as fields of this object, though different event types
+    may have different sets of fields.
     """
-    type: str
-    targets: List[Target]
-    properties: Dict[str, Any]
+    __event: str
+    __targets: List[Target]
+    __properties: Dict[str, Any]
+    __finalized: bool = False
 
-    def __getattr__(self, name) -> Any:
-        value = self.properties[name]
+    def __getattr__(self, name: str) -> Any:
+        value = self.__properties[name]
         if value is None:
             raise AttributeError
         return value
 
+    def __setattr__(self, name: str, value: Any) -> None:
+        if self.__finalized:
+            raise ValueError("Event objects are immutable once created")
+        else:
+            super(Event, self).__setattr__(name, value)
 
-def page_url(path: str, port: int = MYXINE_DEFAULT_PORT) -> str:
+    def __dir__(self) -> List[str]:
+        fields = dir(super(Event, self)) + \
+            list(self.__properties.keys()) + \
+            ['event', 'targets']
+        return sorted(set(fields))
+
+    def event(self) -> str:
+        """Returns the event name for this event."""
+        return self.__event
+
+    def targets(self) -> List[Target]:
+        """Returns the list of targets for this event, in order from most to
+        least specific in the DOM tree."""
+        return deepcopy(self.__targets)
+
+    def __init__(self, value: Dict[str, Any]) -> None:
+        """Parse a JSON-encoded event. Returns None if it can't be parsed."""
+        try:
+            self.__event = value['event']
+            self.__targets = [Target(tag=j['tagName'],
+                                     attributes=j['attributes'])
+                              for j in value['targets']]
+            self.__properties = value['properties']
+        except json.JSONDecodeError:
+            raise ValueError("Could not parse event: " + str(value)) from None
+        except KeyError:
+            raise ValueError("Could not parse event: " + str(value)) from None
+        self.__finalized = True
+
+
+def page_url(path: str, port: int = DEFAULT_PORT) -> str:
     """Normalize a port & path to give the localhost url for that location."""
     if len(path) > 0 and path[0] == '/':
         path = path[1:]
     return 'http://localhost:' + str(port) + '/' + path
 
 
-def parse_event(line: str) -> Optional[Event]:
-    """Parse a JSON-encoded event. Returns None if it can't be parsed."""
-    try:
-        parsed = json.loads(line)
-        return Event(type=parsed['event'],
-                     targets=[Target(tag=j['tagName'],
-                                     attributes=j['attributes'])
-                              for j in parsed['targets']],
-                     properties=parsed['properties'])
-    except json.JSONDecodeError:
-        return None
-    except KeyError:
-        return None
-
-
 def events(path: str,
            subscription: Optional[List[str]] = None,
-           port: int = MYXINE_DEFAULT_PORT) -> Iterator[Event]:
+           port: int = DEFAULT_PORT) -> Iterator[Event]:
     """Subscribe to a stream of page events from a myxine server, returning an
     iterator over the events returned by the stream as they become available.
     """
@@ -83,10 +106,10 @@ def events(path: str,
 
         while True:
             url = urllib.parse.urljoin(base_url, moment)
-            response = MYXINE_GLOBAL_SESSION.get(url, params=params)
+            response = __GLOBAL_SESSION.get(url, params=params)
             if response.encoding is None:
                 response.encoding = 'utf-8'
-            event = parse_event(response.text)
+            event = Event(response.json())
             if event is not None:
                 yield event
 
@@ -102,7 +125,7 @@ def evaluate(path: str, *,
              expression: Optional[str] = None,
              statement: Optional[str] = None,
              timeout: Optional[int] = None,
-             port: int = MYXINE_DEFAULT_PORT) -> None:
+             port: int = DEFAULT_PORT) -> None:
     """Evaluate the given JavaScript code in the context of the page."""
     bad_args_err = \
         ValueError('Input must be exactly one of a statement or an expression')
@@ -123,7 +146,7 @@ def evaluate(path: str, *,
     if timeout is not None:
         params['timeout'] = str(timeout)
     try:
-        r = MYXINE_GLOBAL_SESSION.post(url, data=data, params=params)
+        r = __GLOBAL_SESSION.post(url, data=data, params=params)
         if r.status_code == 200:
             return r.json()
         else:
@@ -136,14 +159,14 @@ def evaluate(path: str, *,
 def update(path: str,
            body: str,
            title: Optional[str] = None,
-           port: int = MYXINE_DEFAULT_PORT) -> None:
+           port: int = DEFAULT_PORT) -> None:
     """Set the contents of the page at the given path to a provided body and
     title. If body or title is not provided, clears those elements of the page.
     """
     url = page_url(path, port)
     try:
         params = {'title': title}
-        MYXINE_GLOBAL_SESSION.post(url, data=body.encode(), params=params)
+        __GLOBAL_SESSION.post(url, data=body.encode(), params=params)
     except RequestException as e:
         msg = "Connection issue with myxine server (is it running?)"
         raise ValueError(msg) from e
@@ -152,7 +175,7 @@ def update(path: str,
 def static(path: str,
            body: bytes,
            content_type: str,
-           port: int = MYXINE_DEFAULT_PORT) -> None:
+           port: int = DEFAULT_PORT) -> None:
     """Set the contents of the page at the given path to the static content
     provided, as a bytestring. You must specify a content type, or else the
     browser won't necessarily know how to display this content.
@@ -160,7 +183,7 @@ def static(path: str,
     url = page_url(path, port) + '?static'
     try:
         headers = {'Content-Type': content_type}
-        MYXINE_GLOBAL_SESSION.post(url, data=body, headers=headers)
+        __GLOBAL_SESSION.post(url, data=body, headers=headers)
     except RequestException as e:
         msg = "Connection issue with myxine server (is it running?)"
         raise ValueError(msg) from e
