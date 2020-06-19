@@ -149,8 +149,7 @@ def evaluate(path: str, *,
         r = __GLOBAL_SESSION.post(url, data=data, params=params)
         if r.status_code == 200:
             return r.json()
-        else:
-            raise ValueError(r.text)
+        raise ValueError(r.text)
     except RequestException as e:
         msg = "Connection issue with myxine server (is it running?)"
         raise ValueError(msg) from e
