@@ -41,14 +41,18 @@ second.
 ## Installing
 
 To install the Myxine server, you will need a recent version of the Rust
-programming langauge and its build tool, `cargo`. If you don't have that,
-[here's the quick-start for installing
-Rust](https://www.rust-lang.org/learn/get-started). Once you have `cargo`
-installed, install the latest version of `myxine`:
+programming langauge and its build tool, `cargo`. If you don't have it, [here's
+the quick-start for installing
+Rust](https://www.rust-lang.org/learn/get-started). After you have that set up,
+install the Myxine server:
 
 ```bash
 $ cargo install myxine
 ```
+
+Installing a client library for Myxine will require steps specific to that
+library: consult the appropriate library's documentation to find out how to
+install it.
 
 ## Building interactive applications
 
@@ -67,7 +71,8 @@ do contribute back your work by submitting a pull request!
 
 ### An example in Python
 
-If a picture is worth a thousand words, what's an interactive animation worth?
+If a picture is worth a thousand words, how many pictures is a visual
+interaction worth?
 
 Below is a simple, complete Myxine application in Python. For this example to
 work, you will need to install the Python client library:
@@ -83,7 +88,7 @@ $ myxine
 Running at: http://127.0.0.1:1123
 ```
 
-Then (in another terminal window), run the script:
+Then, in another terminal window, run the script:
 
 ``` bash
 $ ./examples/python/follow.py
@@ -179,3 +184,19 @@ if __name__ == '__main__':
     Page().run('/')  # Run the page on the root path.
 ```
 
+In the above, you can see each of the steps of Myxine's interaction model
+represented as separate Python constructs:
+
+- The `Page` class has fields that track the state of the application.
+- The `draw` function is a pure function from the current application state to
+  its representation as HTML.
+- The `react` function updates the `Page`'s state in response to some event that
+  occurred in the browser.
+- The `run` function ties it all together by looping over all events in the
+  browser, updating the application state in reaction to each, and sending a new
+  HTML body to the browser, to be immediately displayed to you!
+  
+While different client libraries may represent this pattern using different
+language-specific idioms, the basic structure is the same. And despite its
+simplicity, it's fast!
+  
