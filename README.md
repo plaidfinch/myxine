@@ -12,11 +12,32 @@
 </tr>
 </table>
 
-Myxine is a local web server that provides an API for creating interactive
-applications in your web browser, from the comfort of your favorite programming
-language and its HTTP library.
+Myxine is a local web server that enables you to create interactive applications
+in your web browser from the comfort of your favorite programming language.
 
-TODO: explain Myxine's model
+Myxine is designed with three explicit goals, in order of decreasing priority:
+
+1. To enable programmers who don't necessarily specialize in UI design to build
+   appealing interactive applications without learning a complex UI framework.
+2. To make it easy to write correct, efficient, and idiomatic bindings to Myxine
+   from almost any programming language.
+3. To be as fast as possible while consuming as few resources as possible.
+
+Here's how it works:
+
+1. You start Myxine and open your browser to a page it is serving.
+2. From your programming language of choice, you send some HTML to Myxine, and
+   it instantly appears, replacing the contents of that page's `<body>`.
+3. You then request a subscription to whichever browser events in which you're
+   interested, and Myxine notifies you when each one occurs, eliding those you
+   don't care about.
+4. You can then react to those events, updating the page again to reflect what
+   you'd like it to look like now. Rinse and repeat!
+
+Myxine handles the hard work of optimizing this process to minimize latency and
+computational load: it can handle thousands of requests per second and
+translate them into smooth, flicker-free animations at up to 60 frames per
+second.
 
 ## Installing
 
@@ -48,15 +69,14 @@ the `--port` command line option.
 To build an interactive application with Myxine (or add a new interface to an
 existing application!), you will likely want to use one of the client libraries
 in your language of choice. Currently, the two client libraries officially
-maintained by the Myxine project are those for Python and Haskell.
+maintained by the Myxine project are those for
+[Python](https://pypi.org/project/myxine-client/) and
+[Haskell](https://hackage.haskell.org/package/myxine-client).
 
-However, if your favorite language is not supported, don't despair: one of
-Myxine's explicit design goals is to make it easy to write succinct, idiomatic
-bindings in almost any programming language. If you're interested in writing
-Myxine bindings for a new language, you'll want to read the [API
-documentation](API.md). Don't be afraid to ask for help by [opening an
-issue](https://github.com/GaloisInc/myxine/issues/new), and please do contribute
-back your bindings by submitting a pull request!
+If you're interested in writing Myxine bindings for a new language, you'll want
+to read the [API documentation](API.md). Don't be afraid to ask for help by
+[opening an issue](https://github.com/GaloisInc/myxine/issues/new), and please
+do contribute back your bindings by submitting a pull request!
 
 If a client library already exists for the language you're using, you'll want to
 read the documentation for that specific library to find out how to use it.
@@ -64,7 +84,7 @@ Typically, a client library does not manage the `myxine` server process itself;
 rather, it expects you to make sure it's running (either in your application
 code, or as a user).
 
-### An example
+### An example in Python
 
 Without further ado, here's a simple, complete Myxine application written in
 Python. For this example to work, you will need to install the Python client
@@ -78,16 +98,21 @@ To run the example, first make sure `myxine` is running on your computer:
 
 ``` bash
 $ myxine
+Running at: http://127.0.0.1:1123
 ```
 
-Then, run the script:
+Then (in another terminal window), run the script:
 
 ``` bash
 $ ./examples/python/follow.py
 ```
 
 Finally, navigate in your web browser to
-[http://localhost:1123](http://localhost:1123), and play around!
+[http://localhost:1123](http://localhost:1123), and play around! You can press
+Ctrl+C in your terminal to stop the application.
+
+You can find this example and others in the [examples](examples/) directory,
+categorized in subdirectories by language of implementation.
 
 ``` python
 #!/usr/bin/env python3
@@ -96,24 +121,13 @@ import random
 import myxine
 
 class Page:
+    # The model of the page
     def __init__(self):
-        self.x, self.y = 0, 0
+        self.x, self.y = 150, 150
         self.hue = random.uniform(0, 360)
         self.radius = 75
 
-    def react(self, event):
-        if event.type == 'mousemove':
-            self.x = event.clientX
-            self.y = event.clientY
-        elif event.type == 'mousedown':
-            self.hue = (self.hue + random.uniform(30, 330)) % 360
-        elif event.type == 'wheel':
-            if event.ctrlKey:
-                self.hue = (self.hue + event.deltaY * -0.1) % 360
-            else:
-                self.radius += event.deltaY * -0.2
-                self.radius = min(max(self.radius, 12), 1000)
-
+    # Draw the page's model as a fragment of HTML
     def draw(self):
         circle_style = f'''
         position: absolute;
@@ -153,25 +167,36 @@ class Page:
         </div>
         '''
 
-def run(path):
-    page = Page()                             # Create our model of the page,
-    myxine.update(path, page.draw())          # then draw it in the browser.
-    try:
-        for event in myxine.events(path):     # For each browser event,
-            page.react(event)                 # update our model of the page,
-            myxine.update(path, page.draw())  # then re-draw it in the browser.
-    except KeyboardInterrupt:
-        pass                                  # Press Ctrl-C to quit.
+    # Change the page's model in response to a browser event
+    def react(self, event):
+        if event.event() == 'mousemove':
+            self.x = event.clientX
+            self.y = event.clientY
+        elif event.event() == 'mousedown':
+            self.hue = (self.hue + random.uniform(30, 330)) % 360
+        elif event.event() == 'wheel':
+            if event.ctrlKey:
+                self.hue = (self.hue + event.deltaY * -0.1) % 360
+            else:
+                self.radius += event.deltaY * -0.2
+                self.radius = min(max(self.radius, 12), 1000)
+
+    # The page's event loop
+    def run(self, path):
+        myxine.update(path, self.draw())          # Draw the page in the browser.
+        try:
+            for event in myxine.events(path):     # For each browser event,
+                self.react(event)                 # update our model of the page,
+                myxine.update(path, self.draw())  # then re-draw it in the browser.
+        except KeyboardInterrupt:
+            pass                                  # Press Ctrl-C to quit.
 
 if __name__ == '__main__':
-    run('/')  # Run the page on the root path.
+    Page().run('/')  # Run the page on the root path.
 ```
 
 This example demonstrates that a straightforward minimal Myxine application has
-very little input lag, despite the simplicity of Myxine's design---try moving
+very little input lag, despite the simplicity of Myxine's design: try moving
 your mouse as fast as possible, and you'll find that it's quite difficult to
-outrun the circle by very much.
-
-You can find this example and others in the [examples](examples/) directory,
-categorized in subdirectories by language of implementation.
+outrun the circle by very much!
 

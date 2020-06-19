@@ -4,24 +4,13 @@ import random
 import myxine
 
 class Page:
+    # The model of the page
     def __init__(self):
-        self.x, self.y = 0, 0
+        self.x, self.y = 150, 150
         self.hue = random.uniform(0, 360)
         self.radius = 75
 
-    def react(self, event):
-        if event.event() == 'mousemove':
-            self.x = event.clientX
-            self.y = event.clientY
-        elif event.event() == 'mousedown':
-            self.hue = (self.hue + random.uniform(30, 330)) % 360
-        elif event.event() == 'wheel':
-            if event.ctrlKey:
-                self.hue = (self.hue + event.deltaY * -0.1) % 360
-            else:
-                self.radius += event.deltaY * -0.2
-                self.radius = min(max(self.radius, 12), 1000)
-
+    # Draw the page's model as a fragment of HTML
     def draw(self):
         circle_style = f'''
         position: absolute;
@@ -61,15 +50,29 @@ class Page:
         </div>
         '''
 
-def run(path):
-    page = Page()                             # Create our model of the page,
-    myxine.update(path, page.draw())          # then draw it in the browser.
-    try:
-        for event in myxine.events(path):     # For each browser event,
-            page.react(event)                 # update our model of the page,
-            myxine.update(path, page.draw())  # then re-draw it in the browser.
-    except KeyboardInterrupt:
-        pass                                  # Press Ctrl-C to quit.
+    # Change the page's model in response to a browser event
+    def react(self, event):
+        if event.event() == 'mousemove':
+            self.x = event.clientX
+            self.y = event.clientY
+        elif event.event() == 'mousedown':
+            self.hue = (self.hue + random.uniform(30, 330)) % 360
+        elif event.event() == 'wheel':
+            if event.ctrlKey:
+                self.hue = (self.hue + event.deltaY * -0.1) % 360
+            else:
+                self.radius += event.deltaY * -0.2
+                self.radius = min(max(self.radius, 12), 1000)
+
+    # The page's event loop
+    def run(self, path):
+        myxine.update(path, self.draw())          # Draw the page in the browser.
+        try:
+            for event in myxine.events(path):     # For each browser event,
+                self.react(event)                 # update our model of the page,
+                myxine.update(path, self.draw())  # then re-draw it in the browser.
+        except KeyboardInterrupt:
+            pass                                  # Press Ctrl-C to quit.
 
 if __name__ == '__main__':
-    run('/')  # Run the page on the root path.
+    Page().run('/')  # Run the page on the root path.
