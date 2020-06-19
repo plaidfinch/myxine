@@ -51,4 +51,4 @@ import Myxine.Event
 import Myxine.Direct
 import Myxine.Page
 import qualified Myxine.Event as Event
-  hiding (decodeSomeEventType, decodeEventProperties, encodeEventType)
+  hiding (decodeSomeEventType, eventPropertiesDict, encodeEventType)

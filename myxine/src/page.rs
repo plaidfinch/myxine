@@ -1,21 +1,23 @@
+use futures::join;
+use futures::{pin_mut, select, FutureExt};
+use hopscotch::{self, ArcK};
 use hyper::body::{Body, Bytes};
 use hyper_usse::EventBuilder;
-use std::time::Duration;
-use std::io::Write;
-use tokio::sync::Mutex;
-use futures::join;
 use serde_json::Value;
-use uuid::Uuid;
-use futures::{select, pin_mut, FutureExt};
+use std::fmt::{self, Display};
+use std::time::Duration;
+use tokio::sync::{Mutex, RwLock};
 
-pub mod sse;
-pub mod subscription;
-pub mod query;
 mod content;
+mod query;
+mod subscription;
 
-use subscription::{Subscribers, Subscription, AggregateSubscription};
-use query::{Queries};
+use super::server::RefreshMode;
+use crate::unique::Unique;
 use content::Content;
+use query::Queries;
+use subscription::Subscribers;
+pub use subscription::{Event, Subscription};
 
 /// A `Page` pairs some page `Content` (either dynamic or static) with a set of
 /// `Subscribers` to the events on the page.
@@ -24,87 +26,179 @@ pub struct Page {
     content: Mutex<Content>,
     subscribers: Mutex<Subscribers>,
     queries: Mutex<Queries<Result<Value, String>>>,
+    events: RwLock<hopscotch::Queue<String, Event, ArcK>>, // TODO: preload events and use u16 tags
 }
 
-/// The size of the dynamic page template in bytes
-const TEMPLATE_SIZE: usize = include_str!("page/dynamic.html").len();
+/// The possible errors that can occur while evaluating JavaScript in the
+/// context of a page.
+#[derive(Debug, Clone)]
+pub enum EvalError {
+    /// There was no browser viewing the page, so could not run JavaScript.
+    NoBrowser,
+    /// The page was static, so could not run JavaScript.
+    StaticPage,
+    /// The page took too long to respond.
+    Timeout {
+        duration: Duration,
+        was_custom: bool,
+    },
+    /// The code threw some kind of exception in JavaScript.
+    JsError(String),
+}
+
+impl Display for EvalError {
+    fn fmt(&self, w: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        use EvalError::*;
+        match self {
+            NoBrowser => write!(w, "No browser is currently viewing the page"),
+            StaticPage => write!(w, "The page is static, which means it cannot run scripts"),
+            Timeout {
+                duration,
+                was_custom,
+            } => {
+                if *was_custom {
+                    write!(w, "Exceeded custom timeout of {}ms", duration.as_millis())
+                } else {
+                    write!(w, "Exceeded default timeout of {}ms", duration.as_millis())
+                }
+            }
+            JsError(err) => write!(w, "Exception: {}", err),
+        }
+    }
+}
 
 /// The default timeout for evaluating JavaScript expressions in the page,
 /// measured in milliseconds
-const DEFAULT_EVAL_TIMEOUT_MILLIS: Duration = Duration::from_millis(1000);
+const DEFAULT_EVAL_TIMEOUT: Duration = Duration::from_secs(1);
+
+/// The maximum size of the event buffer for each page: a consumer of events via
+/// the long-polling interface can lag by this many events before events get
+/// dropped.
+const MAX_EVENT_BUFFER_LEN: usize = 1_000;
 
 impl Page {
-    /// Make a new empty (dynamic) page
-    pub async fn new() -> Page {
+    /// Make a new empty (dynamic) page.
+    pub fn new() -> Page {
         Page {
-            content: Mutex::new(Content::new().await),
+            content: Mutex::new(Content::new()),
             subscribers: Mutex::new(Subscribers::new()),
             queries: Mutex::new(Queries::new()),
+            events: RwLock::new(hopscotch::Queue::new()),
         }
     }
 
     /// Render a whole page as HTML (for first page load).
     pub async fn render(&self) -> Body {
         match &*self.content.lock().await {
-            Content::Dynamic{title, body, ..} => {
-                let debug = cfg!(debug_assertions).to_string();
-                let subscription = {
-                    let subscribers = self.subscribers.lock().await;
-                    let aggregate_subscription = subscribers.total_subscription();
-                    serde_json::to_string(&aggregate_subscription).unwrap()
-                };
-
-                // Pre-allocate a buffer exactly the right size
-                let buffer_size =
-                    TEMPLATE_SIZE + subscription.len() + debug.len() + title.len() + body.len();
-                let mut bytes = Vec::with_capacity(buffer_size);
-
-                write!(&mut bytes,
-                       include_str!("page/dynamic.html"),
-                       debug = debug,
-                       title = title,
-                       subscription = subscription,
-                       body = body)
-                    .expect("Internal error: write!() failed on a Vec<u8>");
-                Body::from(bytes)
-            },
-            Content::Static{raw_contents, ..} => {
-                raw_contents.clone().into()
-            },
+            Content::Dynamic { .. } => include_str!("page/dynamic.html").into(),
+            Content::Static { raw_contents, .. } => raw_contents.clone().into(),
         }
     }
 
     /// Subscribe another page event listener to this page, given a subscription
     /// specification for what events to listen to.
-    pub async fn event_stream(&self, subscription: Subscription) -> (Uuid, Body) {
+    pub async fn event_stream(&self, subscription: Subscription) -> Body {
         let mut subscribers = self.subscribers.lock().await;
-        let (uuid, total_subscription, event_stream) =
-            subscribers.add_subscriber(subscription).await;
-        let content = &mut *self.content.lock().await;
-        match content {
-            Content::Static{..} => { },
-            Content::Dynamic{ref mut updates, ..} => {
-                set_subscriptions(updates, total_subscription).await;
+        subscribers.add_subscriber(subscription)
+    }
+
+    /// Get a specific event, at or after a particular moment in time, given a
+    /// subscription specification that it must match. If the event is available
+    /// in the buffer, this returns immediately, otherwise it may block until
+    /// the event is available. If the request is for a moment which lies
+    /// *before* the buffer, returns `Err(u64)`, to indicate the canonical
+    /// moment for the event requested. The user-agent is responsible for
+    /// retrying a request redirected to this moment.
+    pub async fn event(&self, subscription: Subscription, moment: u64) -> Result<(u64, Body), u64> {
+        let lagged = {
+            // Scope for ensuring we drop events read-lock
+            let events = self.events.read().await;
+
+            // Determine if the event was lagging the buffer
+            let earliest_index = if let Some(earliest) = events.earliest() {
+                earliest.index()
+            } else {
+                events.next_index()
+            };
+            let lagged = moment < earliest_index;
+
+            match &subscription {
+                Subscription::Universal => {
+                    if lagged {
+                        // Immediately report lag: since any event will do, the
+                        // place to retry (after the user-agent re-issues the
+                        // request) should be the earliest index represented.
+                        return Err(earliest_index);
+                    } else if let Some(found) = events.get(moment) {
+                        // If no lag, and there is an event to send, send back
+                        // the body we desire, and its found index.
+                        let body = serde_json::to_string(found.value()).unwrap().into();
+                        return Ok((moment, body));
+                    } else {
+                        // Block until we get a matching event (see below).
+                    }
+                }
+                Subscription::Specific(tags) => {
+                    if let Some(found) = events.after(moment, tags) {
+                        if lagged {
+                            // Immediately report lag: since it was found, the
+                            // place to retry (after the user-agent re-issues
+                            // the request) should be this very same index.
+                            return Err(found.index());
+                        } else {
+                            // If no lag, send back the body we desire, and its
+                            // found index.
+                            let body = serde_json::to_string(found.value()).unwrap().into();
+                            return Ok((found.index(), body));
+                        }
+                    } else {
+                        // Block until we get a matching event (see below).
+                    }
+                }
             }
-        }
-        (uuid, event_stream)
+
+            // This computed value will be used below to determine whether to
+            // report that lag occurred if there was both (1) lag, and (2) no
+            // matching event yet.
+            lagged
+        };
+
+        // If we couldn't find it in the buffered events, then wait for it:
+        let result = {
+            // Scope for ensuring we drop subscriber lock before awaiting the
+            // result of the subscription
+            let mut subscribers = self.subscribers.lock().await;
+            subscribers.add_one_off(subscription, moment, lagged)
+        };
+        result.await
+    }
+
+    /// Get the next event for a particular subscription, bypassing the buffer
+    /// of existing events and blocking until a new event arrives.
+    pub async fn next_event(&self, subscription: Subscription) -> (u64, Body) {
+        let result = {
+            // Scope for ensuring we drop subscriber lock before awaiting the
+            // result of the subscription
+            let mut subscribers = self.subscribers.lock().await;
+            subscribers.add_one_off(subscription, 0, false)
+        };
+        result.await.expect("Page::next_event can't lag")
     }
 
     /// Send an event to all subscribers. This should only be called with events
     /// that have come from the corresponding page itself, or confusion will
     /// result!
-    pub async fn send_event(&self, event: &str, id: &Value, data: &Value) {
-        if let Some(total_subscription) =
-            self.subscribers.lock().await
-            .send_event(event, id, data).await {
-                let content = &mut *self.content.lock().await;
-                match content {
-                    Content::Static{..} => { },
-                    Content::Dynamic{ref mut updates, ..} => {
-                        set_subscriptions(updates, total_subscription).await;
-                    }
-                }
-            }
+    pub async fn send_event(&self, event: Event) {
+        let mut events = self.events.write().await;
+        self.subscribers
+            .lock()
+            .await
+            .send_event(events.next_index(), &event);
+        let tag = event.event.clone();
+        events.push(tag, event);
+        if events.len() > MAX_EVENT_BUFFER_LEN {
+            events.pop();
+        }
     }
 
     /// Send an empty "heartbeat" message to all clients of a page, if it is
@@ -112,78 +206,60 @@ impl Page {
     /// `None` if so, otherwise returns the current number of clients getting
     /// live updates to the page.
     pub async fn send_heartbeat(&self) -> Option<usize> {
-        let mut subscribers = self.subscribers.lock().await;
-        let mut content = self.content.lock().await;
-        let subscriber_heartbeat = async {
-            subscribers.send_heartbeat().await
-        };
-        let content_heartbeat = async {
-            content.send_heartbeat().await
-        };
-        let (new_subscription, update_client_count) =
-            join!(subscriber_heartbeat, content_heartbeat);
-        if let Some(total_subscription) = new_subscription {
-            match *content {
-                Content::Dynamic{ref mut updates, ..} => {
-                    set_subscriptions(updates, total_subscription).await;
-                },
-                Content::Static{..} => { },
-            }
-        }
-        update_client_count
+        let content = self.content.lock().await;
+        content.send_heartbeat()
     }
 
     /// Tell the page to evaluate a given piece of JavaScript, as either an
     /// expression or a statement, with an optional explicit timeout (defaults
-    /// to the long-ish hardcoded timeout `DEFAULT_EVAL_TIMEOUT_MILLIS`).
+    /// to the long-ish hardcoded timeout `DEFAULT_EVAL_TIMEOUT`).
     pub async fn evaluate(
         &self,
         expression: &str,
         statement_mode: bool,
         timeout: Option<Duration>,
-    ) -> Result<Value, String> {
+    ) -> Result<Value, EvalError> {
         match *self.content.lock().await {
-            Content::Dynamic{ref mut updates, ..} => {
+            Content::Dynamic {
+                ref mut updates, ..
+            } => {
                 let (id, result) = self.queries.lock().await.request();
-                let id_string = id.to_simple_ref().to_string();
+                let id_string = format!("{}", id);
                 let event = EventBuilder::new(expression)
                     .event_type(if statement_mode { "run" } else { "evaluate" })
                     .id(&id_string);
-                let get_client_count = updates.send_to_clients(event.build()).await;
+                let client_count = updates.send(event.into()).unwrap_or(0);
                 // All the below gets executed *after* the lock on content is
                 // released, because it's a returned async block that is
                 // .await-ed after the scope of the match closes.
                 async move {
                     // If nobody's listening, give up now and report the issue
-                    if get_client_count.await == 0 {
+                    if client_count == 0 {
                         self.queries.lock().await.cancel(id);
-                        Err("Can't evaluate JavaScript when no browser is viewing the page.".to_string())
+                        Err(EvalError::NoBrowser)
                     } else {
                         // Timeout for evaluation request
                         let request_timeout = async move {
-                            let duration = timeout.unwrap_or(DEFAULT_EVAL_TIMEOUT_MILLIS);
+                            let duration = timeout.unwrap_or(DEFAULT_EVAL_TIMEOUT);
                             tokio::time::delay_for(duration).await;
                             self.queries.lock().await.cancel(id);
-                            Err(match timeout {
-                                None => format!(
-                                    "Request timeout: default timeout of {}ms exceeded: \
-                                     for more time, use a custom ?timeout query parameter.",
-                                    DEFAULT_EVAL_TIMEOUT_MILLIS.as_millis()
-                                ),
-                                Some(timeout) => format!(
-                                    "Request timeout: specified timeout of {}ms exceeded: \
-                                     for more time, increase the ?timeout query parameter.",
-                                    timeout.as_millis())
+                            Err(EvalError::Timeout {
+                                duration,
+                                was_custom: timeout.is_some(),
                             })
-                        }.fuse();
+                        }
+                        .fuse();
 
                         // Wait for the result
                         let wait_result = async {
                             match result.await {
-                                None => Err("No response from page (handle dropped).".to_string()),
-                                Some(result) => result,
+                                None => {
+                                    panic!("Internal error: query handle dropped before response")
+                                }
+                                Some(result) => result.map_err(EvalError::JsError),
                             }
-                        }.fuse();
+                        }
+                        .fuse();
 
                         // Race the timeout against the wait for the result
                         pin_mut!(request_timeout, wait_result);
@@ -193,17 +269,18 @@ impl Page {
                         }
                     }
                 }
-            },
-            Content::Static{..} => {
-                return Err("Can't evaluate JavaScript within a static page.".to_string());
-            },
-        }.await
+            }
+            Content::Static { .. } => {
+                return Err(EvalError::StaticPage);
+            }
+        }
+        .await
     }
 
     /// Notify waiting clients of the result to some in-page JavaScript
     /// evaluation they have requested, either with an error or a valid
     /// response.
-    pub async fn send_evaluate_result(&self, id: Uuid, result: Result<Value, String>) {
+    pub async fn send_evaluate_result(&self, id: Unique, result: Result<Value, String>) {
         self.queries.lock().await.respond(id, result).unwrap_or(())
     }
 
@@ -211,30 +288,29 @@ impl Page {
     /// an empty title, empty body, and no subscribers waiting on its page
     /// events: that is, it's identical to `Page::new()`.
     pub async fn is_empty(&self) -> bool {
-        let (content_empty, subscribers_empty, queries_empty) =
-            join!(
-                async { self.content.lock().await.is_empty().await },
-                async { self.subscribers.lock().await.is_empty() },
-                async { self.queries.lock().await.is_empty() },
-            );
-        content_empty && subscribers_empty && queries_empty
+        let (content, subscribers, queries) = join!(
+            async { self.content.lock().await },
+            async { self.subscribers.lock().await },
+            async { self.queries.lock().await },
+        );
+        content.is_empty() && subscribers.is_empty() && queries.is_empty()
     }
 
     /// Add a client to the dynamic content of a page, if it is dynamic. If it
     /// is static, this has no effect and returns None. Otherwise, returns the
     /// Body stream to give to the new client.
     pub async fn update_stream(&self) -> Option<Body> {
-        self.content.lock().await.update_stream().await
+        let content = self.content.lock().await;
+        content.update_stream()
     }
 
     /// Set the contents of the page to be a static raw set of bytes with no
     /// self-refreshing functionality. All clients will be told to refresh their
     /// page to load the new static content (which will not be able to update
     /// itself until a client refreshes their page again).
-    pub async fn set_static(&self,
-                            content_type: Option<String>,
-                            raw_contents: Bytes) {
-        self.content.lock().await.set_static(content_type, raw_contents).await
+    pub async fn set_static(&self, content_type: Option<String>, raw_contents: Bytes) {
+        let mut content = self.content.lock().await;
+        content.set_static(content_type, raw_contents)
     }
 
     /// Get the content type of a page, or return `None` if none has been set
@@ -244,36 +320,16 @@ impl Page {
         self.content.lock().await.content_type()
     }
 
-    /// Tell all clients to change the title, if necessary. This converts the
-    /// page into a dynamic page, overwriting any static content that previously
-    /// existed, if any.
-    pub async fn set_title(&self, new_title: impl Into<String>) {
-        self.content.lock().await.set_title(new_title).await
-    }
-
-    /// Tell all clients to change the body, if necessary. This converts the
-    /// page into a dynamic page, overwriting any static content that previously
-    /// existed, if any.
-    pub async fn set_body(&self, new_body: impl Into<String>) {
-        self.content.lock().await.set_body(new_body).await
-    }
-
-    /// Change a particular existing subscription stream's subscription,
-    /// updating the aggregate subscription in the browser if necessary. Returns
-    /// `Err(())` if the id given does not correspond to an extant stream.
-    pub async fn change_subscription(&self, id: Uuid, subscription: Subscription) -> Result<(), ()> {
-        match self.subscribers.lock().await.change_subscription(id, subscription) {
-            Ok(Some(new_aggregate)) => {
-                match &mut *self.content.lock().await {
-                    Content::Static{..} => { },
-                    Content::Dynamic{ref mut updates, ..} =>
-                        set_subscriptions(updates, new_aggregate).await
-                }
-                Ok(())
-            },
-            Ok(None) => Ok(()),
-            Err(()) => Err(()),
-        }
+    /// Tell all clients to change the title and body, if necessary. This
+    /// converts the page into a dynamic page, overwriting any static content
+    /// that previously existed, if any.
+    pub async fn set_content(
+        &self,
+        new_title: impl Into<String>,
+        new_body: impl Into<String>,
+        refresh: RefreshMode,
+    ) {
+        self.content.lock().await.set(new_title, new_body, refresh);
     }
 
     /// Clear the page entirely, removing all subscribers and resetting the page
@@ -282,29 +338,12 @@ impl Page {
         let subscribers = &mut *self.subscribers.lock().await;
         *subscribers = Subscribers::new();
         let content = &mut *self.content.lock().await;
-        match content {
-            Content::Static{..} => { },
-            Content::Dynamic{ref mut updates, ..} => {
-                set_subscriptions(updates, AggregateSubscription::empty()).await;
-            }
-        }
-        content.set_title("").await;
-        content.set_body("").await;
+        content.set("", "", RefreshMode::Diff);
     }
-}
 
-/// Send a new total set of subscriptions to the page, so it can update its
-/// event hooks. This function should *only* ever be called *directly* after
-/// obtaining such a new set of subscriptions from adding a subscriber,
-/// sending an event, or sending a heartbeat! It will cause unexpected loss
-/// of messages if you arbitrarily set the subscriptions of a page outside
-/// of these contexts.
-async fn set_subscriptions<'a>(server: &'a mut sse::BufferedServer,
-                               subscription: AggregateSubscription<'a>) {
-    let data = serde_json::to_string(&subscription)
-        .expect("Serializing subscriptions to JSON shouldn't fail");
-    let event = EventBuilder::new(&data).event_type("subscribe");
-    // We're not using the future returned here because we don't care what the
-    // number of client connections is, so we don't need to wait to find out
-    let _unused_response = server.send_to_clients(event.build()).await;
+    /// Tell the page, if it is dynamic, to refresh its content in full from the
+    /// server.
+    pub async fn refresh(&self) {
+        self.content.lock().await.refresh(RefreshMode::FullReload)
+    }
 }

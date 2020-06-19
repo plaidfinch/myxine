@@ -1,9 +1,12 @@
-use hyper::Body;
 use hyper::body::Bytes;
+use hyper::Body;
 use hyper_usse::EventBuilder;
+use serde_json::json;
 use std::mem;
+use tokio::stream::StreamExt;
+use tokio::sync::broadcast;
 
-use super::sse;
+use super::RefreshMode;
 
 /// The `Content` of a page is either `Dynamic` or `Static`. If it's dynamic, it
 /// has a title, body, and a set of SSE event listeners who are waiting for
@@ -18,42 +21,39 @@ pub enum Content {
     Dynamic {
         title: String,
         body: String,
-        updates: sse::BufferedServer,
+        updates: broadcast::Sender<Bytes>,
     },
     Static {
         content_type: Option<String>,
         raw_contents: Bytes,
-    }
+    },
 }
 
-/// The maximum number of messages to buffer before blocking a send. This means
-/// a client can send a burst of up to this many "frames" of HTML before it
-/// experiences backpressure.
+/// The maximum number of messages to buffer before dropping an update. This is
+/// set to 1, because dropped updates are okay (the most recent update will
+/// always get through once things quiesce).
 const UPDATE_BUFFER_SIZE: usize = 1;
-// TODO: Should this be client-configurable? Larger values are good for "bursty"
-// workloads where many frames will be sent, followed by relative sparsity, but
-// smaller values lead to smoother movement by more consistently rate-limiting
-// the client's frames dynamically based on the speed of the browser's rending
-// engine. Right now this is set to optimize for browser smoothness rather than
-// bursty throughput from the client.
 
 impl Content {
     /// Make a new empty (dynamic) page
-    pub async fn new() -> Content {
+    pub fn new() -> Content {
         Content::Dynamic {
             title: String::new(),
             body: String::new(),
-            updates: sse::BufferedServer::new(UPDATE_BUFFER_SIZE).await,
+            updates: broadcast::channel(UPDATE_BUFFER_SIZE).0,
         }
     }
 
     /// Test if this page is empty, where "empty" means that it is dynamic, with
     /// an empty title, empty body, and no subscribers waiting on its page
     /// events: that is, it's identical to `Content::new()`.
-    pub async fn is_empty(&mut self) -> bool {
+    pub fn is_empty(&self) -> bool {
         match self {
-            Content::Dynamic{title, body, ref mut updates}
-            if title == "" && body == "" => updates.connections().await == 0,
+            Content::Dynamic {
+                title,
+                body,
+                ref updates,
+            } if title == "" && body == "" => updates.receiver_count() == 0,
             _ => false,
         }
     }
@@ -61,56 +61,67 @@ impl Content {
     /// Add a client to the dynamic content of a page, if it is dynamic. If it
     /// is static, this has no effect and returns None. Otherwise, returns the
     /// Body stream to give to the new client.
-    pub async fn update_stream(&mut self) -> Option<Body> {
-        match self {
-            Content::Dynamic{updates, title, body} => {
-                let (channel, stream_body) = Body::channel();
-                let title_event = if *title != "" {
-                    EventBuilder::new(&title).event_type("title")
-                } else {
-                    EventBuilder::new(".").event_type("clear-title")
-                }.build();
-                let body_event = if *body != "" {
-                    EventBuilder::new(body).event_type("body")
-                } else {
-                    EventBuilder::new(".").event_type("clear-body")
-                }.build();
-                updates.add_client(channel).await;
-                // We're ignoring these futures because we don't care what
-                // number of clients there are
-                let _unused = updates.send_to_clients(title_event).await;
-                let _unused = updates.send_to_clients(body_event).await;
+    pub fn update_stream(&self) -> Option<Body> {
+        let result = match self {
+            Content::Dynamic { updates, .. } => {
+                let stream_body = Body::wrap_stream(updates.subscribe().filter(|result| {
+                    match result {
+                        // We ignore lagged items in the stream! If we don't
+                        // ignore these, we would terminate the Body on
+                        // every lag, which is undesirable.
+                        Err(broadcast::RecvError::Lagged(_)) => false,
+                        // Otherwise, we leave the result alone.
+                        _ => true,
+                    }
+                }));
                 Some(stream_body)
-            },
-            Content::Static{..} => None
-        }
+            }
+            Content::Static { .. } => None,
+        };
+        // Make sure the page is up to date
+        self.refresh(RefreshMode::Diff);
+        result
     }
 
     /// Send an empty "heartbeat" message to all clients of a page, if it is
     /// dynamic. This has no effect if it is (currently) static, and returns
     /// `None` if so, otherwise returns the current number of clients getting
     /// live updates to the page.
-    pub async fn send_heartbeat(&mut self) -> Option<usize> {
+    pub fn send_heartbeat(&self) -> Option<usize> {
         match self {
-            Content::Dynamic{updates, ..} => {
+            Content::Dynamic { updates, .. } => {
                 // Send a heartbeat to pages waiting on <body> updates
-                Some(updates.send_heartbeat().await.await)
-            },
-            Content::Static{..} => None,
+                Some(updates.send(":\n\n".into()).unwrap_or(0))
+            }
+            Content::Static { .. } => None,
         }
     }
 
     /// Tell all clients to refresh the contents of a page, if it is dynamic.
     /// This has no effect if it is (currently) static.
-    pub async fn refresh(&mut self) {
+    pub fn refresh(&self, refresh: RefreshMode) {
         match self {
-            Content::Dynamic{updates, ..} => {
-                let event = EventBuilder::new(".").event_type("refresh").build();
-                // We're ignoring this future because we don't care what number
-                // of clients there are
-                let _unused = updates.send_to_clients(event).await;
+            Content::Dynamic {
+                updates,
+                title,
+                body,
+            } => match refresh {
+                RefreshMode::FullReload => {
+                    let event = EventBuilder::new(".").event_type("refresh").build();
+                    let _ = updates.send(event.into());
+                }
+                RefreshMode::SetBody | RefreshMode::Diff => {
+                    let data = json!({
+                        "title": title,
+                        "body": body,
+                        "diff": refresh == RefreshMode::Diff,
+                    });
+                    let message = serde_json::to_string(&data).unwrap();
+                    let event = EventBuilder::new(&message).event_type("set").build();
+                    let _ = updates.send(event.into());
+                }
             },
-            Content::Static{..} => { },
+            Content::Static { .. } => {}
         }
     }
 
@@ -118,13 +129,13 @@ impl Content {
     /// self-refreshing functionality. All clients will be told to refresh their
     /// page to load the new static content (which will not be able to update
     /// itself until a client refreshes their page again).
-    pub async fn set_static(&mut self,
-                            content_type: Option<String>,
-                            raw_contents: Bytes) {
-        let mut page =
-            Content::Static{content_type, raw_contents};
-        mem::swap(&mut page, self);
-        page.refresh().await;
+    pub fn set_static(&mut self, content_type: Option<String>, raw_contents: Bytes) {
+        let mut content = Content::Static {
+            content_type,
+            raw_contents,
+        };
+        mem::swap(&mut content, self);
+        content.refresh(RefreshMode::FullReload);
     }
 
     /// Get the content type of a page, or return `None` if none has been set
@@ -132,66 +143,48 @@ impl Content {
     /// client-configurable).
     pub fn content_type(&self) -> Option<String> {
         match self {
-            Content::Dynamic{..} => None,
-            Content::Static{content_type, ..} => content_type.clone(),
-        }
-    }
-
-    /// Tell all clients to change the title, if necessary. This converts the
-    /// page into a dynamic page, overwriting any static content that previously
-    /// existed, if any.
-    pub async fn set_title(&mut self, new_title: impl Into<String>) {
-        loop {
-            match self {
-                Content::Dynamic{ref mut title, ref mut updates, ..} => {
-                    let new_title = new_title.into();
-                    if new_title != *title {
-                        *title = new_title;
-                        let event = if title != "" {
-                            EventBuilder::new(title).event_type("title")
-                        } else {
-                            EventBuilder::new(".").event_type("clear-title")
-                        };
-                        // We're ignoring this future because we don't care how
-                        // many clients there are
-                        let _unused = updates.send_to_clients(event.build()).await;
-                    }
-                    break; // title has been set
-                },
-                Content::Static{..} => {
-                    *self = Content::new().await;
-                    // and loop again to actually set the title
-                }
-            }
+            Content::Dynamic { .. } => None,
+            Content::Static { content_type, .. } => content_type.clone(),
         }
     }
 
     /// Tell all clients to change the body, if necessary. This converts the
     /// page into a dynamic page, overwriting any static content that previously
-    /// existed, if any.
-    pub async fn set_body(&mut self, new_body: impl Into<String>) {
+    /// existed, if any. Returns `true` if the page content was changed (either
+    /// converted from static, or altered whilst dynamic).
+    pub fn set(
+        &mut self,
+        new_title: impl Into<String>,
+        new_body: impl Into<String>,
+        refresh: RefreshMode,
+    ) -> bool {
+        let mut changed = false;
         loop {
             match self {
-                Content::Dynamic{ref mut body, ref mut updates, ..} => {
+                Content::Dynamic {
+                    ref mut title,
+                    ref mut body,
+                    ..
+                } => {
+                    let new_title = new_title.into();
                     let new_body = new_body.into();
-                    if new_body != *body {
-                        *body = new_body;
-                        let event = if body != "" {
-                            EventBuilder::new(body).event_type("body")
-                        } else {
-                            EventBuilder::new(".").event_type("clear-body")
-                        };
-                        // We're ignoring this future because we don't care how
-                        // many clients of the page there are
-                        let _unused = updates.send_to_clients(event.build()).await;
+                    if new_title != *title || new_body != *body {
+                        changed = true;
                     }
-                    break; // body has been set
-                },
-                Content::Static{..} => {
-                    *self = Content::new().await;
-                    // and loop again to actually set the body
+                    *title = new_title;
+                    *body = new_body;
+                    break; // values have been set
+                }
+                Content::Static { .. } => {
+                    *self = Content::new();
+                    changed = true;
+                    // and loop again to actually set
                 }
             }
         }
+        if changed {
+            self.refresh(refresh);
+        }
+        changed
     }
 }

@@ -1,7 +1,8 @@
 {-# options_haddock not-home #-}
 
-module Myxine.Target (Target, attribute, tag) where
+module Myxine.Target (Target, attribute, tag, TargetFact(..), targetFacts) where
 
+import Data.Hashable
 import Data.Text (Text)
 import qualified Data.Aeson as JSON
 import Data.HashMap.Lazy (HashMap)
@@ -30,3 +31,14 @@ attribute name Target{attributes} = HashMap.lookup name attributes
 tag :: Target -> Text
 tag Target{tagName} = tagName
 {-# INLINE tag #-}
+
+-- | A fact about a 'Target', such as it having a particular tag or having a
+-- particular attribute equal to a particular value.
+data TargetFact
+  = HasTag !Text
+  | AttributeEquals !Text !Text
+  deriving (Eq, Ord, Show, Generic, Hashable)
+
+targetFacts :: Target -> [TargetFact]
+targetFacts Target{tagName, attributes} =
+  HasTag tagName : map (uncurry AttributeEquals) (HashMap.toList attributes)

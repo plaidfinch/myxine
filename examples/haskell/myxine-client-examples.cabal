@@ -1,0 +1,64 @@
+cabal-version:       2.4
+name:                myxine-client-examples
+version:             0.1.0.0
+synopsis:            Examples of use for the Haskell client to the Myxine UI server
+homepage:            https://github.com/galoisinc/myxine
+bug-reports:         https://github.com/GaloisInc/myxine/issues/new
+license:             MIT
+license-file:        LICENSE
+author:              Kenny Foner
+maintainer:          kwf@very.science
+copyright:           Copyright (c) 2020 Galois, Inc.
+category:            GUI
+extra-source-files:  CHANGELOG.md
+description:
+  This package is a collection of examples of using the Haskell language
+  bindings to the Myxine GUI server. For more information on Myxine itself, see
+  [its homepage](https://github.com/GaloisInc/myxine). To read the library
+  documentation for the Haskell bindings used here, see [the documentation on
+  Hackage](https://hackage.haskell.org/package/myxine-client).
+
+common options
+  default-language:    Haskell2010
+  ghc-options:         -Wall
+                       -Wincomplete-uni-patterns
+                       -Wincomplete-record-updates
+                       -Wcompat
+                       -Widentities
+                       -Wredundant-constraints
+                       -fhide-source-paths
+                       -Wpartial-fields
+  default-extensions:  BlockArguments,
+                       DataKinds,
+                       DeriveAnyClass,
+                       DeriveGeneric,
+                       DerivingStrategies,
+                       DerivingVia,
+                       DuplicateRecordFields,
+                       RecordWildCards,
+                       EmptyCase,
+                       GADTs,
+                       GeneralizedNewtypeDeriving,
+                       KindSignatures,
+                       LambdaCase,
+                       NamedFieldPuns,
+                       OverloadedStrings,
+                       RankNTypes,
+                       ScopedTypeVariables,
+                       StandaloneDeriving,
+                       TemplateHaskell,
+                       TupleSections,
+                       TypeApplications,
+                       ViewPatterns
+
+common deps
+  build-depends:       base ^>=4.12.0.0,
+                       random,
+                       text,
+                       blaze-markup,
+                       blaze-html,
+                       myxine-client
+
+executable circles
+  import:              options, deps
+  main-is:             circles.hs

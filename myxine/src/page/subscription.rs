@@ -1,22 +1,21 @@
-use std::collections::{HashMap, HashSet};
-use hyper_usse::EventBuilder;
-use serde::{Serialize, Deserialize};
-use serde_json::Value;
+use bytes::Bytes;
+use futures::{Future, StreamExt};
 use hyper::Body;
-use futures::future;
-use uuid::Uuid;
-
-use super::sse;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::HashSet;
+use std::convert::Infallible;
+use tokio::sync::{mpsc, oneshot};
 
 /// An incoming event sent from the browser, intended to be forwarded directly
 /// to listeners. While there is more structure here than merely a triple of
 /// JSON values, we don't bother to parse it because the client will be parsing
 /// it again, so this will be a waste of resources.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Event {
     pub event: String,
-    pub id: Value,
-    pub data: Value,
+    pub targets: Value,
+    pub properties: Value,
 }
 
 /// A subscription to events is either a `Universal` subscription to all events,
@@ -47,75 +46,31 @@ impl Subscription {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(untagged)]
-pub enum AggregateSubscription<'a> {
-    Specific(HashSet<&'a String>),
-    Universal,
-}
-
-impl<'a> AggregateSubscription<'a> {
-    /// Make an empty aggregate subscription (useful when specifying that a page
-    /// should disconnect all open subscribers).
-    pub fn empty() -> AggregateSubscription<'a> {
-        AggregateSubscription::Specific(HashSet::new())
-    }
-
-    /// Add a single subscription to an aggregate.
-    pub fn add(&mut self, subscription: &'a Subscription) {
-        if match self {
-            AggregateSubscription::Universal => true,
-            AggregateSubscription::Specific(ref mut existing) => {
-                match subscription {
-                    Subscription::Universal => true,
-                    Subscription::Specific(new) => {
-                        existing.extend(new.into_iter());
-                        false
-                    }
-                }
-            }
-        } {
-            *self = AggregateSubscription::Universal;
-        }
-    }
-
-    /// Join together a bunch of individual `Subscription`s to form their
-    /// aggregate.
-    pub fn aggregate<'b: 'a>(
-        subscriptions: impl IntoIterator<Item = &'b Subscription>
-    ) -> AggregateSubscription<'a> {
-        let mut aggregate = AggregateSubscription::empty();
-        for subscription in subscriptions {
-            aggregate.add(subscription);
-        }
-        aggregate
-    }
-}
-
-/// The maximum number of messages to buffer before blocking a send. This means
-/// a client can send a burst of up to this number of UI events before it
-/// experiences backpressure. It usually makes sense for this to be much higher
-/// than the buffer size for page content, because page content is likely to be
-/// larger and less "bursty."
-const EVENT_BUFFER_SIZE: usize = 10_000;
-
 #[derive(Debug)]
 pub struct Subscribers {
-    sinks: HashMap<Uuid, Sink>
+    sinks: Vec<Sink>,
+}
+
+#[derive(Debug)]
+pub enum SinkSender {
+    Persistent(mpsc::UnboundedSender<Bytes>),
+    Once {
+        sender: oneshot::Sender<Result<(u64, hyper::Body), u64>>,
+        after: u64,
+        lagged: bool,
+    },
 }
 
 #[derive(Debug)]
 struct Sink {
     subscription: Subscription,
-    server: sse::BufferedServer,
+    sender: SinkSender,
 }
 
 impl Subscribers {
     /// Make a new empty set of subscribers.
     pub fn new() -> Subscribers {
-        Subscribers {
-            sinks: HashMap::new()
-        }
+        Subscribers { sinks: Vec::new() }
     }
 
     /// Returns `true` if there are no subscribers to any events in this set of
@@ -124,141 +79,109 @@ impl Subscribers {
         self.sinks.is_empty()
     }
 
-    /// Add a new subscription to this set of subscribers, returning a streaming
-    /// body to be sent to the subscribing client.
-    pub async fn add_subscriber(
-        &mut self,
-        subscription: Subscription,
-    ) -> (Uuid, AggregateSubscription<'_>, Body) {
+    /// Add a persistent subscriber for the given subscription. The returned
+    /// `Body` will stream newline-separated events, and will not terminate
+    /// until the consumer disconnects or the server exits.
+    pub fn add_subscriber(&mut self, subscription: Subscription) -> Body {
         // Create a new single-client SSE server (new clients will never be added
         // after this, because each event subscription is potentially unique).
-        let uuid = Uuid::new_v4();
-        let server = sse::BufferedServer::new(EVENT_BUFFER_SIZE).await;
-        let (sender, body) = Body::channel();
-        server.add_client(sender).await;
-        self.sinks.insert(uuid, Sink{server, subscription});
+        let (tx, rx) = mpsc::unbounded_channel::<Bytes>();
+        let body = hyper::Body::wrap_stream(rx.map(|b| Ok::<_, Infallible>(b)));
+        let sender = SinkSender::Persistent(tx);
+
+        // Insert the server into the sinks map
+        self.sinks.push(Sink {
+            sender,
+            subscription,
+        });
 
         // Return the body, for sending to whoever subscribed
-        let subscriptions = self.sinks.values().map(|Sink{subscription, ..}| subscription);
-        (uuid, AggregateSubscription::aggregate(subscriptions), body)
+        body
+    }
+
+    /// Add a one-off subscriber which gives the moment it was fulfilled, as
+    /// well as the body of the event to which it corresponds. This `Body` will
+    /// be a single valid JSON string.
+    pub fn add_one_off(
+        &mut self,
+        subscription: Subscription,
+        after: u64,
+        lagged: bool,
+    ) -> impl Future<Output = Result<(u64, hyper::Body), u64>> {
+        let (sender, receiver) = oneshot::channel();
+        self.sinks.push(Sink {
+            sender: SinkSender::Once {
+                sender,
+                after,
+                lagged,
+            },
+            subscription,
+        });
+        async move {
+            receiver
+                .await
+                .expect("Receivers for one-off subscriptions shouldn't be dropped")
+        }
     }
 
     /// Send an event to all subscribers to that event, giving each subscriber
     /// only those fields of the event which that subscriber cares about. If the
     /// list of subscribers has changed (that is, by client disconnection),
     /// returns the union of all now-current subscriptions.
-    pub async fn send_event<'a>(
-        &'a mut self, event: &str, id: &Value, data: &Value
-    ) -> Option<AggregateSubscription<'a>>{
-        send_to_all(&mut self.sinks, Some((event, id, data))).await
-    }
-
-    /// Send a heartbeat message to all subscribers, returning a new
-    /// Subscription representing the union of all subscriptions, if there have
-    /// been any noticed changes, or `None` if every client is still connected.
-    pub async fn send_heartbeat(&mut self) -> Option<AggregateSubscription<'_>> {
-        send_to_all(&mut self.sinks, None).await
-    }
-
-    /// Change the subscription for a particular subscriber, identified by UUID.
-    /// If there is no such subscriber, returns `Err(())`. Otherwise, returns
-    /// the new aggregate subscription, if it has changed, or `None` if it has
-    /// not.
-    pub fn change_subscription<'a>(
-        &'a mut self, uuid: Uuid, subscription: Subscription,
-    ) -> Result<Option<AggregateSubscription<'a>>, ()> {
-        match self.sinks.remove(&uuid) {
-            None => Err(()),
-            Some(Sink{server, subscription: old_subscription}) => {
-                // This check for whether we should report a changed aggregate
-                // subscription is overly conservative: if a subscription is
-                // genuinely changed, but that change has no effect on the
-                // aggregate, this will still report a changed aggregate. This
-                // makes the common case of an un-changed single subscription
-                // fast, and only decreases speed in the case where multiple
-                // subscribers have differing, overlapping, changing
-                // subscriptions.
-                if old_subscription != subscription {
-                    self.sinks.insert(uuid, Sink{server, subscription});
-                    let new_aggregate = self.total_subscription();
-                    Ok(Some(new_aggregate))
-                } else {
-                    self.sinks.insert(uuid, Sink{server, subscription: old_subscription});
-                    Ok(None)
-                }
+    pub fn send_event<'a>(&'a mut self, moment: u64, event: &Event) {
+        let message: Bytes =
+            (serde_json::to_string(&event).expect("Serializing to a string shouldn't fail") + "\n")
+                .into();
+        let mut i = 0;
+        loop {
+            if i >= self.sinks.len() {
+                break;
             }
-        }
-    }
-
-    /// Calculate the union of all subscriptions currently active.
-    pub fn total_subscription(&self) -> AggregateSubscription<'_> {
-        let subscriptions =
-            self.sinks.values().map(|Sink{subscription, ..}| subscription);
-        AggregateSubscription::aggregate(subscriptions)
-    }
-
-}
-
-/// Send an event to all the sinks in the given `Vec`, pruning the `Vec` to
-/// remove all those sinks which have become disconnected.
-async fn send_to_all<'a>(
-    sinks: &'a mut HashMap<Uuid, Sink>,
-    message: Option<(&str, &Value, &Value)>,
-) -> Option<AggregateSubscription<'a>> {
-    // The collection of futures for sending the event:
-    let send_futures = sinks.iter_mut().map(move |(sink_id, sink)| {
-        // Make a future for sending the message to the subscriber
-        async move {
-            // Only send the event if the sink is subscribed to it
-            let remaining = if let Some((event, id, data)) = message {
-                // Message was a normal message
-                if sink.subscription.matches_event(event) {
-                    // Serialize the fields to JSON
-                    let data = serde_json::to_string(data)
-                        .expect("Serializing to a string shouldn't fail");
-
-                    // Serialize the target path to JSON
-                    let id = serde_json::to_string(id)
-                        .expect("Serializing to a string shouldn't fail");
-
-                    // Build a text/event-stream message to send to subscriber
-                    let message = EventBuilder::new(&data).id(&id).event_type(event).build();
-                    Some(sink.server.send_to_clients(message).await.await)
-                } else {
-                    None
+            if self.sinks[i].subscription.matches_event(&event.event) {
+                let Sink {
+                    sender,
+                    subscription,
+                } = self.sinks.swap_remove(i);
+                match sender {
+                    SinkSender::Persistent(server)
+                        // NOTE: this is an if-guard, not an expression, so it
+                        // falls through to the default case if there are still
+                        // clients after the message is sent
+                        if server.send(message.clone()).is_err() => {
+                            // if the receiver of a persistent sink has been
+                            // dropped, remove it from the list
+                        },
+                    SinkSender::Once{sender, after, lagged} if moment >= after => {
+                        // if the current moment is later than or equal to the
+                        // time this one-off sink is waiting for, dispatch it
+                        // and remove it from the list of sinks
+                        let result = if lagged {
+                            // If the original request was lagging, we don't
+                            // send back an actual response; we signal to the
+                            // client via a redirect that lag occurred.
+                            Err(moment)
+                        } else {
+                            Ok((moment, message.clone().into()))
+                        };
+                        sender.send(result).unwrap_or(());
+                    },
+                    sender => {
+                        // otherwise, re-insert the sink and move forward, by
+                        // pushing the current sink onto the end of the vector
+                        // and swapping it back into place, then incrementing
+                        // the index by one
+                        self.sinks.push(Sink{sender, subscription});
+                        let end = self.sinks.len() - 1;
+                        self.sinks.swap(i, end);
+                        i += 1;  // move on to the next element
+                    },
                 }
             } else {
-                // Message was a heartbeat
-                Some(sink.server.send_heartbeat().await.await)
-            };
-            // Return the sink id to be pruned if it lost the client
-            remaining.and_then(|r| {
-                assert!(r <= 1, "Subscriber SSE exceeds 1 client");
-                if r == 0 { Some(sink_id.clone()) } else { None }
-            })
+                i += 1; // move onto the next element
+            }
         }
-    });
 
-    // Send all the events and remove all sinks that failed to send (client
-    // disconnected), which are listed as `Some(sink_id)` in the results of the
-    // sending.
-    let mut subscription_changed = false;
-    for closed_id in future::join_all(send_futures).await {
-        if let Some(sink_id) = closed_id {
-            sinks.remove(&sink_id);
-            subscription_changed = true;
-        }
+        // Shrink down the sinks so we don't bloat memory
+        self.sinks.shrink_to_fit();
     }
-    // Shrink down the sinks so we don't bloat memory
-    sinks.shrink_to_fit();
-
-    // Calculate the new aggregate subscription
-    if subscription_changed {
-        Some(AggregateSubscription::aggregate(
-            sinks.values().map(|Sink{subscription, ..}| subscription)
-        ))
-    } else {
-        None
-    }
-
 }

@@ -1,20 +1,18 @@
-export function activate(initialSubscription, debugMode) {
+window.addEventListener("load", () => {
+
+    // Print debug info if the user sets window.myxine = true
+    window.myxine = { "debug": false };
+    function debug(...args) {
+        if (window.myxine.debug === true) {
+            console.log(...args);
+        }
+    }
 
     // The initial set of listeners is empty
     let listeners = {};
 
     // Current animation frame callback ID, if any
     let animationId = null;
-
-    // The global list of all events and their properties
-    let allEventDescriptions;
-
-    // Print debug info if in debug build mode
-    function debug(string) {
-        if (debugMode) {
-            console.log(string);
-        }
-    }
 
     // NOTE: Why do we use separate workers for events and query results, but
     // only one worker for all events? Well, it matters that events arrive in
@@ -24,29 +22,29 @@ export function activate(initialSubscription, debugMode) {
     // matter.
 
     // Actually send an event back to the server
-    let sendEventWorker = new Worker('/.myxine/assets/post.js');
+    let sendEventWorker = new window.Worker("/.myxine/assets/post.js");
 
     function sendEvent(type, path, properties) {
-        let url = window.location.href + '?event';
+        let url = window.location.href + "?page-event";
         let data = JSON.stringify({
             event: type,
-            id: path,
-            data: properties,
+            targets: path,
+            properties: properties
         });
-        debug("Sending event: " + data);
+        debug("Sending event:", data);
         sendEventWorker.postMessage({
             url: url,
             contentType: "application/json",
-            data: data,
+            data: data
         });
     }
 
     // Actually send a query result back to the server
-    let sendEvalResultWorker = new Worker('/.myxine/assets/post.js');
+    let sendEvalResultWorker = new window.Worker("/.myxine/assets/post.js");
 
     function sendEvalResult(id, result) {
         let url = window.location.href
-            + "?result="  + encodeURIComponent(id);
+            + "?page-result="  + encodeURIComponent(id);
         sendEvalResultWorker.postMessage({
             url: url,
             contentType: "application/json",
@@ -56,7 +54,7 @@ export function activate(initialSubscription, debugMode) {
 
     function sendEvalError(id, error) {
         let url = window.location.href
-            + "?error="  + encodeURIComponent(id);
+            + "?page-error="  + encodeURIComponent(id);
         sendEvalResultWorker.postMessage({
             url: url,
             contentType: "text/plain",
@@ -72,43 +70,16 @@ export function activate(initialSubscription, debugMode) {
         }
         // Redraw the body before the next repaint (but not right now yet)
         animationId = window.requestAnimationFrame(timestamp => {
-            diff.innerHTML(document.body, body);
+            window.diff.innerHTML(document.body, body);
         });
     }
-
-    // These are the handlers for SSE events...
-    function resubscribe(event) {
-        debug("Received new subscription: " + event.data);
-        const subscription = JSON.parse(event.data);
-        Object.entries(listeners).forEach(([eventName, listener]) => {
-            debug("Removing listener: " + eventName);
-            window.removeEventListener(eventName, listener);
-        });
-        listeners = {};
-        setupListeners(subscription);
-    }
-
-    // New body
-    function setBody(event) { setBodyTo(event.data); }
-
-    // New empty body
-    function clearBody(event) { setBodyTo(""); }
-
-    // New title
-    function setTitle(event) { document.title = event.data; }
-
-    // New empty title
-    function clearTitle(event) { document.title = ""; }
-
-    // Reload the *whole* page from the server
-    // Called when transitioning to static page, among other situations
-    function refresh(event) { window.location.reload(); }
 
     // Evaluate a JavaScript expression in the global environment
     function evaluate(expression, statementMode) {
-        // TODO: LRU-limited memoization (using memoizee?)
+        // TODO: LRU-limited memoization of functions themselves (not their
+        // results), possibly using memoizee?
         if (!statementMode) {
-            return Function('return (' + expression + ')')();
+            return Function("return (" + expression + ")")();
         } else {
             return Function(expression)();
         }
@@ -121,13 +92,17 @@ export function activate(initialSubscription, debugMode) {
               + (statementMode ? " statement" : "n expression"));
         try {
             let result = evaluate(event.data, statementMode);
-            if (typeof result === 'undefined') {
+            if (typeof result === "undefined") {
                 result = null;
             }
-            debug("Sending back result response (id " + event.lastEventId + "): " + result);
+            debug("Sending back result response (id "
+                  + event.lastEventId
+                  + "):", result);
             sendEvalResult(event.lastEventId, result);
         } catch(err) {
-            debug("Sending back error response: (id " + event.lastEventId + ")" + err);
+            debug("Sending back error response (id "
+                  + event.lastEventId
+                  + "):", err);
             sendEvalError(event.lastEventId, err);
         }
     }
@@ -142,28 +117,33 @@ export function activate(initialSubscription, debugMode) {
     // event name to mappings from property name -> formatter for that property
     function parseEventDescriptions(enabledEvents) {
         let events = {};
-        Object.entries(enabledEvents.events).forEach(([eventName, eventInfo]) => {
-            // Accumulate the desired fields for the event into a map from field
-            // name to formatter for the objects in that field
-            let interfaceName = eventInfo['interface']; // most specific interface
+        const allEvents = enabledEvents.events;
+        Object.entries(allEvents).forEach(([eventName, eventInfo]) => {
+            // Accumulate the desired fields for the event into a map from
+            // field name to formatter for the objects in that field
+            let interfaceName = eventInfo["interface"]; // most specific
             let theInterface = enabledEvents.interfaces[interfaceName];
             events[eventName] = {};
             while (true) {
                 const properties = Object.keys(theInterface.properties);
                 properties.forEach(property => {
                     let formatter = customJsonFormatters[property];
-                    if (typeof formatter === 'undefined') {
-                        formatter = (x => x); // Default formatter is identity
+                    if (typeof formatter === "undefined") {
+                        formatter = (x => x); // Default formatter is id
                     }
-                    if (typeof events[eventName][property] === 'undefined') {
+                    if (typeof events[eventName][property] === "undefined") {
                         events[eventName][property] = formatter;
                     } else {
-                        debug("Duplicate property in " + eventName + ": " + property);
+                        debug("Duplicate property in "
+                              + eventName
+                              + ": "
+                              + property);
                     }
                 });
                 if (theInterface.inherits !== null) {
                     // Check ancestors for more fields to add
-                    theInterface = enabledEvents.interfaces[theInterface.inherits];
+                    theInterface =
+                        enabledEvents.interfaces[theInterface.inherits];
                 } else {
                     break; // Top of interface hierarchy
                 }
@@ -172,17 +152,13 @@ export function activate(initialSubscription, debugMode) {
         return events;
     }
 
-    // Given a mapping from events -> mappings from properties -> formatters for
-    // those properties, set up listeners for all those events which send back
-    // the appropriately formatted results when they fire
-    function setupListeners(subscription) {
-        if (subscription === null) {
-            // Client requested universal subscription, so turn on all events
-            subscription = Object.keys(allEventDescriptions);
-        }
+    // Set up listeners for all those events which send back the appropriately
+    // formatted results when they fire
+    function setupPageEventListeners(descriptions) {
+        const subscription = Object.keys(descriptions);
         // Set up event handlers
         subscription.forEach(eventName => {
-            if (typeof allEventDescriptions[eventName] !== 'undefined') {
+            if (typeof descriptions[eventName] !== "undefined") {
                 const listener = event => {
                     // Calculate the id path
                     const path =
@@ -193,7 +169,8 @@ export function activate(initialSubscription, debugMode) {
                                 tagName: target.tagName.toLowerCase(),
                                 attributes: {},
                             };
-                            for (let i = target.attributes.length - 1; i >= 0; i--) {
+                            const numAttrs = target.attributes.length;
+                            for (let i = numAttrs - 1; i >= 0; i--) {
                                 const attribute = target.attributes[i];
                                 const name = attribute.name;
                                 const value = attribute.value;
@@ -204,53 +181,57 @@ export function activate(initialSubscription, debugMode) {
 
                     // Extract the relevant properties
                     const data = {};
-                    Object.entries(allEventDescriptions[eventName])
+                    Object.entries(descriptions[eventName])
                         .forEach(([property, formatter]) => {
                             data[property] = formatter(event[property]);
                         });
-                    // Send the event back to the server
-                    // TODO: implement batching
                     sendEvent(eventName, path, data);
                 };
-                debug("Adding listener: " + eventName);
+                debug("Adding listener:", eventName);
                 window.addEventListener(eventName, listener);
                 listeners[eventName] = listener;
             } else {
-                debug("Invalid event name: " + eventName);
+                debug("Invalid event name:", eventName);
             }
         });
-
     }
 
-    // Fetch the description of the events we wish to support
+    // Fetch the description of the events we wish to support, and add listeners
+    // for them to the window object of the page
     const r = new XMLHttpRequest();
     r.onerror = () => debug("Could not fetch list of enabled events!");
     r.onload = () => {
         const enabledEvents = JSON.parse(r.responseText);
         debug(enabledEvents);
-        allEventDescriptions = parseEventDescriptions(enabledEvents);
-        setupListeners(initialSubscription);
+        setupPageEventListeners(parseEventDescriptions(enabledEvents));
     };
-    r.open('GET', '/.myxine/assets/enabled-events.json');
+    r.open("GET", "/.myxine/assets/enabled-events.json");
     r.send();
 
+    // The handlers for events coming from the server:
+    function setupServerEventListeners(sse) {
+        sse.addEventListener("set", (event) => {
+            let data = JSON.parse(event.data);
+            document.title = data.title;
+            if (data.diff) {
+                setBodyTo(data.body);
+            } else {
+                document.body.innerHTML = data.body;
+            }
+        });
+        sse.addEventListener("refresh", () => window.location.reload());
+        sse.addEventListener("evaluate", (event) => evaluateAndRespond(false, event));
+        sse.addEventListener("run",      (event) => evaluateAndRespond(true, event));
+    }
+
     // Actually set up SSE...
-    let sse = new EventSource(window.location.href + "?updates");
+    let sse = new window.EventSource(window.location.href + "?updates");
+    setupServerEventListeners(sse);
     sse.onerror = () => {
-        // When we disconnect from the server, stop trying to send it events
-        // until we reconnect and receive a new subscription
-        setupListeners([]);
         // Set up retry interval to attempt reconnection
         window.setTimeout(() => {
-            sse = new EventSource(window.location.href + "?updates");
+            sse = new window.EventSource(window.location.href + "?updates");
+            setupServerEventListeners(sse);
         }, 500); // half a second between retries
     };
-    sse.addEventListener("body", setBody);
-    sse.addEventListener("clear-body", clearBody);
-    sse.addEventListener("title", setTitle);
-    sse.addEventListener("clear-title", clearTitle);
-    sse.addEventListener("refresh", refresh);
-    sse.addEventListener("subscribe", resubscribe);
-    sse.addEventListener("evaluate", event => evaluateAndRespond(false, event));
-    sse.addEventListener("run", event => evaluateAndRespond(true, event));
-}
+});

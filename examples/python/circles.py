@@ -30,15 +30,15 @@ class State:
     (x, y) = (0, 0)  # The current mouse location
 
     def update(self, event):
-        if event.type == 'mousedown':
+        if event.event() == 'mousedown':
             if self.current is not None:
                 self.rest.append(self.current)
             self.current = Circle(x = self.x, y = self.y, r = 0)
-        elif event.type == 'mouseup':
+        elif event.event() == 'mouseup':
             if self.current is not None:
                 self.rest.append(self.current)
             self.current = None
-        elif event.type == 'mousemove':
+        elif event.event() == 'mousemove':
             self.x = event.clientX
             self.y = event.clientY
             if self.current is not None:
