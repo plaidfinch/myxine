@@ -40,9 +40,6 @@ second.
 
 ## Installing
 
-Myxine itself is a server that you run locally and connect to from a client
-library in some programming language.
-
 To install the Myxine server, you will need a recent version of the Rust
 programming langauge and its build tool, `cargo`. If you don't have that,
 [here's the quick-start for installing
@@ -53,29 +50,23 @@ installed, install the latest version of `myxine`:
 $ cargo install myxine
 ```
 
-Then, start it in the background and leave it running:
-
-```bash
-$ myxine
-Running at: http://127.0.0.1:1123
-```
-
-By default, `myxine` uses the port 1123, but you can pick a different one using
-the `--port` command line option.
+ but most likely, you will want to use Myxine via
+a client library in some programming language.
 
 ## Building interactive applications
 
-To build an interactive application with Myxine (or add a new interface to an
-existing application!), you will likely want to use one of the client libraries
-in your language of choice. Currently, the two client libraries officially
-maintained by the Myxine project are those for
+You can interact directly with the server via HTTP requests (see the [API
+documentation](API.md) for details), but most likely you will want to use a
+library of lightweight bindings in your language of choice. Currently, the two
+client libraries officially maintained by the Myxine project are those for
 [Python](https://pypi.org/project/myxine-client/) and
 [Haskell](https://hackage.haskell.org/package/myxine-client).
 
 If you're interested in writing Myxine bindings for a new language, you'll want
-to read the [API documentation](API.md). Don't be afraid to ask for help by
+to read the [API documentation](API.md), and perhaps reference one or more of
+the [existing client libraries](clients/). Don't be afraid to ask for help by
 [opening an issue](https://github.com/GaloisInc/myxine/issues/new), and please
-do contribute back your bindings by submitting a pull request!
+do contribute back your work by submitting a pull request!
 
 ### An example in Python
 
