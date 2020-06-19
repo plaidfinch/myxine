@@ -50,9 +50,6 @@ installed, install the latest version of `myxine`:
 $ cargo install myxine
 ```
 
- but most likely, you will want to use Myxine via
-a client library in some programming language.
-
 ## Building interactive applications
 
 You can interact directly with the server via HTTP requests (see the [API
