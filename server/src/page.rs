@@ -343,6 +343,7 @@ impl Page {
 
     /// Tell the page, if it is dynamic, to refresh its content in full from the
     /// server.
+    #[allow(dead_code)]
     pub async fn refresh(&self) {
         self.content.lock().await.refresh(RefreshMode::FullReload)
     }
