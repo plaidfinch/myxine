@@ -79,9 +79,10 @@ do contribute back your bindings by submitting a pull request!
 
 ### An example in Python
 
-Without further ado, here's a simple, complete Myxine application written in
-Python. For this example to work, you will need to install the Python client
-library:
+If a picture is worth a thousand words, what's an interactive animation worth?
+
+Below is a simple, complete Myxine application in Python. For this example to
+work, you will need to install the Python client library:
 
 ``` bash
 $ pip3 install myxine-client
@@ -106,6 +107,8 @@ Ctrl+C in your terminal to stop the application.
 
 You can find this example and others in the [examples](examples/) directory,
 categorized in subdirectories by language of implementation.
+
+**Without further ado, `follow.py`:**
 
 ``` python
 #!/usr/bin/env python3
