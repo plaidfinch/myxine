@@ -7,17 +7,38 @@ use hyper::{Body, Method, Request, Response, StatusCode};
 use itertools::Itertools;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use tokio::time::Duration;
 
 mod params;
 
-use crate::session::Session;
+use crate::session::{self, Session};
 pub(crate) use params::{GetParams, PostParams, RefreshMode, SubscribeParams};
+
+/// The interval between heartbeats.
+const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(10);
+
+/// The duration we should wait before marking a page as stale.
+const KEEP_ALIVE_DURATION: Duration = Duration::from_secs(10);
+
+/// The maximum size of the event buffer for each page: a consumer of events via
+/// the long-polling interface can lag by this many events before events get
+/// dropped.
+const DEFAULT_BUFFER_LEN: usize = 1_000;
+
+/// The default timeout for evaluating JavaScript expressions in the page,
+/// measured in milliseconds
+const DEFAULT_EVAL_TIMEOUT: Duration = Duration::from_secs(1);
 
 /// Run the main server loop alongside the heartbeat to all SSE clients
 #[allow(clippy::unnecessary_mut_passed)]
 pub async fn run(socket_addr: SocketAddr) -> Result<(), hyper::Error> {
     // The session holding all the pages for this instantiation of the server
-    let session = Arc::new(Session::start().await);
+    let session = Arc::new(Session::start(session::Config {
+        heartbeat_interval: HEARTBEAT_INTERVAL,
+        keep_alive_duration: KEEP_ALIVE_DURATION,
+        default_buffer_len: DEFAULT_BUFFER_LEN,
+        default_eval_timeout: DEFAULT_EVAL_TIMEOUT,
+    }).await);
 
     // The regular server
     let server =

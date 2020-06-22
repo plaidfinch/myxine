@@ -23,10 +23,11 @@ pub use subscription::{Event, Subscription};
 /// `Subscribers` to the events on the page.
 #[derive(Debug)]
 pub struct Page {
+    eval_timeout: RwLock<Duration>,
     content: Mutex<Content>,
     subscribers: Mutex<Subscribers>,
     queries: Mutex<Queries<Result<Value, String>>>,
-    events: RwLock<hopscotch::Queue<String, Event, ArcK>>, // TODO: preload events and use u16 tags
+    events: RwLock<(usize, hopscotch::Queue<String, Event, ArcK>)>, // TODO: preload events and use u16 tags
 }
 
 /// The possible errors that can occur while evaluating JavaScript in the
@@ -67,23 +68,15 @@ impl Display for EvalError {
     }
 }
 
-/// The default timeout for evaluating JavaScript expressions in the page,
-/// measured in milliseconds
-const DEFAULT_EVAL_TIMEOUT: Duration = Duration::from_secs(1);
-
-/// The maximum size of the event buffer for each page: a consumer of events via
-/// the long-polling interface can lag by this many events before events get
-/// dropped.
-const MAX_EVENT_BUFFER_LEN: usize = 1_000;
-
 impl Page {
     /// Make a new empty (dynamic) page.
-    pub fn new() -> Page {
+    pub fn new(buffer_len: usize, eval_timeout: Duration) -> Page {
         Page {
+            eval_timeout: RwLock::new(eval_timeout),
             content: Mutex::new(Content::new()),
             subscribers: Mutex::new(Subscribers::new()),
             queries: Mutex::new(Queries::new()),
-            events: RwLock::new(hopscotch::Queue::new()),
+            events: RwLock::new((buffer_len, hopscotch::Queue::new())),
         }
     }
 
@@ -112,7 +105,7 @@ impl Page {
     pub async fn event(&self, subscription: Subscription, moment: u64) -> Result<(u64, Body), u64> {
         let lagged = {
             // Scope for ensuring we drop events read-lock
-            let events = self.events.read().await;
+            let events = &self.events.read().await.1;
 
             // Determine if the event was lagging the buffer
             let earliest_index = if let Some(earliest) = events.earliest() {
@@ -189,15 +182,30 @@ impl Page {
     /// that have come from the corresponding page itself, or confusion will
     /// result!
     pub async fn send_event(&self, event: Event) {
-        let mut events = self.events.write().await;
+        let (ref max_buffer_len, ref mut events) = &mut *self.events.write().await;
         self.subscribers
             .lock()
             .await
             .send_event(events.next_index(), &event);
         let tag = event.event.clone();
         events.push(tag, event);
-        if events.len() > MAX_EVENT_BUFFER_LEN {
-            events.pop();
+        // Trim the event buffer by a bounded amount if it's larger than the max
+        // length. The bound prevents a sudden large decrease in max buffer
+        // length from causing a long lag -- instead, the pruning is amortized
+        // across many events, at the cost of not immediately freeing the
+        // memory.
+        for i in 0..10 {
+            if events.len() > *max_buffer_len {
+                events.pop();
+            } else {
+                // Shrink to fit only if we popped more than once: that's to
+                // say, we only shrink the underlying buffer if we've actually
+                // decreased its size in this method.
+                if i > 1 && events.len() == *max_buffer_len {
+                    events.shrink_to_fit();
+                }
+                break;
+            }
         }
     }
 
@@ -240,7 +248,7 @@ impl Page {
                     } else {
                         // Timeout for evaluation request
                         let request_timeout = async move {
-                            let duration = timeout.unwrap_or(DEFAULT_EVAL_TIMEOUT);
+                            let duration = timeout.unwrap_or(*self.eval_timeout.read().await);
                             tokio::time::delay_for(duration).await;
                             self.queries.lock().await.cancel(id);
                             Err(EvalError::Timeout {
