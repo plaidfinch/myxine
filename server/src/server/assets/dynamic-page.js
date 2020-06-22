@@ -14,15 +14,8 @@ window.addEventListener("load", () => {
     // Current animation frame callback ID, if any
     let animationId = null;
 
-    // NOTE: Why do we use separate workers for events and query results, but
-    // only one worker for all events? Well, it matters that events arrive in
-    // order so using one worker forces them to be linearized. And having a
-    // second, separate worker for query results means that query results can be
-    // processed concurrently with events, since their interleaving doesn't
-    // matter.
-
     // Actually send an event back to the server
-    let sendEventWorker = new window.Worker("/.myxine/assets/post.js");
+    let postWorker = new window.Worker("/.myxine/assets/post.js");
 
     function sendEvent(type, path, properties) {
         let url = window.location.href + "?page-event";
@@ -32,20 +25,17 @@ window.addEventListener("load", () => {
             properties: properties
         });
         debug("Sending event:", data);
-        sendEventWorker.postMessage({
+        postWorker.postMessage({
             url: url,
             contentType: "application/json",
             data: data
         });
     }
 
-    // Actually send a query result back to the server
-    let sendEvalResultWorker = new window.Worker("/.myxine/assets/post.js");
-
     function sendEvalResult(id, result) {
         let url = window.location.href
             + "?page-result="  + encodeURIComponent(id);
-        sendEvalResultWorker.postMessage({
+        postWorker.postMessage({
             url: url,
             contentType: "application/json",
             data: JSON.stringify(result),
