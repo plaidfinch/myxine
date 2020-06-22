@@ -8,15 +8,14 @@ use std::fmt::{self, Display};
 use std::time::Duration;
 use tokio::sync::{Mutex, RwLock};
 
-mod content;
-mod query;
-mod subscription;
+pub mod content;
+pub mod query;
+pub mod subscription;
 
-use super::server::RefreshMode;
 use crate::unique::Unique;
-use content::Content;
-use query::Queries;
-use subscription::Subscribers;
+pub use content::Content;
+pub use query::Queries;
+pub use subscription::Subscribers;
 pub use subscription::{Event, Subscription};
 
 /// A `Page` pairs some page `Content` (either dynamic or static) with a set of
@@ -66,6 +65,19 @@ impl Display for EvalError {
             JsError(err) => write!(w, "Exception: {}", err),
         }
     }
+}
+
+/// The ways in which a page can be refreshed
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub enum RefreshMode {
+    /// Reload the entire page via `window.location.reload()`.
+    FullReload,
+    /// Set the body of the page via `document.body = ...` (mainly to be used
+    /// for debugging purposes).
+    SetBody,
+    /// The default: diff the update against the current page contents to update
+    /// only the parts of the DOM which require it.
+    Diff,
 }
 
 impl Page {

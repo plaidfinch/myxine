@@ -11,8 +11,8 @@ use tokio::time::Duration;
 
 mod params;
 
-use crate::session::{self, Session};
-pub(crate) use params::{GetParams, PostParams, RefreshMode, SubscribeParams};
+use myxine::session::{self, Session};
+pub(crate) use params::{GetParams, PostParams, SubscribeParams};
 
 /// The interval between heartbeats.
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(10);

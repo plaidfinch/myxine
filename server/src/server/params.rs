@@ -2,8 +2,9 @@ use serde_urlencoded;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
-use crate::page::Subscription;
-use crate::unique::Unique;
+use myxine::page::Subscription;
+use myxine::unique::Unique;
+use myxine::page::RefreshMode;
 
 /// Parsed parameters from a query string for a GET/HEAD request.
 pub enum GetParams {
@@ -83,14 +84,6 @@ fn parse_subscription<'a>(params: &'a HashMap<String, Vec<String>>) -> Subscript
     } else {
         Subscription::from_events(events)
     }
-}
-
-/// The ways in which a page can be refreshed
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
-pub enum RefreshMode {
-    FullReload,
-    SetBody,
-    Diff,
 }
 
 /// Parsed parameters from a query string for a POST request.

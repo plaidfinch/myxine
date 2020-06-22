@@ -1,9 +1,6 @@
 use structopt::StructOpt;
 
-mod page;
 mod server;
-mod session;
-mod unique;
 
 #[derive(Debug, StructOpt)]
 struct Options {
