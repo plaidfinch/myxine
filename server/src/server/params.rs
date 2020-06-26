@@ -29,7 +29,7 @@ impl Display for ParseError {
                        if map.len() > 1 { "s" } else { "" })?;
                 let mut i = 1;
                 // write!(f, "?")?;
-                for (key, vals) in map {
+                for (key, _vals) in map {
                     // let mut j = 1;
                     // for val in vals {
                     //     if val != "" {
@@ -69,6 +69,7 @@ impl Display for ParseError {
 }
 
 /// Parsed parameters from a query string for a GET/HEAD request.
+#[derive(Debug, Clone)]
 pub enum GetParams {
     FullPage,
     PageUpdates,
@@ -79,6 +80,7 @@ pub enum GetParams {
 }
 
 /// The manner in which a subscription should be handled.
+#[derive(Debug, Clone)]
 pub enum SubscribeParams {
     /// Stream all events to the client.
     Stream,
@@ -131,6 +133,13 @@ impl GetParams {
     }
 }
 
+/// Get the canonical path to the moment for an event
+// NOTE: This must be updated if the ?after=... API changes!
+pub fn canonical_moment(path: &warp::path::FullPath, moment: u64) -> String {
+    format!("{}?after={}", path.as_str(), moment)
+}
+
+
 fn parse_subscription<'a>(params: &'a HashMap<String, Vec<String>>) -> Subscription {
     let events = match (
         params.get("events"),
@@ -149,7 +158,8 @@ fn parse_subscription<'a>(params: &'a HashMap<String, Vec<String>>) -> Subscript
 }
 
 /// Parsed parameters from a query string for a POST request.
-pub(crate) enum PostParams {
+#[derive(Debug, Clone)]
+pub enum PostParams {
     DynamicPage {
         title: String,
         refresh: RefreshMode,

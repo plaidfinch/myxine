@@ -1,13 +1,13 @@
-use std::collections::HashMap;
 use std::net::SocketAddr;
 use tokio::time::Duration;
 use std::sync::Arc;
-use warp::{self, Filter, reject::Reject, Rejection};
-use http::{Uri, Method, StatusCode};
+use hyper::body::Body;
+use bytes::Bytes;
+use warp::{self, Filter, reject::Reject, Rejection, path::FullPath};
+use http::{Uri, StatusCode, Response};
 
-use myxine::unique::Unique;
 use myxine::session::{self, Session};
-use myxine::page::{Page, RefreshMode, subscription::Subscription};
+use myxine::page::Page;
 
 mod params;
 
@@ -94,12 +94,58 @@ fn no_params() -> impl Filter<Extract = (), Error = warp::Rejection> + Clone {
 fn get(
     session: Arc<Session>
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-    get_params()
+    warp::path::full()
+        .and(get_params())
         .and(page(session))
-        .and_then(|params: params::GetParams, page: Arc<Page>| async move {
-            let reply: Result<String, warp::Rejection> = Ok("GET".to_string());
-            reply
-            // match params {}
+        .and_then(|path: FullPath, params: params::GetParams, page: Arc<Page>| async move {
+            use params::GetParams::*;
+            use params::SubscribeParams::*;
+            let mut response = Response::builder();
+            Ok::<_, warp::Rejection>(match params {
+                FullPage => {
+                    // FIXME: Possible race condition here where content-type
+                    // and content could mismatch
+                    if let Some(content_type) = page.content_type().await {
+                        response = response.header("Content-Type", content_type);
+                    }
+                    response.body(page.render().await)
+                },
+                Subscribe { subscription, stream_or_after: Stream } =>
+                    response.body(page.event_stream(subscription).await),
+                Subscribe { subscription, stream_or_after: After(after) } =>
+                    match page.event(subscription, after).await {
+                        Ok((moment, body)) => {
+                            response
+                                .header("Content-Type", "application/json; charset=utf8")
+                                .header("Content-Location", params::canonical_moment(&path, moment))
+                                .body(body)
+                        },
+                        Err(moment) => {
+                            response
+                                .header("Location", params::canonical_moment(&path, moment))
+                                .status(StatusCode::TEMPORARY_REDIRECT)
+                                .body(format!("{}", moment - after).into())
+                        }
+                    },
+                Subscribe { subscription, stream_or_after: Next } => {
+                    let (moment, body) = page.next_event(subscription).await;
+                    response
+                        .header("Content-Type", "application/json; charset=utf8")
+                        .header("Content-Location", params::canonical_moment(&path, moment))
+                        .body(body)
+                },
+                // ----- INTERNAL API BELOW HERE -----
+                PageUpdates => match page.update_stream().await {
+                    Some(body) =>
+                        response
+                        .header("Content-Type", "text/event-stream")
+                        .body(body),
+                    None =>
+                        response
+                        .status(StatusCode::NOT_FOUND)
+                        .body(Body::empty())
+                },
+            }.unwrap())
         })
 }
 
@@ -109,10 +155,104 @@ fn post(
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     post_params()
         .and(page(session))
-        .and_then(|params: params::PostParams, page: Arc<Page>| async move {
-            let reply: Result<String, warp::Rejection> = Ok("POST".to_string());
-            reply
-            // match params {}
+        .and(warp::header::optional::<String>("Content-Type"))
+        .and(warp::body::bytes())
+        .and_then(|params: params::PostParams, page: Arc<Page>, mut content_type: Option<String>, bytes: Bytes| async move {
+            use params::PostParams::*;
+            // One of these content types means it's just data, we know nothing
+            // about it, and we should just serve it up as a unicode string. The
+            // user should specify some particular content type if they desire
+            // one.
+            if let Some(ref t) = content_type {
+                if t.starts_with("application/x-www-form-urlencoded")
+                    || t.starts_with("multipart/form-data")
+                {
+                    content_type = None;
+                }
+            }
+            Ok::<_, warp::Rejection>({
+                match params {
+                    StaticPage => page.set_static(content_type, bytes).await,
+                    DynamicPage { title, refresh } => {
+                        match std::str::from_utf8(bytes.as_ref()) {
+                            Ok(body) => page.set_content(title, body, refresh).await,
+                            Err(err) => {
+                                return Ok(Response::builder()
+                                    .status(StatusCode::BAD_REQUEST)
+                                    .body(format!("Invalid UTF-8 in POST data: {}", err).into())
+                                    .unwrap());
+                            },
+                        }
+                    },
+                    Evaluate { expression, timeout } => {
+                        match if let Some(expression) = expression {
+                            page.evaluate(&expression, false, timeout).await
+                        } else {
+                            match std::str::from_utf8(bytes.as_ref()) {
+                                Ok(statements) => page.evaluate(&statements, true, timeout).await,
+                                Err(err) => {
+                                    return Ok(Response::builder()
+                                        .status(StatusCode::BAD_REQUEST)
+                                        .body(format!("Invalid UTF-8 in POST data: {}", err).into())
+                                        .unwrap());
+                                }
+                            }
+                        } {
+                            Ok(value) => {
+                                let json = serde_json::to_string(&value).unwrap();
+                                return Ok(Response::builder()
+                                    .header("Content-Type", "application/json")
+                                    .body(Body::from(json))
+                                    .unwrap())
+                            },
+                            Err(err) => {
+                                return Ok(Response::builder()
+                                    .status(match err {
+                                        myxine::page::EvalError::Timeout{..} => StatusCode::REQUEST_TIMEOUT,
+                                        myxine::page::EvalError::NoBrowser => StatusCode::NOT_FOUND,
+                                        myxine::page::EvalError::StaticPage => StatusCode::NOT_FOUND,
+                                        myxine::page::EvalError::JsError{..} => StatusCode::BAD_REQUEST,
+                                    })
+                                    .body(format!("{}", err).into())
+                                    .unwrap())
+                            },
+                        }
+                    },
+                    // ----- INTERNAL API BELOW HERE -----
+                    PageEvent => {
+                        match serde_json::from_slice(bytes.as_ref()) {
+                            Ok(event) => page.send_event(event).await,
+                            Err(err) => {
+                                return Ok(Response::builder()
+                                    .status(StatusCode::BAD_REQUEST)
+                                    .body(format!("Invalid page event: {}", err).into())
+                                    .unwrap());
+                            },
+                        }
+                    },
+                    EvalResult { id } => {
+                        match serde_json::from_slice(bytes.as_ref()) {
+                            Ok(result) => page.send_evaluate_result(id, Ok(result)).await,
+                            Err(err) => {
+                                let status = StatusCode::BAD_REQUEST;
+                                let message = format!("Invalid JSON in evaluation result from browser: {}", err);
+                                return Ok(Response::builder().status(status).body(message.into()).unwrap());
+                            }
+                        }
+                    }
+                    EvalError { id } => {
+                        match std::str::from_utf8(bytes.as_ref()) {
+                            Ok(error) => page.send_evaluate_result(id, Err(error.to_string())).await,
+                            Err(err) => {
+                                let status = StatusCode::BAD_REQUEST;
+                                let message = format!("Invalid UTF-8 in evaluation error from browser: {}", err);
+                                return Ok(Response::builder().status(status).body(message.into()).unwrap());
+                            }
+                        }
+                    }
+                };
+                Response::new(Body::empty())
+            })
         })
 }
 
@@ -123,10 +263,21 @@ fn delete(
     no_params()
         .and(page(session))
         .and_then(|page: Arc<Page>| async move {
-            let reply: Result<String, warp::Rejection> = Ok("DELETE".to_string());
-            reply
+            page.clear().await;
+            Ok::<_, warp::Rejection>("")
         })
 }
+
+/// The static string identifying the server and its major.minor version (we
+/// don't reveal the patch because patch versions should not affect public API).
+/// This allows clients to check whether they are compatible with this version
+/// of the server.
+const SERVER: &str =
+    concat!(env!("CARGO_PKG_NAME"),
+            "/",
+            env!("CARGO_PKG_VERSION_MAJOR"),
+            ".",
+            env!("CARGO_PKG_VERSION_MINOR"));
 
 pub(crate) async fn run(addr: impl Into<SocketAddr> + 'static) {
     // The session holding all the pages for this instantiation of the server
@@ -139,9 +290,12 @@ pub(crate) async fn run(addr: impl Into<SocketAddr> + 'static) {
 
     // Collect the routes
     let routes =
-        get(session)
-        .or(post(session))
+        get(session.clone())
+        .or(post(session.clone()))
         .or(delete(session))
+        .map(|reply| warp::reply::with_header(reply, "Cache-Control", "no-cache"))
+        .map(|reply| warp::reply::with_header(reply, "Access-Control-Allow-Origin", "*"))
+        .map(|reply| warp::reply::with_header(reply, "Server", SERVER))
         .recover(|err: Rejection| async {
             if let Some(Redirect(uri)) = err.find() {
                 Ok(warp::redirect(uri.clone()))

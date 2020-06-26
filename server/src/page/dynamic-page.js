@@ -1,5 +1,4 @@
-window.addEventListener("load", () => {
-
+function myxine(enabledEvents) {
     // Print debug info if the user sets window.myxine = true
     window.myxine = { "debug": false };
     function debug(...args) {
@@ -186,18 +185,6 @@ window.addEventListener("load", () => {
         });
     }
 
-    // Fetch the description of the events we wish to support, and add listeners
-    // for them to the window object of the page
-    const r = new XMLHttpRequest();
-    r.onerror = () => debug("Could not fetch list of enabled events!");
-    r.onload = () => {
-        const enabledEvents = JSON.parse(r.responseText);
-        debug(enabledEvents);
-        setupPageEventListeners(parseEventDescriptions(enabledEvents));
-    };
-    r.open("GET", "/.myxine/assets/enabled-events.json");
-    r.send();
-
     // The handlers for events coming from the server:
     function setupServerEventListeners(sse) {
         sse.addEventListener("set", (event) => {
@@ -214,14 +201,14 @@ window.addEventListener("load", () => {
         sse.addEventListener("run",      (event) => evaluateAndRespond(true, event));
     }
 
-    // Actually set up SSE...
-    let sse = new window.EventSource(window.location.href + "?updates");
-    setupServerEventListeners(sse);
-    sse.onerror = () => {
-        // Set up retry interval to attempt reconnection
-        window.setTimeout(() => {
-            sse = new window.EventSource(window.location.href + "?updates");
-            setupServerEventListeners(sse);
-        }, 500); // half a second between retries
-    };
-});
+    // When things are loaded, activate the page.
+    window.onload(() => {
+        // Fetch the description of the events we wish to support, and add listeners
+        // for them to the window object of the page
+        setupPageEventListeners(parseEventDescriptions(enabledEvents));
+
+        // Actually set up SSE...
+        let sse = new window.EventSource(window.location.href + "?updates");
+        setupServerEventListeners(sse);
+    });
+}
