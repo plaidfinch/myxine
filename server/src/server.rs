@@ -5,6 +5,7 @@ use hyper::body::Body;
 use bytes::Bytes;
 use warp::{self, Filter, reject::Reject, Rejection, path::FullPath};
 use http::{Uri, StatusCode, Response};
+use lazy_static::lazy_static;
 
 use myxine::session::{self, Session};
 use myxine::page::Page;
@@ -90,6 +91,18 @@ fn no_params() -> impl Filter<Extract = (), Error = warp::Rejection> + Clone {
     }).untuple_one()
 }
 
+lazy_static! {
+    /// The content of the dynamic page returned by default, including (inlined)
+    /// all the JavaScript necessary to make it run.
+    static ref DYNAMIC_PAGE: String =
+        format!(
+            include_str!("server/dynamic.html"),
+            diff = include_str!("../deps/diffhtml.min.js"),
+            dynamic = include_str!("server/dynamic.js"),
+            enabled_events = include_str!("enabled-events.json"),
+        );
+}
+
 /// Handle a GET request, in the whole.
 fn get(
     session: Arc<Session>
@@ -103,12 +116,14 @@ fn get(
             let mut response = Response::builder();
             Ok::<_, warp::Rejection>(match params {
                 FullPage => {
-                    // FIXME: Possible race condition here where content-type
-                    // and content could mismatch
-                    if let Some(content_type) = page.content_type().await {
-                        response = response.header("Content-Type", content_type);
+                    if let Some((content_type, raw_contents)) = page.static_content().await {
+                        if let Some(content_type) = content_type {
+                            response = response.header("Content-Type", content_type);
+                        }
+                        response.body(raw_contents.into())
+                    } else {
+                        response.body(DYNAMIC_PAGE.as_str().into())
                     }
-                    response.body(page.render().await)
                 },
                 Subscribe { subscription, stream_or_after: Stream } =>
                     response.body(page.event_stream(subscription).await),

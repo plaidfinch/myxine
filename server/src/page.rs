@@ -7,7 +7,6 @@ use serde_json::Value;
 use std::fmt::{self, Display};
 use std::time::Duration;
 use tokio::sync::{Mutex, RwLock};
-use lazy_static::lazy_static;
 
 pub mod content;
 pub mod query;
@@ -81,16 +80,6 @@ pub enum RefreshMode {
     Diff,
 }
 
-lazy_static! {
-    static ref DYNAMIC_PAGE: String =
-        format!(
-            include_str!("page/dynamic.html"),
-            diff = include_str!("page/diffhtml.min.js"),
-            dynamic = include_str!("page/dynamic-page.js"),
-            enabled_events = include_str!("enabled-events.json"),
-        );
-}
-
 impl Page {
     /// Make a new empty (dynamic) page.
     pub fn new(buffer_len: usize, eval_timeout: Duration) -> Page {
@@ -104,10 +93,11 @@ impl Page {
     }
 
     /// Render a whole page as HTML (for first page load).
-    pub async fn render(&self) -> Body {
+    pub async fn static_content(&self) -> Option<(Option<String>, Bytes)> {
         match &*self.content.lock().await {
-            Content::Dynamic { .. } => DYNAMIC_PAGE.as_str().into(),
-            Content::Static { raw_contents, .. } => raw_contents.clone().into(),
+            Content::Dynamic { .. } => None,
+            Content::Static { content_type, raw_contents } =>
+                Some((content_type.clone(), raw_contents.clone())),
         }
     }
 
