@@ -81,7 +81,11 @@ impl Display for ParseError {
 /// Parsed parameters from a query string for a GET/HEAD request.
 #[derive(Debug, Clone)]
 pub enum GetParams {
+    /// Get the full page.
     FullPage,
+    /// Get the tiny WebWorker script for connecting back to the server.
+    Connect,
+    /// Subscribe to events in the page.
     Subscribe {
         subscription: Subscription,
         stream_or_after: SubscribeParams,
@@ -107,6 +111,9 @@ impl GetParams {
         let params = query_params(&query);
         if params.is_empty() {
             Ok(GetParams::FullPage)
+        } else if param_as_flag("connect", &params)? {
+            constrain_to_keys(params, &["connect"])?;
+            Ok(GetParams::Connect)
         } else if param_as_flag("stream", &params)? {
             let result = Ok(GetParams::Subscribe {
                 subscription: parse_subscription(&params),

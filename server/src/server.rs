@@ -130,6 +130,11 @@ fn get(
                                 response.body(DYNAMIC_PAGE.as_str().into())
                             }
                         }
+                        Connect => {
+                            response
+                                .header("Content-Type", "application/javascript; charset=utf8")
+                                .body(include_str!("server/connect.js").into())
+                        }
                         Subscribe {
                             subscription,
                             stream_or_after: Stream,
@@ -258,6 +263,7 @@ fn delete(
         })
 }
 
+/// Handle a websocket upgrade from the page.
 fn websocket(
     session: Arc<Session>,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {

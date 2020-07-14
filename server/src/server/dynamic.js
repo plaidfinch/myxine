@@ -32,7 +32,7 @@ function myxine(enabledEvents) {
     }
 
     // Evaluate a JavaScript expression and return the result
-    function evaluateAndRespond(statementMode, expression, id, socket) {
+    function evaluateAndRespond(statementMode, expression, id, worker) {
         debug("Evaluating expression '" + expression + "' as a"
               + (statementMode ? " statement" : "n expression"));
         try {
@@ -41,18 +41,18 @@ function myxine(enabledEvents) {
                 result = null;
             }
             debug("Sending back result response:", result);
-            socket.send(JSON.stringify({
+            worker.postMessage({
                 type: "evalResult",
                 id: id,
                 result: { Ok: result }
-            }))
+            })
         } catch(err) {
             debug("Sending back error response:", err);
-            socket.send(JSON.stringify({
+            worker.postMessage({
                 type: "evalResult",
                 id: id,
                 result: { Err: err.toString() }
-            }))
+            })
         }
     }
 
@@ -103,7 +103,7 @@ function myxine(enabledEvents) {
 
     // Set up listeners for all those events which send back the appropriately
     // formatted results when they fire
-    function setupPageEventListeners(socket) {
+    function setupPageEventListeners(worker) {
         const descriptions = parseEventDescriptions(enabledEvents);
         const subscription = Object.keys(descriptions);
         // Set up event handlers
@@ -135,12 +135,12 @@ function myxine(enabledEvents) {
                         .forEach(([property, formatter]) => {
                             data[property] = formatter(event[property]);
                         });
-                    socket.send(JSON.stringify({
+                    worker.postMessage({
                         type: "event",
                         event: eventName,
                         targets: path,
                         properties: data,
-                    }));
+                    });
                 };
                 debug("Adding listener:", eventName);
                 window.addEventListener(eventName, listener);
@@ -151,20 +151,20 @@ function myxine(enabledEvents) {
     }
 
     // The handlers for events coming from the server:
-    function setupServerEventListeners(socket) {
-        socket.onmessage = message => {
-            const data = JSON.parse(message.data);
-            debug("Received message:", data);
-            if (data.type === "reload") {
+    function setupServerEventListeners(worker) {
+        worker.onmessage = workerMessage => {
+            let message = workerMessage.data;
+            debug("Received message:", message);
+            if (message.type === "reload") {
                 window.location.reload();
-            } else if (data.type === "evaluate") {
-                evaluateAndRespond(data.statementMode, data.script, data.id, socket);
-            } else if (data.type === "update") {
-                document.title = data.title;
-                if (data.diff) {
-                    setBodyTo(data.body);
+            } else if (message.type === "evaluate") {
+                evaluateAndRespond(message.statementMode, message.script, message.id, worker);
+            } else if (message.type === "update") {
+                document.title = message.title;
+                if (message.diff) {
+                    setBodyTo(message.body);
                 } else {
-                    document.body.innerHTML = data.body;
+                    document.body.innerHTML = message.body;
                 }
             }
         }
@@ -172,10 +172,8 @@ function myxine(enabledEvents) {
 
     // When things are loaded, activate the page.
     window.addEventListener("load", () => {
-        let socket = new WebSocket("ws://" + location.host + location.pathname);
-        socket.onopen = () => {
-            setupServerEventListeners(socket);
-            setupPageEventListeners(socket);
-        }
+        let worker = new Worker(location.href + "?connect")
+        setupServerEventListeners(worker);
+        setupPageEventListeners(worker);
     });
 }
