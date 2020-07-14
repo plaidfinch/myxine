@@ -134,7 +134,7 @@ def evaluate(path: str, *,
             raise bad_args_err
         url = page_url(path, port)
         params = {'evaluate': expression}
-        data = expression.encode()
+        data = b''
     elif statement is not None:
         if expression is not None:
             raise bad_args_err
