@@ -1,14 +1,15 @@
-use std::net::SocketAddr;
-use tokio::time::Duration;
-use std::sync::Arc;
-use hyper::body::Body;
 use bytes::Bytes;
-use warp::{self, Filter, reject::Reject, Rejection, path::FullPath};
-use http::{Uri, StatusCode, Response};
+use futures::{SinkExt, StreamExt};
+use http::{Response, StatusCode, Uri};
+use hyper::body::Body;
 use lazy_static::lazy_static;
+use std::net::SocketAddr;
+use std::sync::Arc;
+use tokio::time::Duration;
+use warp::{self, path::FullPath, reject::Reject, Filter, Rejection};
 
-use myxine::session::{self, Session};
 use myxine::page::Page;
+use myxine::session::{self, Session};
 
 mod params;
 
@@ -35,26 +36,25 @@ impl Reject for Redirect {}
 /// a `Rejection` that tells us to emit a redirect, if the path ends with a
 /// slash.
 fn page(
-    session: Arc<Session>
+    session: Arc<Session>,
 ) -> impl Filter<Extract = (Arc<Page>,), Error = warp::Rejection> + Clone {
-    warp::path::full()
-        .and_then(move |path: warp::path::FullPath| {
-            let session = session.clone();
-            async move {
-                let path = path.as_str();
-                let path_ends_with_slash = path != "/" && path.ends_with('/');
-                let path = if path != "/" {
-                    path.trim_end_matches('/')
-                } else {
-                    "/"
-                };
-                if path_ends_with_slash {
-                    Err(warp::reject::custom(Redirect(path.parse().unwrap())))
-                } else {
-                    Ok(session.page(&path).await)
-                }
+    warp::path::full().and_then(move |path: warp::path::FullPath| {
+        let session = session.clone();
+        async move {
+            let path = path.as_str();
+            let path_ends_with_slash = path != "/" && path.ends_with('/');
+            let path = if path != "/" {
+                path.trim_end_matches('/')
+            } else {
+                "/"
+            };
+            if path_ends_with_slash {
+                Err(warp::reject::custom(Redirect(path.parse().unwrap())))
+            } else {
+                Ok(session.page(&path).await)
             }
-        })
+        }
+    })
 }
 
 /// Get the raw query string, if one is present, or the empty string if one is
@@ -85,10 +85,12 @@ fn post_params() -> impl Filter<Extract = (params::PostParams,), Error = warp::R
 /// Enforce that there are no query parameters, throwing a nice error if there
 /// are any.
 fn no_params() -> impl Filter<Extract = (), Error = warp::Rejection> + Clone {
-    query().and_then(|params: String| async move {
-        params::constrain_to_keys(params::query_params(&params), &[])
-            .map_err(warp::reject::custom)
-    }).untuple_one()
+    query()
+        .and_then(|params: String| async move {
+            params::constrain_to_keys(params::query_params(&params), &[])
+                .map_err(warp::reject::custom)
+        })
+        .untuple_one()
 }
 
 lazy_static! {
@@ -105,68 +107,66 @@ lazy_static! {
 
 /// Handle a GET request, in the whole.
 fn get(
-    session: Arc<Session>
+    session: Arc<Session>,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     warp::path::full()
         .and(get_params())
         .and(page(session))
-        .and_then(|path: FullPath, params: params::GetParams, page: Arc<Page>| async move {
-            use params::GetParams::*;
-            use params::SubscribeParams::*;
-            let mut response = Response::builder();
-            Ok::<_, warp::Rejection>(match params {
-                FullPage => {
-                    if let Some((content_type, raw_contents)) = page.static_content().await {
-                        if let Some(content_type) = content_type {
-                            response = response.header("Content-Type", content_type);
+        .and_then(
+            |path: FullPath, params: params::GetParams, page: Arc<Page>| async move {
+                use params::GetParams::*;
+                use params::SubscribeParams::*;
+                let mut response = Response::builder();
+                Ok::<_, warp::Rejection>(
+                    match params {
+                        FullPage => {
+                            if let Some((content_type, raw_contents)) = page.static_content().await
+                            {
+                                if let Some(content_type) = content_type {
+                                    response = response.header("Content-Type", content_type);
+                                }
+                                response.body(raw_contents.into())
+                            } else {
+                                response.body(DYNAMIC_PAGE.as_str().into())
+                            }
                         }
-                        response.body(raw_contents.into())
-                    } else {
-                        response.body(DYNAMIC_PAGE.as_str().into())
-                    }
-                },
-                Subscribe { subscription, stream_or_after: Stream } =>
-                    response.body(page.event_stream(subscription).await),
-                Subscribe { subscription, stream_or_after: After(after) } =>
-                    match page.event(subscription, after).await {
-                        Ok((moment, body)) => {
+                        Subscribe {
+                            subscription,
+                            stream_or_after: Stream,
+                        } => response.body(page.event_stream(subscription).await),
+                        Subscribe {
+                            subscription,
+                            stream_or_after: After(after),
+                        } => match page.event(subscription, after).await {
+                            Ok((moment, body)) => response
+                                .header("Content-Type", "application/json; charset=utf8")
+                                .header("Content-Location", params::canonical_moment(&path, moment))
+                                .body(body),
+                            Err(moment) => response
+                                .header("Location", params::canonical_moment(&path, moment))
+                                .status(StatusCode::TEMPORARY_REDIRECT)
+                                .body(format!("{}", moment - after).into()),
+                        },
+                        Subscribe {
+                            subscription,
+                            stream_or_after: Next,
+                        } => {
+                            let (moment, body) = page.next_event(subscription).await;
                             response
                                 .header("Content-Type", "application/json; charset=utf8")
                                 .header("Content-Location", params::canonical_moment(&path, moment))
                                 .body(body)
-                        },
-                        Err(moment) => {
-                            response
-                                .header("Location", params::canonical_moment(&path, moment))
-                                .status(StatusCode::TEMPORARY_REDIRECT)
-                                .body(format!("{}", moment - after).into())
                         }
-                    },
-                Subscribe { subscription, stream_or_after: Next } => {
-                    let (moment, body) = page.next_event(subscription).await;
-                    response
-                        .header("Content-Type", "application/json; charset=utf8")
-                        .header("Content-Location", params::canonical_moment(&path, moment))
-                        .body(body)
-                },
-                // ----- INTERNAL API BELOW HERE -----
-                PageUpdates => match page.update_stream().await {
-                    Some(body) =>
-                        response
-                        .header("Content-Type", "text/event-stream")
-                        .body(body),
-                    None =>
-                        response
-                        .status(StatusCode::NOT_FOUND)
-                        .body(Body::empty())
-                },
-            }.unwrap())
-        })
+                    }
+                    .unwrap(),
+                )
+            },
+        )
 }
 
 /// Handle a POST request, in the whole.
 fn post(
-    session: Arc<Session>
+    session: Arc<Session>,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     post_params()
         .and(page(session))
@@ -201,7 +201,14 @@ fn post(
                     },
                     Evaluate { expression, timeout } => {
                         match if let Some(expression) = expression {
-                            page.evaluate(&expression, false, timeout).await
+                            if bytes.is_empty() {
+                                page.evaluate(&expression, false, timeout).await
+                            } else {
+                                return Ok(Response::builder()
+                                          .status(StatusCode::BAD_REQUEST)
+                                          .body("Expecting empty body with non-empty ?evaluate=... query parameter".into())
+                                          .unwrap())
+                            }
                         } else {
                             match std::str::from_utf8(bytes.as_ref()) {
                                 Ok(statements) => page.evaluate(&statements, true, timeout).await,
@@ -233,38 +240,6 @@ fn post(
                             },
                         }
                     },
-                    // ----- INTERNAL API BELOW HERE -----
-                    PageEvent => {
-                        match serde_json::from_slice(bytes.as_ref()) {
-                            Ok(event) => page.send_event(event).await,
-                            Err(err) => {
-                                return Ok(Response::builder()
-                                    .status(StatusCode::BAD_REQUEST)
-                                    .body(format!("Invalid page event: {}", err).into())
-                                    .unwrap());
-                            },
-                        }
-                    },
-                    EvalResult { id } => {
-                        match serde_json::from_slice(bytes.as_ref()) {
-                            Ok(result) => page.send_evaluate_result(id, Ok(result)).await,
-                            Err(err) => {
-                                let status = StatusCode::BAD_REQUEST;
-                                let message = format!("Invalid JSON in evaluation result from browser: {}", err);
-                                return Ok(Response::builder().status(status).body(message.into()).unwrap());
-                            }
-                        }
-                    }
-                    EvalError { id } => {
-                        match std::str::from_utf8(bytes.as_ref()) {
-                            Ok(error) => page.send_evaluate_result(id, Err(error.to_string())).await,
-                            Err(err) => {
-                                let status = StatusCode::BAD_REQUEST;
-                                let message = format!("Invalid UTF-8 in evaluation error from browser: {}", err);
-                                return Ok(Response::builder().status(status).body(message.into()).unwrap());
-                            }
-                        }
-                    }
                 };
                 Response::new(Body::empty())
             })
@@ -273,7 +248,7 @@ fn post(
 
 /// Handle a DELETE request, in the whole.
 fn delete(
-    session: Arc<Session>
+    session: Arc<Session>,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     no_params()
         .and(page(session))
@@ -283,29 +258,85 @@ fn delete(
         })
 }
 
+fn websocket(
+    session: Arc<Session>,
+) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    warp::ws()
+        .and(page(session))
+        .map(|ws: warp::ws::Ws, page: Arc<Page>| {
+            ws.on_upgrade(|websocket| async {
+                // Forward page updates to the page
+                let (mut tx, mut rx) = websocket.split();
+                if let Some(mut commands) = page.command_stream().await {
+                    tokio::spawn(async move {
+                        loop {
+                            if let Some(command) = commands.next().await {
+                                let message = serde_json::to_string(&command).unwrap();
+                                if tx.send(warp::ws::Message::text(message)).await.is_err() {
+                                    break;
+                                }
+                            } else {
+                                break;
+                            }
+                        }
+                    });
+                }
+                // Forward responses from the browser to their handlers
+                tokio::spawn(async move {
+                    loop {
+                        if let Some(Ok(message)) = rx.next().await {
+                            if let Ok(text) = message.to_str() {
+                                if let Ok(response) = serde_json::from_str(text) {
+                                    match response {
+                                        myxine::page::Response::Event(event) => {
+                                            page.send_event(event).await
+                                        }
+                                        myxine::page::Response::EvalResult { id, result } => {
+                                            page.send_evaluate_result(id, result).await
+                                        }
+                                    }
+                                } else {
+                                    // Couldn't parse response.
+                                    break;
+                                }
+                            }
+                        } else {
+                            // End of stream.
+                            break;
+                        }
+                    }
+                });
+            })
+        })
+}
+
 /// The static string identifying the server and its major.minor version (we
 /// don't reveal the patch because patch versions should not affect public API).
 /// This allows clients to check whether they are compatible with this version
 /// of the server.
-const SERVER: &str =
-    concat!(env!("CARGO_PKG_NAME"),
-            "/",
-            env!("CARGO_PKG_VERSION_MAJOR"),
-            ".",
-            env!("CARGO_PKG_VERSION_MINOR"));
+const SERVER: &str = concat!(
+    env!("CARGO_PKG_NAME"),
+    "/",
+    env!("CARGO_PKG_VERSION_MAJOR"),
+    ".",
+    env!("CARGO_PKG_VERSION_MINOR")
+);
 
 pub(crate) async fn run(addr: impl Into<SocketAddr> + 'static) {
     // The session holding all the pages for this instantiation of the server
-    let session = Arc::new(Session::start(session::Config {
-        heartbeat_interval: HEARTBEAT_INTERVAL,
-        keep_alive_duration: KEEP_ALIVE_DURATION,
-        default_buffer_len: DEFAULT_BUFFER_LEN,
-        default_eval_timeout: DEFAULT_EVAL_TIMEOUT,
-    }).await);
+    let session = Arc::new(
+        Session::start(session::Config {
+            heartbeat_interval: HEARTBEAT_INTERVAL,
+            keep_alive_duration: KEEP_ALIVE_DURATION,
+            default_buffer_len: DEFAULT_BUFFER_LEN,
+            default_eval_timeout: DEFAULT_EVAL_TIMEOUT,
+        })
+        .await,
+    );
 
     // Collect the routes
-    let routes =
-        get(session.clone())
+    let routes = websocket(session.clone())
+        .or(get(session.clone()))
         .or(post(session.clone()))
         .or(delete(session))
         .map(|reply| warp::reply::with_header(reply, "Cache-Control", "no-cache"))

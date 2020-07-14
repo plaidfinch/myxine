@@ -37,12 +37,14 @@ pub struct Session {
 impl Session {
     /// Create a new session, starting a thread to maintain heartbeats to any
     /// Pages created in this session.
-    pub async fn start(Config {
-        heartbeat_interval,
-        keep_alive_duration,
-        default_eval_timeout,
-        default_buffer_len
-    }: Config) -> Session {
+    pub async fn start(
+        Config {
+            heartbeat_interval,
+            keep_alive_duration,
+            default_eval_timeout,
+            default_buffer_len,
+        }: Config,
+    ) -> Session {
         let (touch_path, recv_path) = mpsc::unbounded_channel();
         let session = Session {
             touch_path,
@@ -68,7 +70,7 @@ impl Session {
             Entry::Vacant(e) => {
                 let page = Arc::new(Page::new(
                     self.default_buffer_len,
-                    self.default_eval_timeout
+                    self.default_eval_timeout,
                 ));
                 e.insert((Instant::now(), page.clone()));
                 page
@@ -122,7 +124,6 @@ async fn heartbeat_loop(
                 async move {
                     let mut pages = pages.lock().await;
                     if let Some((path, (last_access, page))) = pages.remove_entry(path) {
-                        page.send_heartbeat().await;
                         if last_access.elapsed() < keep_alive || !page.is_empty().await {
                             pages.insert(path, (last_access, page));
                         } else {

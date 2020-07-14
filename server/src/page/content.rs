@@ -1,12 +1,11 @@
 use hyper::body::Bytes;
-use hyper::Body;
-use hyper_usse::EventBuilder;
-use serde_json::json;
+use serde::Serialize;
 use std::mem;
-use tokio::stream::StreamExt;
+use tokio::stream::{Stream, StreamExt};
 use tokio::sync::broadcast;
 
 use super::RefreshMode;
+use crate::unique::Unique;
 
 /// The `Content` of a page is either `Dynamic` or `Static`. If it's dynamic, it
 /// has a title, body, and a set of SSE event listeners who are waiting for
@@ -16,12 +15,13 @@ use super::RefreshMode;
 /// the change is instantly reflected in the client web browser; in the other
 /// direction, it requires a manual refresh (because a static page has no
 /// injected javascript to make it update itself).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Content {
     Dynamic {
         title: String,
         body: String,
-        updates: broadcast::Sender<Bytes>,
+        updates: broadcast::Sender<Command>,
+        other_commands: broadcast::Sender<Command>,
     },
     Static {
         content_type: Option<String>,
@@ -29,10 +29,34 @@ pub enum Content {
     },
 }
 
-/// The maximum number of messages to buffer before dropping an update. This is
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum Command {
+    Reload,
+    Update {
+        title: String,
+        body: String,
+        diff: bool,
+    },
+    Evaluate {
+        script: String,
+        statement_mode: bool,
+        id: Unique,
+    },
+}
+
+/// The maximum number of updates to buffer before dropping an update. This is
 /// set to 1, because dropped updates are okay (the most recent update will
 /// always get through once things quiesce).
 const UPDATE_BUFFER_SIZE: usize = 1;
+
+/// The maximum number of non-update commands to buffer before dropping one.
+/// This is set to a large number, because we don't want to drop a reload
+/// command or an evaluate command. Unlike the update buffer, clients likely
+/// won't fill this one, because it's used only for occasional full-reload
+/// commands and for evaluating JavaScript, neither of which should be done at
+/// an absurd rate.
+const OTHER_COMMAND_BUFFER_SIZE: usize = 10_000;
 
 impl Content {
     /// Make a new empty (dynamic) page
@@ -41,6 +65,7 @@ impl Content {
             title: String::new(),
             body: String::new(),
             updates: broadcast::channel(UPDATE_BUFFER_SIZE).0,
+            other_commands: broadcast::channel(OTHER_COMMAND_BUFFER_SIZE).0,
         }
     }
 
@@ -53,7 +78,10 @@ impl Content {
                 title,
                 body,
                 ref updates,
-            } if title == "" && body == "" => updates.receiver_count() == 0,
+                ref other_commands,
+            } if title == "" && body == "" => {
+                updates.receiver_count() == 0 && other_commands.receiver_count() == 0
+            }
             _ => false,
         }
     }
@@ -61,19 +89,29 @@ impl Content {
     /// Add a client to the dynamic content of a page, if it is dynamic. If it
     /// is static, this has no effect and returns None. Otherwise, returns the
     /// Body stream to give to the new client.
-    pub fn update_stream(&self) -> Option<Body> {
+    pub fn command_stream(&self) -> Option<impl Stream<Item = Command>> {
         let result = match self {
-            Content::Dynamic { updates, .. } => {
-                let stream_body = Body::wrap_stream(updates.subscribe().filter(|result| {
-                    match result {
-                        // We ignore lagged items in the stream! If we don't
-                        // ignore these, we would terminate the Body on
-                        // every lag, which is undesirable.
-                        Err(broadcast::RecvError::Lagged(_)) => false,
-                        // Otherwise, we leave the result alone.
-                        _ => true,
-                    }
-                }));
+            Content::Dynamic {
+                updates,
+                other_commands,
+                ..
+            } => {
+                let merged = updates.subscribe().merge(other_commands.subscribe());
+                let stream_body = merged
+                    .filter_map(|result| {
+                        match result {
+                            // We ignore lagged items in the stream! If we don't
+                            // ignore these, we would terminate the Body on
+                            // every lag, which is undesirable.
+                            Err(broadcast::RecvError::Lagged(_)) => None,
+                            // Otherwise, if the stream is over, we end this stream.
+                            Err(broadcast::RecvError::Closed) => Some(Err(())),
+                            // But if the item is ok, forward it.
+                            Ok(item) => Some(Ok(item)),
+                        }
+                    })
+                    .take_while(|i| i.is_ok())
+                    .map(|i| i.unwrap());
                 Some(stream_body)
             }
             Content::Static { .. } => None,
@@ -83,46 +121,27 @@ impl Content {
         result
     }
 
-    /// Send an empty "heartbeat" message to all clients of a page, if it is
-    /// dynamic. This has no effect if it is (currently) static, and returns
-    /// `None` if so, otherwise returns the current number of clients getting
-    /// live updates to the page.
-    pub fn send_heartbeat(&self) -> Option<usize> {
-        match self {
-            Content::Dynamic { updates, .. } => {
-                // Send a heartbeat to pages waiting on <body> updates
-                Some(updates.send(":\n\n".into()).unwrap_or(0))
-            }
-            Content::Static { .. } => None,
-        }
-    }
-
     /// Tell all clients to refresh the contents of a page, if it is dynamic.
     /// This has no effect if it is (currently) static.
     pub fn refresh(&self, refresh: RefreshMode) {
         match self {
             Content::Dynamic {
                 updates,
+                other_commands,
                 title,
                 body,
-            } => match refresh {
-                RefreshMode::FullReload => {
-                    let event = EventBuilder::new(".").event_type("refresh").build();
-                    let _ = updates.send(event.into());
-                }
-                RefreshMode::SetBody | RefreshMode::Diff => {
-                    let data = json!({
-                        "title": title,
-                        "body": body,
-                        "diff": refresh == RefreshMode::Diff,
-                    });
-                    let message = serde_json::to_string(&data).unwrap();
-                    let event = EventBuilder::new(&message).event_type("set").build();
-                    let _ = updates.send(event.into());
-                }
-            },
-            Content::Static { .. } => {}
-        }
+            } => {
+                let _ = match refresh {
+                    RefreshMode::FullReload => other_commands.send(Command::Reload),
+                    RefreshMode::SetBody | RefreshMode::Diff => updates.send(Command::Update {
+                        title: title.clone(),
+                        body: body.clone(),
+                        diff: refresh == RefreshMode::Diff,
+                    }),
+                };
+            }
+            Content::Static { .. } => (),
+        };
     }
 
     /// Set the contents of the page to be a static raw set of bytes with no

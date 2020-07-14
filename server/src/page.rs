@@ -1,8 +1,8 @@
 use futures::join;
-use futures::{pin_mut, select, FutureExt};
+use futures::{pin_mut, select, FutureExt, Stream};
 use hopscotch::{self, ArcK};
 use hyper::body::{Body, Bytes};
-use hyper_usse::EventBuilder;
+use serde::Deserialize;
 use serde_json::Value;
 use std::fmt::{self, Display};
 use std::time::Duration;
@@ -27,6 +27,18 @@ pub struct Page {
     subscribers: Mutex<Subscribers>,
     queries: Mutex<Queries<Result<Value, String>>>,
     events: RwLock<(usize, hopscotch::Queue<String, Event, ArcK>)>, // TODO: preload events and use u16 tags
+}
+
+/// The possible responses from a page: either an event happened, or the result
+/// of evaluating an expression was sent back.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum Response {
+    Event(Event),
+    EvalResult {
+        id: Unique,
+        result: Result<Value, String>,
+    },
 }
 
 /// The possible errors that can occur while evaluating JavaScript in the
@@ -96,8 +108,10 @@ impl Page {
     pub async fn static_content(&self) -> Option<(Option<String>, Bytes)> {
         match &*self.content.lock().await {
             Content::Dynamic { .. } => None,
-            Content::Static { content_type, raw_contents } =>
-                Some((content_type.clone(), raw_contents.clone())),
+            Content::Static {
+                content_type,
+                raw_contents,
+            } => Some((content_type.clone(), raw_contents.clone())),
         }
     }
 
@@ -222,15 +236,6 @@ impl Page {
         }
     }
 
-    /// Send an empty "heartbeat" message to all clients of a page, if it is
-    /// dynamic. This has no effect if it is (currently) static, and returns
-    /// `None` if so, otherwise returns the current number of clients getting
-    /// live updates to the page.
-    pub async fn send_heartbeat(&self) -> Option<usize> {
-        let content = self.content.lock().await;
-        content.send_heartbeat()
-    }
-
     /// Tell the page to evaluate a given piece of JavaScript, as either an
     /// expression or a statement, with an optional explicit timeout (defaults
     /// to the long-ish hardcoded timeout `DEFAULT_EVAL_TIMEOUT`).
@@ -242,14 +247,16 @@ impl Page {
     ) -> Result<Value, EvalError> {
         match *self.content.lock().await {
             Content::Dynamic {
-                ref mut updates, ..
+                ref mut other_commands,
+                ..
             } => {
                 let (id, result) = self.queries.lock().await.request();
-                let id_string = format!("{}", id);
-                let event = EventBuilder::new(expression)
-                    .event_type(if statement_mode { "run" } else { "evaluate" })
-                    .id(&id_string);
-                let client_count = updates.send(event.into()).unwrap_or(0);
+                let command = content::Command::Evaluate {
+                    script: expression.to_string(),
+                    statement_mode,
+                    id,
+                };
+                let client_count = other_commands.send(command).unwrap_or(0);
                 // All the below gets executed *after* the lock on content is
                 // released, because it's a returned async block that is
                 // .await-ed after the scope of the match closes.
@@ -319,10 +326,10 @@ impl Page {
 
     /// Add a client to the dynamic content of a page, if it is dynamic. If it
     /// is static, this has no effect and returns None. Otherwise, returns the
-    /// Body stream to give to the new client.
-    pub async fn update_stream(&self) -> Option<Body> {
+    /// Command stream to give to the new client.
+    pub async fn command_stream(&self) -> Option<impl Stream<Item = content::Command>> {
         let content = self.content.lock().await;
-        content.update_stream()
+        content.command_stream()
     }
 
     /// Set the contents of the page to be a static raw set of bytes with no

@@ -7,49 +7,8 @@ function myxine(enabledEvents) {
         }
     }
 
-    // The initial set of listeners is empty
-    let listeners = {};
-
     // Current animation frame callback ID, if any
     let animationId = null;
-
-    // Actually send an event back to the server
-    let postWorker = new window.Worker("/.myxine/assets/post.js");
-
-    function sendEvent(type, path, properties) {
-        let url = window.location.href + "?page-event";
-        let data = JSON.stringify({
-            event: type,
-            targets: path,
-            properties: properties
-        });
-        debug("Sending event:", data);
-        postWorker.postMessage({
-            url: url,
-            contentType: "application/json",
-            data: data
-        });
-    }
-
-    function sendEvalResult(id, result) {
-        let url = window.location.href
-            + "?page-result="  + encodeURIComponent(id);
-        postWorker.postMessage({
-            url: url,
-            contentType: "application/json",
-            data: JSON.stringify(result),
-        });
-    }
-
-    function sendEvalError(id, error) {
-        let url = window.location.href
-            + "?page-error="  + encodeURIComponent(id);
-        sendEvalResultWorker.postMessage({
-            url: url,
-            contentType: "text/plain",
-            data: error.toString()
-        });
-    }
 
     // Set the body
     function setBodyTo(body) {
@@ -65,34 +24,35 @@ function myxine(enabledEvents) {
 
     // Evaluate a JavaScript expression in the global environment
     function evaluate(expression, statementMode) {
-        // TODO: LRU-limited memoization of functions themselves (not their
-        // results), possibly using memoizee?
         if (!statementMode) {
-            return Function("return (" + expression + ")")();
+            return Function("return (" + expression + ");")();
         } else {
             return Function(expression)();
         }
     }
 
     // Evaluate a JavaScript expression and return the result
-    function evaluateAndRespond(statementMode, event) {
-        debug("Evaluating expression '" + event.data + "'(id "
-              + event.lastEventId + ") as a"
+    function evaluateAndRespond(statementMode, expression, id, socket) {
+        debug("Evaluating expression '" + expression + "' as a"
               + (statementMode ? " statement" : "n expression"));
         try {
-            let result = evaluate(event.data, statementMode);
+            let result = evaluate(expression, statementMode);
             if (typeof result === "undefined") {
                 result = null;
             }
-            debug("Sending back result response (id "
-                  + event.lastEventId
-                  + "):", result);
-            sendEvalResult(event.lastEventId, result);
+            debug("Sending back result response:", result);
+            socket.send(JSON.stringify({
+                type: "evalResult",
+                id: id,
+                result: { Ok: result }
+            }))
         } catch(err) {
-            debug("Sending back error response (id "
-                  + event.lastEventId
-                  + "):", err);
-            sendEvalError(event.lastEventId, err);
+            debug("Sending back error response:", err);
+            socket.send(JSON.stringify({
+                type: "evalResult",
+                id: id,
+                result: { Err: err.toString() }
+            }))
         }
     }
 
@@ -143,7 +103,8 @@ function myxine(enabledEvents) {
 
     // Set up listeners for all those events which send back the appropriately
     // formatted results when they fire
-    function setupPageEventListeners(descriptions) {
+    function setupPageEventListeners(socket) {
+        const descriptions = parseEventDescriptions(enabledEvents);
         const subscription = Object.keys(descriptions);
         // Set up event handlers
         subscription.forEach(eventName => {
@@ -174,11 +135,15 @@ function myxine(enabledEvents) {
                         .forEach(([property, formatter]) => {
                             data[property] = formatter(event[property]);
                         });
-                    sendEvent(eventName, path, data);
+                    socket.send(JSON.stringify({
+                        type: "event",
+                        event: eventName,
+                        targets: path,
+                        properties: data,
+                    }));
                 };
                 debug("Adding listener:", eventName);
                 window.addEventListener(eventName, listener);
-                listeners[eventName] = listener;
             } else {
                 debug("Invalid event name:", eventName);
             }
@@ -186,29 +151,31 @@ function myxine(enabledEvents) {
     }
 
     // The handlers for events coming from the server:
-    function setupServerEventListeners(sse) {
-        sse.addEventListener("set", (event) => {
-            let data = JSON.parse(event.data);
-            document.title = data.title;
-            if (data.diff) {
-                setBodyTo(data.body);
-            } else {
-                document.body.innerHTML = data.body;
+    function setupServerEventListeners(socket) {
+        socket.onmessage = message => {
+            const data = JSON.parse(message.data);
+            debug("Received message:", data);
+            if (data.type === "reload") {
+                window.location.reload();
+            } else if (data.type === "evaluate") {
+                evaluateAndRespond(data.statementMode, data.script, data.id, socket);
+            } else if (data.type === "update") {
+                document.title = data.title;
+                if (data.diff) {
+                    setBodyTo(data.body);
+                } else {
+                    document.body.innerHTML = data.body;
+                }
             }
-        });
-        sse.addEventListener("refresh", () => window.location.reload());
-        sse.addEventListener("evaluate", (event) => evaluateAndRespond(false, event));
-        sse.addEventListener("run",      (event) => evaluateAndRespond(true, event));
+        }
     }
 
     // When things are loaded, activate the page.
-    window.onload(() => {
-        // Fetch the description of the events we wish to support, and add listeners
-        // for them to the window object of the page
-        setupPageEventListeners(parseEventDescriptions(enabledEvents));
-
-        // Actually set up SSE...
-        let sse = new window.EventSource(window.location.href + "?updates");
-        setupServerEventListeners(sse);
+    window.addEventListener("load", () => {
+        let socket = new WebSocket("ws://" + location.host + location.pathname);
+        socket.onopen = () => {
+            setupServerEventListeners(socket);
+            setupPageEventListeners(socket);
+        }
     });
 }
