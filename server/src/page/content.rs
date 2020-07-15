@@ -56,7 +56,7 @@ const UPDATE_BUFFER_SIZE: usize = 1;
 /// won't fill this one, because it's used only for occasional full-reload
 /// commands and for evaluating JavaScript, neither of which should be done at
 /// an absurd rate.
-const OTHER_COMMAND_BUFFER_SIZE: usize = 10_000;
+const OTHER_COMMAND_BUFFER_SIZE: usize = 1_000;
 
 impl Content {
     /// Make a new empty (dynamic) page
