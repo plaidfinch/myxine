@@ -15,10 +15,9 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 hopscotch = "0.1.1"
-warp = "0.2"
+warp = { version = "0.2" }
 hyper = "0.13"
 http = "0.2"
-hyper-usse = "0.3" # TODO: remove this dependency
 futures = "0.3"
 tokio = { version = "0.2.2", features = ["full"] }
 percent-encoding = "2.1"

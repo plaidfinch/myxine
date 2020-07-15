@@ -503,16 +503,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hyper-usse"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ed6cbd574ab43dcffb0f69e6ba2e97ca95113840def0f89d18eef523ca68f82"
-dependencies = [
- "futures",
- "hyper",
-]
-
-[[package]]
 name = "idna"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -755,7 +745,6 @@ dependencies = [
  "hopscotch",
  "http",
  "hyper",
- "hyper-usse",
  "itertools",
  "lazy_static",
  "percent-encoding",

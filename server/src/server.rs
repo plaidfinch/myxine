@@ -328,7 +328,7 @@ const SERVER: &str = concat!(
     env!("CARGO_PKG_VERSION_MINOR")
 );
 
-pub(crate) async fn run(addr: impl Into<SocketAddr> + 'static) {
+pub(crate) async fn run(addr: impl Into<SocketAddr> + 'static) -> Result<(), warp::Error>{
     // The session holding all the pages for this instantiation of the server
     let session = Arc::new(
         Session::start(session::Config {
@@ -367,5 +367,12 @@ pub(crate) async fn run(addr: impl Into<SocketAddr> + 'static) {
         });
 
     // Run the server
-    warp::serve(routes).run(addr).await;
+    match warp::serve(routes).try_bind_ephemeral(addr) {
+        Ok((actual_addr, server)) => {
+            println!("http://{}", actual_addr);
+            server.await;
+            Ok(())
+        },
+        Err(err) => Err(err),
+    }
 }

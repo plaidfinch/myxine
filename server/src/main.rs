@@ -12,5 +12,8 @@ struct Options {
 #[tokio::main]
 async fn main() {
     let options = Options::from_args();
-    server::run(([127, 0, 0, 1], options.port)).await;
+    if let Err(err) = server::run(([127, 0, 0, 1], options.port)).await {
+        eprintln!("{}", err);
+        std::process::exit(1);
+    }
 }

@@ -51,12 +51,14 @@ pub enum Command {
 const UPDATE_BUFFER_SIZE: usize = 1;
 
 /// The maximum number of non-update commands to buffer before dropping one.
-/// This is set to a large number, because we don't want to drop a reload
+/// This is set to a medium sized number, because we don't want to drop a reload
 /// command or an evaluate command. Unlike the update buffer, clients likely
 /// won't fill this one, because it's used only for occasional full-reload
 /// commands and for evaluating JavaScript, neither of which should be done at
 /// an absurd rate.
-const OTHER_COMMAND_BUFFER_SIZE: usize = 1_000;
+const OTHER_COMMAND_BUFFER_SIZE: usize = 8;
+// NOTE: This memory is allocated all at once, which means that the choice of
+// buffer size impacts myxine's memory footprint.
 
 impl Content {
     /// Make a new empty (dynamic) page
