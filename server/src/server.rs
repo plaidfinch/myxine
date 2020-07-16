@@ -346,7 +346,6 @@ pub(crate) async fn run(addr: impl Into<SocketAddr> + 'static) -> Result<(), war
         .or(post(session.clone()))
         .or(delete(session))
         .map(|reply| warp::reply::with_header(reply, "Cache-Control", "no-cache"))
-        .map(|reply| warp::reply::with_header(reply, "Access-Control-Allow-Origin", "*"))
         .map(|reply| warp::reply::with_header(reply, "Server", SERVER))
         .recover(|err: Rejection| async {
             if let Some(Redirect(uri)) = err.find() {

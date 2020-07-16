@@ -101,70 +101,79 @@ function myxine(enabledEvents) {
         return events;
     }
 
+    // We only should set up page event listeners once
+    let pageEventListenersSet = false;
+
     // Set up listeners for all those events which send back the appropriately
     // formatted results when they fire
     function setupPageEventListeners(worker) {
-        const descriptions = parseEventDescriptions(enabledEvents);
-        const subscription = Object.keys(descriptions);
-        // Set up event handlers
-        subscription.forEach(eventName => {
-            if (typeof descriptions[eventName] !== "undefined") {
-                const listener = event => {
-                    // Calculate the id path
-                    const path =
-                        event.composedPath()
-                        .filter(t => t instanceof Element)
-                        .map(target => {
-                            const pathElement = {
-                                tagName: target.tagName.toLowerCase(),
-                                attributes: {},
-                            };
-                            const numAttrs = target.attributes.length;
-                            for (let i = numAttrs - 1; i >= 0; i--) {
-                                const attribute = target.attributes[i];
-                                const name = attribute.name;
-                                const value = attribute.value;
-                                pathElement.attributes[name] = value;
-                            }
-                            return pathElement;
-                        });
+        if (!pageEventListenersSet) {
+            pageEventListenersSet = true;
+            const descriptions = parseEventDescriptions(enabledEvents);
+            const subscription = Object.keys(descriptions);
+            // Set up event handlers
+            subscription.forEach(eventName => {
+                if (typeof descriptions[eventName] !== "undefined") {
+                    const listener = event => {
+                        // Calculate the id path
+                        const path =
+                            event.composedPath()
+                            .filter(t => t instanceof Element)
+                            .map(target => {
+                                const pathElement = {
+                                    tagName: target.tagName.toLowerCase(),
+                                    attributes: {},
+                                };
+                                const numAttrs = target.attributes.length;
+                                for (let i = numAttrs - 1; i >= 0; i--) {
+                                    const attribute = target.attributes[i];
+                                    const name = attribute.name;
+                                    const value = attribute.value;
+                                    pathElement.attributes[name] = value;
+                                }
+                                return pathElement;
+                            });
 
-                    // Extract the relevant properties
-                    const data = {};
-                    Object.entries(descriptions[eventName])
-                        .forEach(([property, formatter]) => {
-                            data[property] = formatter(event[property]);
+                        // Extract the relevant properties
+                        const data = {};
+                        Object.entries(descriptions[eventName])
+                            .forEach(([property, formatter]) => {
+                                data[property] = formatter(event[property]);
+                            });
+                        worker.postMessage({
+                            type: "event",
+                            event: eventName,
+                            targets: path,
+                            properties: data,
                         });
-                    worker.postMessage({
-                        type: "event",
-                        event: eventName,
-                        targets: path,
-                        properties: data,
-                    });
-                };
-                debug("Adding listener:", eventName);
-                window.addEventListener(eventName, listener);
-            } else {
-                debug("Invalid event name:", eventName);
-            }
-        });
+                    };
+                    debug("Adding listener:", eventName);
+                    window.addEventListener(eventName, listener);
+                } else {
+                    debug("Invalid event name:", eventName);
+                }
+            });
+        }
     }
 
     // The handlers for events coming from the server:
     function setupServerEventListeners(worker) {
         worker.onmessage = workerMessage => {
+            setupPageEventListeners(worker);
             let message = workerMessage.data;
-            debug("Received message:", message);
-            if (message.type === "reload") {
-                window.location.reload();
-            } else if (message.type === "evaluate") {
-                evaluateAndRespond(message.statementMode, message.script, message.id, worker);
-            } else if (message.type === "update") {
-                document.title = message.title;
-                if (message.diff) {
-                    setBodyTo(message.body);
-                } else {
-                    document.body.innerHTML = message.body;
+            if (message !== null) {  // Worker will send null message to signal initialization.
+                debug("Received message:", message);
+                if (message.type === "reload") {
+                    window.location.reload();
+                } else if (message.type === "evaluate") {
+                    evaluateAndRespond(message.statementMode, message.script, message.id, worker);
+                } else if (message.type === "update") {
+                    document.title = message.title;
+                    if (message.diff) {
+                        setBodyTo(message.body);
+                    } else {
+                        document.body.innerHTML = message.body;
+                    }
                 }
             }
         }
@@ -174,6 +183,5 @@ function myxine(enabledEvents) {
     window.addEventListener("load", () => {
         let worker = new Worker(location.href + "?connect")
         setupServerEventListeners(worker);
-        setupPageEventListeners(worker);
     });
 }
