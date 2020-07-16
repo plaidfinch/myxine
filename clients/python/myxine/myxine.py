@@ -116,9 +116,9 @@ def events(path: str,
             # Set up the next request
             moment = response.headers['Content-Location']
 
-    except RequestException as e:
+    except RequestException:
         msg = "Connection issue with myxine server (is it running?)"
-        raise ValueError(msg) from e
+        raise ConnectionError(msg) from None
 
 
 def evaluate(path: str, *,
@@ -150,9 +150,9 @@ def evaluate(path: str, *,
         if r.status_code == 200:
             return r.json()
         raise ValueError(r.text)
-    except RequestException as e:
+    except RequestException:
         msg = "Connection issue with myxine server (is it running?)"
-        raise ValueError(msg) from e
+        raise ConnectionError(msg) from None
 
 
 def update(path: str,
@@ -166,9 +166,9 @@ def update(path: str,
     try:
         params = {'title': title}
         __GLOBAL_SESSION.post(url, data=body.encode(), params=params)
-    except RequestException as e:
+    except RequestException:
         msg = "Connection issue with myxine server (is it running?)"
-        raise ValueError(msg) from e
+        raise ConnectionError(msg) from None
 
 
 def static(path: str,
@@ -183,6 +183,6 @@ def static(path: str,
     try:
         headers = {'Content-Type': content_type}
         __GLOBAL_SESSION.post(url, data=body, headers=headers)
-    except RequestException as e:
+    except RequestException:
         msg = "Connection issue with myxine server (is it running?)"
-        raise ValueError(msg) from e
+        raise ConnectionError(msg) from None
