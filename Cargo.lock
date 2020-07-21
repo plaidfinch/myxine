@@ -188,12 +188,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "134951f4028bdadb9b84baf4232681efbf277da25144b9b0ad65df75946c422b"
 
 [[package]]
-name = "either"
-version = "1.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb1f6b1ce1c140482ea30ddd3335fc0024ac7ee112895426e0a629a6c20adfe3"
-
-[[package]]
 name = "encoding_rs"
 version = "0.8.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -541,15 +535,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "itertools"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "284f18f85651fe11e8a991b2adb42cb078325c996ed026d994719efcfca1d54b"
-dependencies = [
- "either",
-]
-
-[[package]]
 name = "itoa"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -740,22 +725,33 @@ name = "myxine"
 version = "0.1.0"
 dependencies = [
  "bytes",
- "either",
  "futures",
  "hopscotch",
  "http",
  "hyper",
- "itertools",
  "lazy_static",
+ "myxine-core",
  "percent-encoding",
  "reqwest",
- "serde",
  "serde_json",
  "serde_urlencoded",
  "structopt",
  "tokio",
- "uuid",
  "warp",
+]
+
+[[package]]
+name = "myxine-core"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "futures",
+ "hopscotch",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]

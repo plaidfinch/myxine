@@ -3,8 +3,8 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 use std::time::Duration;
 
-use myxine::page::RefreshMode;
-use myxine::page::Subscription;
+use myxine_core::page::RefreshMode;
+use myxine_core::page::Subscription;
 
 #[derive(Debug, Clone)]
 pub enum ParseError {

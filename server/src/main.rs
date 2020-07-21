@@ -1,5 +1,6 @@
 use structopt::StructOpt;
 
+mod params;
 mod server;
 
 #[derive(Debug, StructOpt)]

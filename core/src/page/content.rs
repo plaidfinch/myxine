@@ -1,4 +1,4 @@
-use hyper::body::Bytes;
+use bytes::Bytes;
 use serde::Serialize;
 use std::mem;
 use tokio::stream::{Stream, StreamExt};

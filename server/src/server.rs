@@ -8,10 +8,10 @@ use std::sync::Arc;
 use tokio::time::Duration;
 use warp::{self, path::FullPath, reject::Reject, Filter, Rejection};
 
-use myxine::page::Page;
-use myxine::session::{self, Session};
+use myxine_core::page::{self, Page};
+use myxine_core::session::{self, Session};
 
-mod params;
+use crate::params;
 
 /// The interval between heartbeats.
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(10);
@@ -98,9 +98,9 @@ lazy_static! {
     /// all the JavaScript necessary to make it run.
     static ref DYNAMIC_PAGE: String =
         format!(
-            include_str!("server/dynamic.html"),
+            include_str!("dynamic.html"),
             diff = include_str!("../deps/diffhtml.min.js"),
-            dynamic = include_str!("server/dynamic.js"),
+            dynamic = include_str!("dynamic.js"),
             enabled_events = include_str!("enabled-events.json"),
         );
 }
@@ -133,20 +133,31 @@ fn get(
                         Connect => {
                             response
                                 .header("Content-Type", "application/javascript; charset=utf8")
-                                .body(include_str!("server/connect.js").into())
+                                .body(include_str!("connect.js").into())
                         }
                         Subscribe {
                             subscription,
                             stream_or_after: Stream,
-                        } => response.body(page.event_stream(subscription).await),
+                        } => {
+                            let events = page.event_stream(subscription).await;
+                            let stream =
+                                hyper::body::Body::wrap_stream(
+                                    events.map(|event| {
+                                        let mut line = serde_json::to_vec(&*event).unwrap();
+                                        line.push(b'\n');
+                                        Ok::<Vec<u8>, std::convert::Infallible>(line)
+                                    })
+                                );
+                            response.body(stream)
+                        },
                         Subscribe {
                             subscription,
                             stream_or_after: After(after),
                         } => match page.event(subscription, after).await {
-                            Ok((moment, body)) => response
+                            Ok((moment, event)) => response
                                 .header("Content-Type", "application/json; charset=utf8")
                                 .header("Content-Location", params::canonical_moment(&path, moment))
-                                .body(body),
+                                .body(serde_json::to_vec(&*event).unwrap().into()),
                             Err(moment) => response
                                 .header("Location", params::canonical_moment(&path, moment))
                                 .status(StatusCode::TEMPORARY_REDIRECT)
@@ -156,11 +167,11 @@ fn get(
                             subscription,
                             stream_or_after: Next,
                         } => {
-                            let (moment, body) = page.next_event(subscription).await;
+                            let (moment, event) = page.next_event(subscription).await;
                             response
                                 .header("Content-Type", "application/json; charset=utf8")
                                 .header("Content-Location", params::canonical_moment(&path, moment))
-                                .body(body)
+                                .body(serde_json::to_vec(&*event).unwrap().into())
                         }
                     }
                     .unwrap(),
@@ -235,10 +246,10 @@ fn post(
                             Err(err) => {
                                 return Ok(Response::builder()
                                     .status(match err {
-                                        myxine::page::EvalError::Timeout{..} => StatusCode::REQUEST_TIMEOUT,
-                                        myxine::page::EvalError::NoBrowser => StatusCode::NOT_FOUND,
-                                        myxine::page::EvalError::StaticPage => StatusCode::NOT_FOUND,
-                                        myxine::page::EvalError::JsError{..} => StatusCode::BAD_REQUEST,
+                                        page::EvalError::Timeout{..} => StatusCode::REQUEST_TIMEOUT,
+                                        page::EvalError::NoBrowser => StatusCode::NOT_FOUND,
+                                        page::EvalError::StaticPage => StatusCode::NOT_FOUND,
+                                        page::EvalError::JsError{..} => StatusCode::BAD_REQUEST,
                                     })
                                     .body(format!("{}", err).into())
                                     .unwrap())
@@ -294,10 +305,10 @@ fn websocket(
                             if let Ok(text) = message.to_str() {
                                 if let Ok(response) = serde_json::from_str(text) {
                                     match response {
-                                        myxine::page::Response::Event(event) => {
+                                        page::Response::Event(event) => {
                                             page.send_event(event).await
                                         }
-                                        myxine::page::Response::EvalResult { id, result } => {
+                                        page::Response::EvalResult { id, result } => {
                                             page.send_evaluate_result(id, result).await
                                         }
                                     }
