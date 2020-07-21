@@ -18,8 +18,6 @@ pub struct Config {
     /// (including events coming in from the page itself) in order to be
     /// eligible for garbage collection.
     pub keep_alive_duration: Duration,
-    /// The default timeout for in-page JavaScript evaluation.
-    pub default_eval_timeout: Duration,
     /// The default size of the event buffer for each page. The larger this is,
     /// the more memory a page will consume, but clients will be able to lag
     /// by more events without dropping them.
@@ -30,7 +28,6 @@ pub struct Session {
     touch_path: mpsc::UnboundedSender<String>,
     active_paths: Arc<Mutex<HashSet<String>>>,
     pages: Arc<Mutex<HashMap<String, (Instant, Arc<Page>)>>>,
-    default_eval_timeout: Duration,
     default_buffer_len: usize,
 }
 
@@ -41,7 +38,6 @@ impl Session {
         Config {
             heartbeat_interval,
             keep_alive_duration,
-            default_eval_timeout,
             default_buffer_len,
         }: Config,
     ) -> Session {
@@ -50,7 +46,6 @@ impl Session {
             touch_path,
             active_paths: Arc::new(Mutex::new(HashSet::new())),
             pages: Arc::new(Mutex::new(HashMap::new())),
-            default_eval_timeout,
             default_buffer_len,
         };
         let heartbeat = heartbeat_loop(
@@ -68,10 +63,7 @@ impl Session {
     pub async fn page(&self, path: &str) -> Arc<Page> {
         let page = match self.pages.lock().await.entry(path.to_string()) {
             Entry::Vacant(e) => {
-                let page = Arc::new(Page::new(
-                    self.default_buffer_len,
-                    self.default_eval_timeout,
-                ));
+                let page = Arc::new(Page::new(self.default_buffer_len));
                 e.insert((Instant::now(), page.clone()));
                 page
             }

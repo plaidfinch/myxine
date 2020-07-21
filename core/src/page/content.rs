@@ -56,7 +56,7 @@ const UPDATE_BUFFER_SIZE: usize = 1;
 /// won't fill this one, because it's used only for occasional full-reload
 /// commands and for evaluating JavaScript, neither of which should be done at
 /// an absurd rate.
-const OTHER_COMMAND_BUFFER_SIZE: usize = 8;
+const OTHER_COMMAND_BUFFER_SIZE: usize = 16;
 // NOTE: This memory is allocated all at once, which means that the choice of
 // buffer size impacts myxine's memory footprint.
 
@@ -91,7 +91,7 @@ impl Content {
     /// Add a client to the dynamic content of a page, if it is dynamic. If it
     /// is static, this has no effect and returns None. Otherwise, returns the
     /// Body stream to give to the new client.
-    pub fn command_stream(&self) -> Option<impl Stream<Item = Command>> {
+    pub fn commands(&self) -> Option<impl Stream<Item = Command>> {
         let result = match self {
             Content::Dynamic {
                 updates,
@@ -157,16 +157,6 @@ impl Content {
         };
         mem::swap(&mut content, self);
         content.refresh(RefreshMode::FullReload);
-    }
-
-    /// Get the content type of a page, or return `None` if none has been set
-    /// (as in the case of a dynamic page, where the content type is not
-    /// client-configurable).
-    pub fn content_type(&self) -> Option<String> {
-        match self {
-            Content::Dynamic { .. } => None,
-            Content::Static { content_type, .. } => content_type.clone(),
-        }
     }
 
     /// Tell all clients to change the body, if necessary. This converts the

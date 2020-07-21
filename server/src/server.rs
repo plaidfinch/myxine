@@ -8,8 +8,7 @@ use std::sync::Arc;
 use tokio::time::Duration;
 use warp::{self, path::FullPath, reject::Reject, Filter, Rejection};
 
-use myxine_core::page::{self, Page};
-use myxine_core::session::{self, Session};
+use myxine_core::{Session, Page};
 
 use crate::params;
 
@@ -22,10 +21,6 @@ const KEEP_ALIVE_DURATION: Duration = Duration::from_secs(10);
 /// The maximum size of the event buffer for each page: a consumer of events via
 /// the polling interface can lag by this many events before dropping events.
 const DEFAULT_BUFFER_LEN: usize = 1_000;
-
-/// The default timeout for evaluating JavaScript expressions in the page,
-/// measured in milliseconds
-const DEFAULT_EVAL_TIMEOUT: Duration = Duration::from_secs(1);
 
 /// A custom rejection for when the path ended with a slash
 #[derive(Debug, Clone)]
@@ -139,7 +134,7 @@ fn get(
                             subscription,
                             stream_or_after: Stream,
                         } => {
-                            let events = page.event_stream(subscription).await;
+                            let events = page.events(subscription).await;
                             let stream =
                                 hyper::body::Body::wrap_stream(
                                     events.map(|event| {
@@ -153,7 +148,7 @@ fn get(
                         Subscribe {
                             subscription,
                             stream_or_after: After(after),
-                        } => match page.event(subscription, after).await {
+                        } => match page.event_after(subscription, after).await {
                             Ok((moment, event)) => response
                                 .header("Content-Type", "application/json; charset=utf8")
                                 .header("Content-Location", params::canonical_moment(&path, moment))
@@ -215,10 +210,10 @@ fn post(
                             },
                         }
                     },
-                    Evaluate { expression, timeout } => {
+                    Evaluate { expression } => {
                         match if let Some(expression) = expression {
                             if bytes.is_empty() {
-                                page.evaluate(&expression, false, timeout).await
+                                page.evaluate(&expression, false).await
                             } else {
                                 return Ok(Response::builder()
                                           .status(StatusCode::BAD_REQUEST)
@@ -227,7 +222,7 @@ fn post(
                             }
                         } else {
                             match std::str::from_utf8(bytes.as_ref()) {
-                                Ok(statements) => page.evaluate(&statements, true, timeout).await,
+                                Ok(statements) => page.evaluate(&statements, true).await,
                                 Err(err) => {
                                     return Ok(Response::builder()
                                         .status(StatusCode::BAD_REQUEST)
@@ -245,12 +240,7 @@ fn post(
                             },
                             Err(err) => {
                                 return Ok(Response::builder()
-                                    .status(match err {
-                                        page::EvalError::Timeout{..} => StatusCode::REQUEST_TIMEOUT,
-                                        page::EvalError::NoBrowser => StatusCode::NOT_FOUND,
-                                        page::EvalError::StaticPage => StatusCode::NOT_FOUND,
-                                        page::EvalError::JsError{..} => StatusCode::BAD_REQUEST,
-                                    })
+                                    .status(StatusCode::BAD_REQUEST)
                                     .body(format!("{}", err).into())
                                     .unwrap())
                             },
@@ -284,7 +274,7 @@ fn websocket(
             ws.on_upgrade(|websocket| async {
                 // Forward page updates to the page
                 let (mut tx, mut rx) = websocket.split();
-                if let Some(mut commands) = page.command_stream().await {
+                if let Some(mut commands) = page.commands().await {
                     tokio::spawn(async move {
                         loop {
                             if let Some(command) = commands.next().await {
@@ -305,11 +295,11 @@ fn websocket(
                             if let Ok(text) = message.to_str() {
                                 if let Ok(response) = serde_json::from_str(text) {
                                     match response {
-                                        page::Response::Event(event) => {
+                                        myxine_core::Response::Event(event) => {
                                             page.send_event(event).await
                                         }
-                                        page::Response::EvalResult { id, result } => {
-                                            page.send_evaluate_result(id, result).await
+                                        myxine_core::Response::EvalResult { id, result } => {
+                                            page.send_eval_result(id, result).await
                                         }
                                     }
                                 } else {
@@ -342,11 +332,10 @@ const SERVER: &str = concat!(
 pub(crate) async fn run(addr: impl Into<SocketAddr> + 'static) -> Result<(), warp::Error>{
     // The session holding all the pages for this instantiation of the server
     let session = Arc::new(
-        Session::start(session::Config {
+        Session::start(myxine_core::Config {
             heartbeat_interval: HEARTBEAT_INTERVAL,
             keep_alive_duration: KEEP_ALIVE_DURATION,
             default_buffer_len: DEFAULT_BUFFER_LEN,
-            default_eval_timeout: DEFAULT_EVAL_TIMEOUT,
         })
         .await,
     );

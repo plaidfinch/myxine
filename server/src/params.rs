@@ -1,10 +1,9 @@
 use serde_urlencoded;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter};
-use std::time::Duration;
 
-use myxine_core::page::RefreshMode;
-use myxine_core::page::Subscription;
+use myxine_core::RefreshMode;
+use myxine_core::Subscription;
 
 #[derive(Debug, Clone)]
 pub enum ParseError {
@@ -183,7 +182,6 @@ pub enum PostParams {
     StaticPage,
     Evaluate {
         expression: Option<String>,
-        timeout: Option<Duration>,
     },
 }
 
@@ -208,26 +206,8 @@ impl PostParams {
                     })
                 },
             )?;
-            let timeout = if params.contains_key("timeout") {
-                let timeout_str = param_as_str("timeout", &params)?;
-                timeout_str.parse().map_or_else(
-                    |_| {
-                        Err(ParseError::Custom(
-                            "timeout",
-                            timeout_str.to_string(),
-                            "non-negative number of milliseconds",
-                        ))
-                    },
-                    |millis| Ok(Some(Duration::from_millis(millis))),
-                )?
-            } else {
-                None
-            };
-            constrain_to_keys(params, &["evaluate", "timeout"])?;
-            Ok(PostParams::Evaluate {
-                expression,
-                timeout,
-            })
+            constrain_to_keys(params, &["evaluate"])?;
+            Ok(PostParams::Evaluate { expression })
         } else if param_as_flag("static", &params)? {
             constrain_to_keys(params, &["static"])?;
             Ok(PostParams::StaticPage)
