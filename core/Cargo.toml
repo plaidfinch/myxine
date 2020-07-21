@@ -1,7 +1,7 @@
 [package]
 name = "myxine-core"
 version = "0.1.0"
-description = "The core library powering the Myxine GUI server. See the myxine crate for more."
+description = "The core library powering the Myxine GUI server."
 keywords = ["GUI", "web", "interface", "scripting", "tool"]
 categories = ["command-line-utilities", "graphics", "gui", "visualization", "web-programming"]
 authors = ["Kenny Foner <kwf@very.science>"]
