@@ -3,9 +3,9 @@ use serde::Serialize;
 use std::mem;
 use tokio::stream::{Stream, StreamExt};
 use tokio::sync::broadcast;
+use uuid::Uuid;
 
 use super::RefreshMode;
-use crate::unique::Unique;
 
 /// The `Content` of a page is either `Dynamic` or `Static`. If it's dynamic, it
 /// has a title, body, and a set of SSE event listeners who are waiting for
@@ -29,22 +29,40 @@ pub enum Content {
     },
 }
 
+/// A command sent directly to the code running in the browser page to tell it
+/// to update or perform some other action.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum Command {
+    /// Reload the page completely, i.e. via `window.location.reload()`.
     #[serde(rename_all = "camelCase")]
     Reload,
+    /// Update the page's dynamic content by setting `window.title` to the given
+    /// title, and setting the contents of the `<body>` to the given body,
+    /// either by means of a DOM diff (if `diff == true`) or directly by setting
+    /// `.innerHTML` (if `diff == false`).
     #[serde(rename_all = "camelCase")]
     Update {
+        /// The new title of the page.
         title: String,
+        /// The new body of the page.
         body: String,
+        /// Whether to use some diffing method to increase efficiency in the
+        /// update (this is usually `true` outside of some debugging contexts.)
         diff: bool,
     },
+    /// Evaluate some JavaScript code in the page.
     #[serde(rename_all = "camelCase")]
     Evaluate {
+        /// The text of the JavaScript to evaluate.
         script: String,
+        /// If `statement_mode == true`, then the given script is evaluated
+        /// exactly as-is; otherwise, it is treated as an *expression* and
+        /// wrapped in an implicit `return (...);`.
         statement_mode: bool,
-        id: Unique,
+        /// The unique id of the request for evaluation, which will be used to
+        /// report the result once it is available.
+        id: Uuid,
     },
 }
 

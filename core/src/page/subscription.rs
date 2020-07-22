@@ -20,7 +20,12 @@ pub struct Event {
 /// or a `Specific` set of events to which the client wishes to subscribe.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Subscription {
+    /// The client is interested in a specific set of events listed herein.
+    ///
+    /// An empty set indicates an interest in zero events, and is distinct from
+    /// a universal subscription, which indicates an interest in every event.
     Specific(HashSet<String>),
+    /// The client is interested in all events, no matter what type they are.
     Universal,
 }
 

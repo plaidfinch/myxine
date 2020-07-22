@@ -24,6 +24,9 @@ pub struct Config {
     pub default_buffer_len: usize,
 }
 
+/// A collection of `Page`s, uniquely keyed by a `String` path, which are
+/// periodically pruned by a garbage collector thread to remove inactive and
+/// empty pages from the pool.
 pub struct Session {
     touch_path: mpsc::UnboundedSender<String>,
     active_paths: Arc<Mutex<HashSet<String>>>,
