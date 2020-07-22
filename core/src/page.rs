@@ -21,10 +21,27 @@ pub use subscription::{Event, Subscription};
 /// `Subscribers` to the events on the page.
 #[derive(Debug)]
 pub struct Page {
+    /// The current content of the page, including connections to any browser
+    /// windows viewing that page.
     content: Mutex<Content>,
+    /// The current subscribers to events in the page, including one-off pending
+    /// requests for a particular event and persistent streams of many events.
     subscribers: Mutex<Subscribers>,
+    /// The current pending JavaScript queries to the page.
     queries: Mutex<Queries<(String, bool), Result<Value, String>>>,
-    events: RwLock<(usize, hopscotch::Queue<String, Arc<Event>, ArcK>)>, // TODO: preload events and use u16 tags
+    /// The current buffer of events in the page, paired with the maximum buffer
+    /// size limiter.
+    events: RwLock<(BufferParams, hopscotch::Queue<String, Arc<Event>, ArcK>)>, // TODO: preload events and use u16 tags
+}
+
+/// The parameters defining the memory behavior of the event buffer.
+#[derive(Debug, Clone)]
+struct BufferParams {
+    /// How many events does the buffer hold when full?
+    size: usize,
+    /// When the buffer is in the midst of being downsized, how many old events
+    /// does it drop for each new event it receives?
+    deallocation_rate: usize,
 }
 
 /// The possible responses from a page: either an event happened, or the result
@@ -68,11 +85,15 @@ impl Page {
     /// and default evaluation timeout. The latter of these can be overridden on
     /// a case-by-case basis.
     pub fn new(buffer_size: usize) -> Page {
+        let params = BufferParams {
+            size: buffer_size,
+            deallocation_rate: 2,
+        };
         Page {
             content: Mutex::new(Content::new()),
             subscribers: Mutex::new(Subscribers::new()),
             queries: Mutex::new(Queries::new()),
-            events: RwLock::new((buffer_size, hopscotch::Queue::new())),
+            events: RwLock::new((params, hopscotch::Queue::with_capacity(buffer_size))),
         }
     }
 
@@ -223,7 +244,9 @@ impl Page {
     /// waiting on an event of this kind.
     pub async fn send_event(&self, event: Event) {
         let event = Arc::new(event);
-        let (ref max_buffer_size, ref mut events) = &mut *self.events.write().await;
+        let (BufferParams{size: max_buffer_size, deallocation_rate},
+             ref mut events) =
+            &mut *self.events.write().await;
         self.subscribers
             .lock()
             .await
@@ -234,7 +257,7 @@ impl Page {
         // length from causing a long lag -- instead, the pruning is amortized
         // across many events, at the cost of not immediately freeing the
         // memory.
-        for i in 0..10 {
+        for i in 0..*deallocation_rate {
             if events.len() > *max_buffer_size {
                 events.pop();
             } else {
@@ -323,5 +346,27 @@ impl Page {
     /// response.
     pub async fn send_eval_result(&self, id: Unique, result: Result<Value, String>) {
         let _ = self.queries.lock().await.respond(id, result);
+    }
+
+    /// Set the size of the page's internal event buffer. This will not actually
+    /// de-allocate memory immediately, but rather will mean that future
+    /// incoming events will incrementally trigger downsizing of the event
+    /// buffer. When the event buffer actually reaches its new target size, one
+    /// single re-allocation will occur to free the used memory.
+    ///
+    /// The `deallocation_rate` parameter determines how aggressively the buffer
+    /// size is changed. A value of 2 means that for every incoming event, 2 old
+    /// events are freed; a value of usize::max_value() means that the buffer is
+    /// instantly resized at the next incoming event; anything in between cause
+    /// incremental behavior, freeing N old events for each 1 new event. A
+    /// deallocation rate of 0 or 1 is not valid, and will cause this function
+    /// to panic.
+    pub async fn set_buffer_size(&self, size: usize, deallocation_rate: usize) {
+        if deallocation_rate >= 2 {
+            self.events.write().await.0 =
+                BufferParams { size, deallocation_rate };
+        } else {
+            panic!("Cannot set buffer size with a deallocation rate of < 2");
+        }
     }
 }
