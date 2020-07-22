@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use futures::{SinkExt, StreamExt};
+use futures::{SinkExt, StreamExt, FutureExt};
 use http::{Response, StatusCode, Uri};
 use hyper::body::Body;
 use lazy_static::lazy_static;
@@ -211,40 +211,54 @@ fn post(
                         }
                     },
                     Evaluate { expression } => {
-                        match if let Some(expression) = expression {
-                            if bytes.is_empty() {
-                                page.evaluate(&expression, false).await
-                            } else {
-                                return Ok(Response::builder()
-                                          .status(StatusCode::BAD_REQUEST)
-                                          .body("Expecting empty body with non-empty ?evaluate=... query parameter".into())
-                                          .unwrap())
-                            }
-                        } else {
-                            match std::str::from_utf8(bytes.as_ref()) {
-                                Ok(statements) => page.evaluate(&statements, true).await,
-                                Err(err) => {
+                        // Make an "abort" future that will complete if this
+                        // enclosing future is dropped: that is, if the client
+                        // kills the connection, regardless of whether we've
+                        // gotten an evaluation result, we're done.
+                        let (_tx, rx) = tokio::sync::oneshot::channel::<()>();
+                        let abort = rx.map(|_| ());
+                        return tokio::spawn(async move {
+                            match if let Some(expression) = expression {
+                                if bytes.is_empty() {
+                                    page.evaluate(&expression, false, abort).await
+                                } else {
                                     return Ok(Response::builder()
-                                        .status(StatusCode::BAD_REQUEST)
-                                        .body(format!("Invalid UTF-8 in POST data: {}", err).into())
-                                        .unwrap());
+                                              .status(StatusCode::BAD_REQUEST)
+                                              .body("Expecting empty body with non-empty ?evaluate=... query parameter".into())
+                                              .unwrap())
                                 }
+                            } else {
+                                match std::str::from_utf8(bytes.as_ref()) {
+                                    Ok(statements) => page.evaluate(&statements, true, abort).await,
+                                    Err(err) => {
+                                        return Ok(Response::builder()
+                                                  .status(StatusCode::BAD_REQUEST)
+                                                  .body(format!("Invalid UTF-8 in POST data: {}", err).into())
+                                                  .unwrap());
+                                    }
+                                }
+                            } {
+                                Some(Ok(value)) => {
+                                    let json = serde_json::to_string(&value).unwrap();
+                                    Ok(Response::builder()
+                                       .header("Content-Type", "application/json")
+                                       .body(Body::from(json))
+                                       .unwrap())
+                                },
+                                Some(Err(err)) => {
+                                    Ok(Response::builder()
+                                       .status(StatusCode::BAD_REQUEST)
+                                       .body(format!("{}", err).into())
+                                       .unwrap())
+                                },
+                                None => {
+                                    Ok(Response::builder()
+                                       .status(StatusCode::INTERNAL_SERVER_ERROR)
+                                       .body("JavaScript evaluation aborted before connection closed".into())
+                                       .unwrap())
+                                },
                             }
-                        } {
-                            Ok(value) => {
-                                let json = serde_json::to_string(&value).unwrap();
-                                return Ok(Response::builder()
-                                    .header("Content-Type", "application/json")
-                                    .body(Body::from(json))
-                                    .unwrap())
-                            },
-                            Err(err) => {
-                                return Ok(Response::builder()
-                                    .status(StatusCode::BAD_REQUEST)
-                                    .body(format!("{}", err).into())
-                                    .unwrap())
-                            },
-                        }
+                        }).await.unwrap()
                     },
                 };
                 Response::new(Body::empty())

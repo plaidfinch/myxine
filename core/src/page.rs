@@ -1,4 +1,4 @@
-use futures::{Stream, join};
+use futures::{Stream, Future, FutureExt, select, join, pin_mut};
 use bytes::Bytes;
 use hopscotch::{self, ArcK};
 use serde::Deserialize;
@@ -316,9 +316,10 @@ impl Page {
         &self,
         expression: &str,
         statement_mode: bool,
-    ) -> Result<Value, JavaScriptError> {
+        abort: impl Future<Output = ()>,
+    ) -> Option<Result<Value, JavaScriptError>> {
         let script = expression.to_string();
-        let (id, result) = self.queries.lock().await.request((script.clone(), statement_mode));
+        let (id, fut) = self.queries.lock().await.request((script.clone(), statement_mode));
         match *self.content.lock().await {
             Content::Dynamic {
                 ref mut other_commands,
@@ -336,9 +337,20 @@ impl Page {
                 // query will be re-sent to it if it hasn't yet been answered
             }
         }
-        result.await
-              .expect("Internal error: query handle dropped before response")
-              .map_err(JavaScriptError)
+        let abort = abort.fuse();
+        let fut = fut.fuse();
+        pin_mut!(fut, abort);
+        select! {
+            result = fut => {
+                Some(result
+                     .expect("Internal error: query handle dropped before response")
+                     .map_err(JavaScriptError))
+            },
+            () = abort => {
+                self.queries.lock().await.cancel(id);
+                None
+            }
+        }
     }
 
     /// Notify waiting clients of the result to some in-page JavaScript

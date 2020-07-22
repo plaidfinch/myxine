@@ -32,12 +32,15 @@ pub enum Content {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum Command {
+    #[serde(rename_all = "camelCase")]
     Reload,
+    #[serde(rename_all = "camelCase")]
     Update {
         title: String,
         body: String,
         diff: bool,
     },
+    #[serde(rename_all = "camelCase")]
     Evaluate {
         script: String,
         statement_mode: bool,

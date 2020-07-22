@@ -46,7 +46,6 @@ impl<Q, A> Queries<Q, A> {
 
     /// Cancel a pending request, so that it will never be answered, and any
     /// future response will do nothing.
-    #[allow(dead_code)]
     pub fn cancel(&mut self, id: Unique) {
         self.pending.remove(&id);
     }
