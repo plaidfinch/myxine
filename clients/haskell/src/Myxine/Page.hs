@@ -82,7 +82,7 @@ where
       the 'on' function, and they can be joined together using their 'Monoid'
       instance.
   -}
-  , Handlers, on, Propagation(..)
+  , Handlers, onEvent, Propagation(..)
   , module Myxine.Target
 
   -- * #Manipulating# Manipulating Running Pages

@@ -1,74 +1,86 @@
 {-# language OverloadedStrings, DuplicateRecordFields #-}
-{-# language NamedFieldPuns, BlockArguments, TypeApplications, RecordWildCards #-}
+{-# language NamedFieldPuns, BlockArguments, TypeApplications, RecordWildCards,
+  TemplateHaskell #-}
 
 module Main (main) where
 
 import Prelude hiding (div, span)
+import Control.Monad.IO.Class
+import Control.Monad.State
 import Data.Word (Word8)
 import Data.String (fromString)
 import Data.Functor ((<&>))
 import Data.List (intercalate)
 import System.Random (randomIO)
-import Text.Blaze.Html5 hiding (main, style, map)
-import Text.Blaze.Html5.Attributes hiding (span)
-import qualified Data.Text.Lazy as Text
-import Text.Blaze.Renderer.Text (renderMarkup)
+import Text.Blaze.Html5 hiding (main, style, title, map, html)
+import Text.Blaze.Html5.Attributes hiding (span, title)
+import qualified Text.Blaze.Html5 as Html
+import Control.Lens
+
 import Myxine
+import Myxine.Widget
 
 data Circle = Circle
-  { x :: Double
-  , y :: Double
-  , r :: Double
-  , hue :: Word8
+  { _x :: Double
+  , _y :: Double
+  , _r :: Double
+  , _hue :: Word8
   } deriving (Eq, Ord, Show)
 
 data Circles = Circles
-  { current :: Maybe Circle
-  , mouse   :: (Double, Double)
-  , rest    :: [Circle]
+  { _current :: Maybe Circle
+  , _mouse   :: (Double, Double)
+  , _rest    :: [Circle]
   } deriving (Eq, Ord, Show)
+
+$(makeLenses ''Circle)
+$(makeLenses ''Circles)
 
 main :: IO ()
 main = do
   page <- runPage mempty
-    Circles { current = Nothing, mouse = (0, 0), rest = [] }
-    (\state ->
-      (pageTitle ("Circles: " <> fromString (show (maybe 0 (const 1) (current state) + length (rest state))))
-       <> pageBody (Text.toStrict (renderMarkup (toMarkup state))),
-       mconcat [ on MouseMove mempty \MouseEvent{clientX, clientY} state' ->
-                   pure (Bubble, state' { mouse = (clientX, clientY)
-                               , current = current state' <&> \Circle{..} ->
-                                   Circle{r = sqrt ((x - clientX)**2 + (y - clientY)**2), ..} })
-               , on MouseDown mempty \MouseEvent{clientX, clientY} state' ->
-                   do hue <- randomIO
-                      pure (Bubble, state' { current = Just (Circle{x = clientX, y = clientY, r = 0, hue}) })
-               , on MouseUp mempty \MouseEvent{} state' ->
-                   pure (Bubble, case current state' of
-                          Nothing -> state'
-                          Just circle -> state' { current = Nothing, rest = circle : rest state' })
-               ]))
+    Circles { _current = Nothing, _mouse = (0, 0), _rest = [] }
+    \circles -> widget do
+      let count = maybe 0 (const 1) (circles^.current) + length (circles^.rest)
+      title $ "Circles: " <> fromString (show count)
+      html (toMarkup circles)
+      listen do
+        on MouseMove \MouseEvent{clientX, clientY} ->
+          do mouse .= (clientX, clientY)
+             zoom (current._Just) do
+               circle <- get
+               r .= sqrt ((circle^.x - clientX)**2 + (circle^.y - clientY)**2)
+        on MouseDown \MouseEvent{clientX, clientY} ->
+          do randomHue <- liftIO randomIO
+             current .= Just (Circle clientX clientY 0 randomHue)
+        on MouseUp \MouseEvent{} ->
+          use current >>= \case
+            Nothing -> pure ()
+            Just circle ->
+              do current .= Nothing
+                 rest %= (circle :)
   print =<< waitPage page
 
 instance ToMarkup Circle where
-  toMarkup Circle{x, y, r, hue} =
+  toMarkup circle =
     div ! styles circleStyles $ ""
     where
-      radius = fromIntegral (round @_ @Int r)
+      radius = fromIntegral (round @_ @Int (circle^.r))
       diameter = radius * 2
       borderWidth = 2
       circleStyles =
         [ ("position", "absolute")
-        , ("top", show (y - radius - borderWidth/2) <> "px")
-        , ("left", show (x - radius - borderWidth/2) <> "px")
+        , ("top", show (circle^.y - radius - borderWidth/2) <> "px")
+        , ("left", show (circle^.x - radius - borderWidth/2) <> "px")
         , ("width", show diameter <> "px")
         , ("height", show diameter <> "px")
-        , ("background", "hsla(" <> show hue <> ", 100%, 75%, 25%)")
-        , ("border", show borderWidth <> "px solid hsla(" <> show hue <> ", 50%, 50%, 75%)")
+        , ("background", "hsla(" <> show (circle^.hue) <> ", 100%, 75%, 25%)")
+        , ("border", show borderWidth <> "px solid hsla(" <> show (circle^.hue) <> ", 50%, 50%, 75%)")
         , ("border-radius", show radius <> "px")
         ]
 
 instance ToMarkup Circles where
-  toMarkup Circles{current = Nothing, rest = []} =
+  toMarkup circles | circles^.current == Nothing && circles^.rest == [] =
     span ! styles greetingStyles $ "Click and drag to make art!"
     where
       greetingStyles =
@@ -82,9 +94,11 @@ instance ToMarkup Circles where
         , ("font-size", "50pt")
         , ("color", "darkgrey") ]
 
-  toMarkup Circles{current, rest} =
+  toMarkup circles =
     div ! styles canvasStyles $
-      foldr (>>) (maybe (pure ()) toMarkup current) (reverse (map toMarkup rest))
+      foldr (>>)
+        (maybe (pure ()) toMarkup (circles^.current))
+        (reverse (map toMarkup (circles^.rest)))
     where
       canvasStyles =
         [ ("position", "relative")

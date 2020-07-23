@@ -1,6 +1,6 @@
 module Myxine.Handlers
   ( Handlers
-  , on
+  , onEvent
   , handle
   , handledEvents
   , HandlerOption
@@ -12,7 +12,7 @@ module Myxine.Handlers
 import Data.Maybe
 import qualified Data.Text as Text
 import Data.Text (Text)
-import Data.Dependent.Map (DMap, Some)
+import Data.Dependent.Map (DMap)
 import qualified Data.Dependent.Map as DMap
 
 import Myxine.Event
@@ -47,15 +47,15 @@ import qualified Myxine.ConjMap as ConjMap
 -- A full listing of all available 'EventType's and their corresponding property
 -- records can be found in the below section on [types and properties of
 -- events](#Types).
-on ::
+onEvent ::
   EventType props ->
   HandlerOption ->
   (props -> model -> IO (Propagation, model)) ->
   Handlers model
-on event (HandlerOption eventFacts) h =
+onEvent event (HandlerOption eventFacts) h =
   Handlers . DMap.singleton event . PerEventHandlers $
     ConjMap.insert eventFacts h mempty
-{-# INLINE on #-}
+{-# INLINE onEvent #-}
 
 newtype HandlerOption
   = HandlerOption [TargetFact]
@@ -120,6 +120,14 @@ data Propagation
   | Stop    -- ^ Continue to trigger the event for all handlers of this element,
             -- but stop before triggering it on any parent elements
   | StopImmediately  -- ^ Do not trigger any other event handlers
+  deriving (Eq, Ord, Show)
+
+instance Semigroup Propagation where
+  l <> r | l > r = l
+         | otherwise = r
+
+instance Monoid Propagation where
+  mempty = Bubble
 
 -- | A handler for a single event type with associated data @props@.
 newtype PerEventHandlers model props

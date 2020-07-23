@@ -43,6 +43,7 @@ common deps
                        req                  ^>= 3.1,
                        aeson                ^>= 1.4,
                        text                 ^>= 1.2,
+                       mtl                  ^>= 2.2,
                        transformers         ^>= 0.5,
                        bytestring           ^>= 0.10,
                        unordered-containers ^>= 0.2,
@@ -56,7 +57,10 @@ common deps
                        http-types           ^>= 0.12,
                        modern-uri           ^>= 0.3,
                        constraints          >= 0.10 && <= 0.12,
-                       salve                ^>= 1.0
+                       salve                ^>= 1.0,
+                       blaze-markup         ^>= 0.8,
+                       blaze-html           ^>= 0.9
+
 
 common options
   default-language:    Haskell2010
@@ -77,10 +81,12 @@ common options
                        DuplicateRecordFields,
                        RecordWildCards,
                        EmptyCase,
+                       FlexibleInstances,
                        GADTs,
                        GeneralizedNewtypeDeriving,
                        KindSignatures,
                        LambdaCase,
+                       MultiParamTypeClasses,
                        NamedFieldPuns,
                        OverloadedStrings,
                        RankNTypes,
@@ -95,6 +101,7 @@ library
   import:              deps, options
   exposed-modules:     Myxine
                        Myxine.Direct
+                       Myxine.Widget
   other-modules:       Myxine.Page
                        Myxine.Target
                        Myxine.Handlers

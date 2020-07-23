@@ -57,6 +57,8 @@ common deps
                        text,
                        blaze-markup,
                        blaze-html,
+                       lens,
+                       mtl,
                        myxine-client
 
 executable circles
