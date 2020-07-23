@@ -3,7 +3,7 @@
 <table style="border: 0">
 <tr style="border: 0">
   <td width="40%" style="border: 0">
-    <img src="/images/myxine_glutinosa.png" target="_blank" width="425px" alt="woodcut sketch of myxine glutinosa, the hagfish">
+    <img src="https://github.com/GaloisInc/myxine/raw/master/images/myxine_glutinosa.png" target="_blank" width="425px" alt="woodcut sketch of myxine glutinosa, the hagfish">
   </td>
   <td style="border: 0">
     <p>Hagfish, a.k.a. <a href="https://en.wikipedia.org/wiki/Hagfish"><i>myxine glutinosa</i></a>, are eel-like sea creatures best known for their ability to make a lot of slime.</p/>
