@@ -214,11 +214,13 @@ impl PostParams {
                     "full" => RefreshMode::FullReload,
                     "set" => RefreshMode::SetBody,
                     "diff" => RefreshMode::Diff,
-                    s => return Err(ParseError::Custom(
-                        "refresh",
-                        s.to_string(),
-                        "one of 'full', 'set', or 'diff'",
-                    )),
+                    s => {
+                        return Err(ParseError::Custom(
+                            "refresh",
+                            s.to_string(),
+                            "one of 'full', 'set', or 'diff'",
+                        ))
+                    }
                 },
             };
             constrain_to_keys(params, &["title", "refresh"])?;

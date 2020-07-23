@@ -56,9 +56,7 @@ fn page(
 /// not. This filter will never fail, unlike warp::query::raw, which fails if
 /// there is not any query string.
 fn query() -> impl Filter<Extract = (String,), Error = std::convert::Infallible> + Clone {
-    warp::query::raw()
-        .or(warp::any().map(String::new))
-        .unify()
+    warp::query::raw().or(warp::any().map(String::new)).unify()
 }
 
 /// If the request was a GET request, parse its query parameters as such, or
