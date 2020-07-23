@@ -173,33 +173,26 @@ runPage :: forall model.
     {- ^ The location of the 'Page' ('pagePort' and/or 'pagePath') -} ->
   model
     {- ^ The initial @model@ of the model for the 'Page' -} ->
-  (model -> Handlers model)
-    {- ^ A function to compute the set of event 'Handlers' for events in the page -} ->
-  (model -> PageContent)
-    {- ^ A function to draw the @model@ as some rendered 'PageContent' (how you do this is up to you) -} ->
+  (model -> (PageContent, Handlers model))
+    {- ^ A function to draw the @model@ as some rendered 'PageContent' (how you
+         do this is up to you), and produce the set of handlers for events on
+         that new view of the page. -} ->
   IO (Page model)
     {- ^ A 'Page' handle to permit further interaction with the running page -}
-runPage pageLocation initialModel handlersFor draw =
+runPage pageLocation initialModel drawAndHandle =
   do pageActions  :: Chan (Maybe (model -> IO model))  <- newChan
      models       :: Chan model                        <- newChan
-     models'      :: Chan model                        <- dupChan models
      pageFinished :: MVar (Either SomeException model) <- newEmptyMVar
 
      -- The stream of events from the page
      nextEvent <- events pageLocation
 
-     renderThread <- forkIO $
-       catch @SomeException
-         (forever $
-          do model <- readChan models
-             update pageLocation (Dynamic (draw model)))
-         (putMVar pageFinished . Left)
-
      pollThread <- forkIO $
        catch @SomeException
          (forever $
-          do model <- readChan models'
-             let handlers = handlersFor model
+          do model <- readChan models
+             let (content, handlers) = drawAndHandle model
+             update pageLocation (Dynamic content)
              case SomeEvents <$> nonEmpty (handledEvents handlers) of
                Nothing -> pure ()
                Just eventList ->
@@ -212,7 +205,6 @@ runPage pageLocation initialModel handlersFor draw =
              readChan pageActions >>= \case
                Nothing ->
                  do putMVar pageFinished (Right model)
-                    killThread renderThread
                     killThread pollThread
                Just action ->
                  do model' <- action model

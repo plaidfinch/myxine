@@ -32,22 +32,21 @@ main :: IO ()
 main = do
   page <- runPage mempty
     Circles { current = Nothing, mouse = (0, 0), rest = [] }
-    (\_ ->
-       mconcat [ on MouseMove mempty \MouseEvent{clientX, clientY} state ->
-                   pure (Bubble, state { mouse = (clientX, clientY)
-                               , current = current state <&> \Circle{..} ->
+    (\state ->
+      (pageTitle ("Circles: " <> fromString (show (maybe 0 (const 1) (current state) + length (rest state))))
+       <> pageBody (Text.toStrict (renderMarkup (toMarkup state))),
+       mconcat [ on MouseMove mempty \MouseEvent{clientX, clientY} state' ->
+                   pure (Bubble, state' { mouse = (clientX, clientY)
+                               , current = current state' <&> \Circle{..} ->
                                    Circle{r = sqrt ((x - clientX)**2 + (y - clientY)**2), ..} })
-               , on MouseDown mempty \MouseEvent{clientX, clientY} state ->
+               , on MouseDown mempty \MouseEvent{clientX, clientY} state' ->
                    do hue <- randomIO
-                      pure (Bubble, state { current = Just (Circle{x = clientX, y = clientY, r = 0, hue}) })
-               , on MouseUp mempty \MouseEvent{} state ->
-                   pure (Bubble, case current state of
-                          Nothing -> state
-                          Just circle -> state { current = Nothing, rest = circle : rest state })
-               ])
-    \state@Circles{current, rest} ->
-      pageTitle ("Circles: " <> fromString (show (maybe 0 (const 1) current + length rest)))
-      <> pageBody (Text.toStrict (renderMarkup (toMarkup state)))
+                      pure (Bubble, state' { current = Just (Circle{x = clientX, y = clientY, r = 0, hue}) })
+               , on MouseUp mempty \MouseEvent{} state' ->
+                   pure (Bubble, case current state' of
+                          Nothing -> state'
+                          Just circle -> state' { current = Nothing, rest = circle : rest state' })
+               ]))
   print =<< waitPage page
 
 instance ToMarkup Circle where
