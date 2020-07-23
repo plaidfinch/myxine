@@ -4,6 +4,13 @@ mod params;
 mod server;
 
 #[derive(Debug, StructOpt)]
+#[structopt(
+    about =
+        "A local web server to help you make interactive applications\n\
+         in your browser using any language under the sea!\n\
+         \n\
+         DOCUMENTATION:\
+         \n    https://github.com/GaloisInc/myxine")]
 struct Options {
     /// Run on this port
     #[structopt(short, long, default_value = "1123")]

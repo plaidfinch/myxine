@@ -12,6 +12,14 @@
 </tr>
 </table>
 
+<p>
+    <a href="https://crates.io/crates/myxine"><img src="https://img.shields.io/crates/d/myxine" /></a>
+    <a href="https://crates.io/crates/myxine"><img src="https://img.shields.io/crates/v/myxine" /></a>
+    <a href="https://pypi.org/project/myxine-client/"><img src="https://img.shields.io/pypi/v/myxine-client" /></a>
+    <a href="https://hackage.haskell.org/package/myxine-client"><img src="https://img.shields.io/hackage/v/myxine-client" /></a>
+    <a href="https://crates.io/crates/myxine"><img src="https://img.shields.io/crates/l/myxine" /></a>
+</p>
+
 Myxine is a local web server that enables you to create interactive applications
 in your web browser from the comfort of your favorite programming language. It's
 designed to satisfy three explicit goals:
