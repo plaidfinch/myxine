@@ -1,10 +1,8 @@
-use bytes::Bytes;
-use futures::{Future, StreamExt};
-use hyper::Body;
+use futures::{Future, Stream};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
-use std::convert::Infallible;
+use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 
 /// An incoming event sent from the browser, intended to be forwarded directly
@@ -22,7 +20,12 @@ pub struct Event {
 /// or a `Specific` set of events to which the client wishes to subscribe.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Subscription {
+    /// The client is interested in a specific set of events listed herein.
+    ///
+    /// An empty set indicates an interest in zero events, and is distinct from
+    /// a universal subscription, which indicates an interest in every event.
     Specific(HashSet<String>),
+    /// The client is interested in all events, no matter what type they are.
     Universal,
 }
 
@@ -53,9 +56,9 @@ pub struct Subscribers {
 
 #[derive(Debug)]
 pub enum SinkSender {
-    Persistent(mpsc::UnboundedSender<Bytes>),
+    Persistent(mpsc::UnboundedSender<Arc<Event>>),
     Once {
-        sender: oneshot::Sender<Result<(u64, hyper::Body), u64>>,
+        sender: oneshot::Sender<Result<(u64, Arc<Event>), u64>>,
         after: u64,
         lagged: bool,
     },
@@ -80,13 +83,12 @@ impl Subscribers {
     }
 
     /// Add a persistent subscriber for the given subscription. The returned
-    /// `Body` will stream newline-separated events, and will not terminate
-    /// until the consumer disconnects or the server exits.
-    pub fn add_subscriber(&mut self, subscription: Subscription) -> Body {
+    /// stream will continue to produce events until the consumer disconnects or
+    /// the server exits.
+    pub fn add_subscriber(&mut self, subscription: Subscription) -> impl Stream<Item = Arc<Event>> {
         // Create a new single-client SSE server (new clients will never be added
         // after this, because each event subscription is potentially unique).
-        let (tx, rx) = mpsc::unbounded_channel::<Bytes>();
-        let body = hyper::Body::wrap_stream(rx.map(|b| Ok::<_, Infallible>(b)));
+        let (tx, rx) = mpsc::unbounded_channel();
         let sender = SinkSender::Persistent(tx);
 
         // Insert the server into the sinks map
@@ -96,7 +98,7 @@ impl Subscribers {
         });
 
         // Return the body, for sending to whoever subscribed
-        body
+        rx
     }
 
     /// Add a one-off subscriber which gives the moment it was fulfilled, as
@@ -107,7 +109,7 @@ impl Subscribers {
         subscription: Subscription,
         after: u64,
         lagged: bool,
-    ) -> impl Future<Output = Result<(u64, hyper::Body), u64>> {
+    ) -> impl Future<Output = Result<(u64, Arc<Event>), u64>> {
         let (sender, receiver) = oneshot::channel();
         self.sinks.push(Sink {
             sender: SinkSender::Once {
@@ -128,10 +130,7 @@ impl Subscribers {
     /// only those fields of the event which that subscriber cares about. If the
     /// list of subscribers has changed (that is, by client disconnection),
     /// returns the union of all now-current subscriptions.
-    pub fn send_event<'a>(&'a mut self, moment: u64, event: &Event) {
-        let message: Bytes =
-            (serde_json::to_string(&event).expect("Serializing to a string shouldn't fail") + "\n")
-                .into();
+    pub fn send_event(&mut self, moment: u64, event: Arc<Event>) {
         let mut i = 0;
         loop {
             if i >= self.sinks.len() {
@@ -147,7 +146,7 @@ impl Subscribers {
                         // NOTE: this is an if-guard, not an expression, so it
                         // falls through to the default case if there are still
                         // clients after the message is sent
-                        if server.send(message.clone()).is_err() => {
+                        if server.send(event.clone()).is_err() => {
                             // if the receiver of a persistent sink has been
                             // dropped, remove it from the list
                         },
@@ -161,7 +160,7 @@ impl Subscribers {
                             // client via a redirect that lag occurred.
                             Err(moment)
                         } else {
-                            Ok((moment, message.clone().into()))
+                            Ok((moment, event.clone()))
                         };
                         sender.send(result).unwrap_or(());
                     },

@@ -1,10 +1,9 @@
-use hyper::body::Bytes;
-use hyper::Body;
-use hyper_usse::EventBuilder;
-use serde_json::json;
+use bytes::Bytes;
+use serde::Serialize;
 use std::mem;
-use tokio::stream::StreamExt;
+use tokio::stream::{Stream, StreamExt};
 use tokio::sync::broadcast;
+use uuid::Uuid;
 
 use super::RefreshMode;
 
@@ -16,12 +15,13 @@ use super::RefreshMode;
 /// the change is instantly reflected in the client web browser; in the other
 /// direction, it requires a manual refresh (because a static page has no
 /// injected javascript to make it update itself).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Content {
     Dynamic {
         title: String,
         body: String,
-        updates: broadcast::Sender<Bytes>,
+        updates: broadcast::Sender<Command>,
+        other_commands: broadcast::Sender<Command>,
     },
     Static {
         content_type: Option<String>,
@@ -29,10 +29,57 @@ pub enum Content {
     },
 }
 
-/// The maximum number of messages to buffer before dropping an update. This is
+/// A command sent directly to the code running in the browser page to tell it
+/// to update or perform some other action.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum Command {
+    /// Reload the page completely, i.e. via `window.location.reload()`.
+    #[serde(rename_all = "camelCase")]
+    Reload,
+    /// Update the page's dynamic content by setting `window.title` to the given
+    /// title, and setting the contents of the `<body>` to the given body,
+    /// either by means of a DOM diff (if `diff == true`) or directly by setting
+    /// `.innerHTML` (if `diff == false`).
+    #[serde(rename_all = "camelCase")]
+    Update {
+        /// The new title of the page.
+        title: String,
+        /// The new body of the page.
+        body: String,
+        /// Whether to use some diffing method to increase efficiency in the
+        /// update (this is usually `true` outside of some debugging contexts.)
+        diff: bool,
+    },
+    /// Evaluate some JavaScript code in the page.
+    #[serde(rename_all = "camelCase")]
+    Evaluate {
+        /// The text of the JavaScript to evaluate.
+        script: String,
+        /// If `statement_mode == true`, then the given script is evaluated
+        /// exactly as-is; otherwise, it is treated as an *expression* and
+        /// wrapped in an implicit `return (...);`.
+        statement_mode: bool,
+        /// The unique id of the request for evaluation, which will be used to
+        /// report the result once it is available.
+        id: Uuid,
+    },
+}
+
+/// The maximum number of updates to buffer before dropping an update. This is
 /// set to 1, because dropped updates are okay (the most recent update will
 /// always get through once things quiesce).
 const UPDATE_BUFFER_SIZE: usize = 1;
+
+/// The maximum number of non-update commands to buffer before dropping one.
+/// This is set to a medium sized number, because we don't want to drop a reload
+/// command or an evaluate command. Unlike the update buffer, clients likely
+/// won't fill this one, because it's used only for occasional full-reload
+/// commands and for evaluating JavaScript, neither of which should be done at
+/// an absurd rate.
+const OTHER_COMMAND_BUFFER_SIZE: usize = 16;
+// NOTE: This memory is allocated all at once, which means that the choice of
+// buffer size impacts myxine's memory footprint.
 
 impl Content {
     /// Make a new empty (dynamic) page
@@ -41,6 +88,7 @@ impl Content {
             title: String::new(),
             body: String::new(),
             updates: broadcast::channel(UPDATE_BUFFER_SIZE).0,
+            other_commands: broadcast::channel(OTHER_COMMAND_BUFFER_SIZE).0,
         }
     }
 
@@ -53,7 +101,10 @@ impl Content {
                 title,
                 body,
                 ref updates,
-            } if title == "" && body == "" => updates.receiver_count() == 0,
+                ref other_commands,
+            } if title == "" && body == "" => {
+                updates.receiver_count() == 0 && other_commands.receiver_count() == 0
+            }
             _ => false,
         }
     }
@@ -61,19 +112,29 @@ impl Content {
     /// Add a client to the dynamic content of a page, if it is dynamic. If it
     /// is static, this has no effect and returns None. Otherwise, returns the
     /// Body stream to give to the new client.
-    pub fn update_stream(&self) -> Option<Body> {
+    pub fn commands(&self) -> Option<impl Stream<Item = Command>> {
         let result = match self {
-            Content::Dynamic { updates, .. } => {
-                let stream_body = Body::wrap_stream(updates.subscribe().filter(|result| {
-                    match result {
-                        // We ignore lagged items in the stream! If we don't
-                        // ignore these, we would terminate the Body on
-                        // every lag, which is undesirable.
-                        Err(broadcast::RecvError::Lagged(_)) => false,
-                        // Otherwise, we leave the result alone.
-                        _ => true,
-                    }
-                }));
+            Content::Dynamic {
+                updates,
+                other_commands,
+                ..
+            } => {
+                let merged = updates.subscribe().merge(other_commands.subscribe());
+                let stream_body = merged
+                    .filter_map(|result| {
+                        match result {
+                            // We ignore lagged items in the stream! If we don't
+                            // ignore these, we would terminate the Body on
+                            // every lag, which is undesirable.
+                            Err(broadcast::RecvError::Lagged(_)) => None,
+                            // Otherwise, if the stream is over, we end this stream.
+                            Err(broadcast::RecvError::Closed) => Some(Err(())),
+                            // But if the item is ok, forward it.
+                            Ok(item) => Some(Ok(item)),
+                        }
+                    })
+                    .take_while(|i| i.is_ok())
+                    .map(|i| i.unwrap());
                 Some(stream_body)
             }
             Content::Static { .. } => None,
@@ -83,46 +144,27 @@ impl Content {
         result
     }
 
-    /// Send an empty "heartbeat" message to all clients of a page, if it is
-    /// dynamic. This has no effect if it is (currently) static, and returns
-    /// `None` if so, otherwise returns the current number of clients getting
-    /// live updates to the page.
-    pub fn send_heartbeat(&self) -> Option<usize> {
-        match self {
-            Content::Dynamic { updates, .. } => {
-                // Send a heartbeat to pages waiting on <body> updates
-                Some(updates.send(":\n\n".into()).unwrap_or(0))
-            }
-            Content::Static { .. } => None,
-        }
-    }
-
     /// Tell all clients to refresh the contents of a page, if it is dynamic.
     /// This has no effect if it is (currently) static.
     pub fn refresh(&self, refresh: RefreshMode) {
         match self {
             Content::Dynamic {
                 updates,
+                other_commands,
                 title,
                 body,
-            } => match refresh {
-                RefreshMode::FullReload => {
-                    let event = EventBuilder::new(".").event_type("refresh").build();
-                    let _ = updates.send(event.into());
-                }
-                RefreshMode::SetBody | RefreshMode::Diff => {
-                    let data = json!({
-                        "title": title,
-                        "body": body,
-                        "diff": refresh == RefreshMode::Diff,
-                    });
-                    let message = serde_json::to_string(&data).unwrap();
-                    let event = EventBuilder::new(&message).event_type("set").build();
-                    let _ = updates.send(event.into());
-                }
-            },
-            Content::Static { .. } => {}
-        }
+            } => {
+                let _ = match refresh {
+                    RefreshMode::FullReload => other_commands.send(Command::Reload),
+                    RefreshMode::SetBody | RefreshMode::Diff => updates.send(Command::Update {
+                        title: title.clone(),
+                        body: body.clone(),
+                        diff: refresh == RefreshMode::Diff,
+                    }),
+                };
+            }
+            Content::Static { .. } => (),
+        };
     }
 
     /// Set the contents of the page to be a static raw set of bytes with no
@@ -136,16 +178,6 @@ impl Content {
         };
         mem::swap(&mut content, self);
         content.refresh(RefreshMode::FullReload);
-    }
-
-    /// Get the content type of a page, or return `None` if none has been set
-    /// (as in the case of a dynamic page, where the content type is not
-    /// client-configurable).
-    pub fn content_type(&self) -> Option<String> {
-        match self {
-            Content::Dynamic { .. } => None,
-            Content::Static { content_type, .. } => content_type.clone(),
-        }
     }
 
     /// Tell all clients to change the body, if necessary. This converts the

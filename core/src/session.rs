@@ -8,29 +8,55 @@ use tokio::time;
 
 use crate::page::Page;
 
-/// The interval between heartbeats.
-const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(10);
+/// The configuration for a session, describing the behavior of the heartbeat /
+/// page garbage collector, and the default parameters for each new page.
+#[derive(Debug, Clone)]
+pub struct Config {
+    /// The delay between successive heartbeats to all pages.
+    pub heartbeat_interval: Duration,
+    /// The minimum time a page must remain untouched by any external method
+    /// (including events coming in from the page itself) in order to be
+    /// eligible for garbage collection.
+    pub keep_alive_duration: Duration,
+    /// The default size of the event buffer for each page. The larger this is,
+    /// the more memory a page will consume, but clients will be able to lag
+    /// by more events without dropping them.
+    pub default_buffer_len: usize,
+}
 
-/// The duration we should wait before marking a page as stale.
-const KEEP_ALIVE_DURATION: Duration = Duration::from_secs(10);
-
+/// A collection of `Page`s, uniquely keyed by a `String` path, which are
+/// periodically pruned by a garbage collector thread to remove inactive and
+/// empty pages from the pool.
 pub struct Session {
     touch_path: mpsc::UnboundedSender<String>,
     active_paths: Arc<Mutex<HashSet<String>>>,
-    pages: Arc<Mutex<HashMap<String, (Instant, Arc<Page>)>>>,
+    pages: Arc<Mutex<PageMap>>,
+    default_buffer_len: usize,
 }
+
+/// The map from paths to pages tagged with last-touched instants.
+type PageMap = HashMap<String, (Instant, Arc<Page>)>;
 
 impl Session {
     /// Create a new session, starting a thread to maintain heartbeats to any
     /// Pages created in this session.
-    pub async fn start() -> Session {
+    pub async fn start(
+        Config {
+            heartbeat_interval,
+            keep_alive_duration,
+            default_buffer_len,
+        }: Config,
+    ) -> Session {
         let (touch_path, recv_path) = mpsc::unbounded_channel();
         let session = Session {
             touch_path,
             active_paths: Arc::new(Mutex::new(HashSet::new())),
             pages: Arc::new(Mutex::new(HashMap::new())),
+            default_buffer_len,
         };
         let heartbeat = heartbeat_loop(
+            heartbeat_interval,
+            keep_alive_duration,
             recv_path,
             session.active_paths.clone(),
             session.pages.clone(),
@@ -43,7 +69,7 @@ impl Session {
     pub async fn page(&self, path: &str) -> Arc<Page> {
         let page = match self.pages.lock().await.entry(path.to_string()) {
             Entry::Vacant(e) => {
-                let page = Arc::new(Page::new());
+                let page = Arc::new(Page::new(self.default_buffer_len));
                 e.insert((Instant::now(), page.clone()));
                 page
             }
@@ -64,9 +90,11 @@ impl Session {
 /// Send a heartbeat message to keep all page connections alive, simultaneously
 /// pruning all pages from memory which have no content and no subscribers.
 async fn heartbeat_loop(
+    interval: Duration,
+    keep_alive: Duration,
     mut recv_path: mpsc::UnboundedReceiver<String>,
     active_paths: Arc<Mutex<HashSet<String>>>,
-    pages: Arc<Mutex<HashMap<String, (Instant, Arc<Page>)>>>,
+    pages: Arc<Mutex<PageMap>>,
 ) {
     // Receive all new paths into the set of known active paths
     let recv_paths = async {
@@ -82,7 +110,7 @@ async fn heartbeat_loop(
     let heartbeat = async {
         loop {
             // Wait for next heartbeat interval...
-            time::delay_for(HEARTBEAT_INTERVAL).await;
+            time::delay_for(interval).await;
 
             // Lock the active set of paths and send a heartbeat to each one,
             // noting which paths are identical to the empty page
@@ -94,8 +122,7 @@ async fn heartbeat_loop(
                 async move {
                     let mut pages = pages.lock().await;
                     if let Some((path, (last_access, page))) = pages.remove_entry(path) {
-                        page.send_heartbeat().await;
-                        if last_access.elapsed() < KEEP_ALIVE_DURATION || !page.is_empty().await {
+                        if last_access.elapsed() < keep_alive || !page.is_empty().await {
                             pages.insert(path, (last_access, page));
                         } else {
                             pruned.lock().await.push(path);

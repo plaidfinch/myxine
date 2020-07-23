@@ -19,11 +19,12 @@ URL = 'https://github.com/GaloisInc/myxine'
 EMAIL = 'kwf@very.science'
 AUTHOR = 'Kenny Foner'
 REQUIRES_PYTHON = '>=3.6.0'
-VERSION = '0.1.0'
+VERSION = '0.2.0'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
-    'requests'
+    'requests',
+    'semantic_version'
 ]
 
 # What packages are optional?
@@ -87,9 +88,9 @@ class UploadCommand(Command):
         self.status('Uploading the package to PyPI via Twine…')
         os.system('twine upload dist/*')
 
-        self.status('Pushing git tags…')
-        os.system('git tag v{0}'.format(about['__version__']))
-        os.system('git push --tags')
+        # self.status('Pushing git tags…')
+        # os.system('git tag v{0}'.format(about['__version__']))
+        # os.system('git push --tags')
 
         sys.exit()
 

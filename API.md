@@ -406,15 +406,10 @@ block.
   If you want to return a non-scalar value like a list or dictionary, construct
   it explicitly yourself by copying from the fields of the object you're
   interested in.
-- There is a default timeout of 1 second for reporting evaluation results. This
-  is not enforced in the browser -- your JavaScript will continue to run
-  indefinitely -- but is a guarantee of the `myxine` API. To alter this timeout,
-  use the `timeout` query parameter to specify the desired limit in
-  milliseconds.
-- All errors in evaluation, including timeouts, serialization errors, and other
-  exceptions, are caught and reported with status code `400 Bad Request`. If the
-  status code is `200 OK`, it's guaranteed that the response will be valid JSON.
-  Otherwise, the response body is a human-readable description of the error.
+- All errors in evaluation are caught and reported with status code `400 Bad
+  Request`. If the status code is `200 OK`, it's guaranteed that the response
+  will be valid JSON. Otherwise, the response body is a human-readable
+  description of the error.
 - For both forms, the JavaScript given is evaluated in the `window` (global)
   scope of the browser. For nitty-gritty details, see the docs on
   [`window.Function`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function)
