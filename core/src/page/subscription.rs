@@ -130,7 +130,7 @@ impl Subscribers {
     /// only those fields of the event which that subscriber cares about. If the
     /// list of subscribers has changed (that is, by client disconnection),
     /// returns the union of all now-current subscriptions.
-    pub fn send_event<'a>(&'a mut self, moment: u64, event: Arc<Event>) {
+    pub fn send_event(&mut self, moment: u64, event: Arc<Event>) {
         let mut i = 0;
         loop {
             if i >= self.sinks.len() {

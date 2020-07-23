@@ -1,4 +1,3 @@
-use serde_urlencoded;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 
@@ -36,7 +35,7 @@ impl Display for ParseError {
                 )?;
                 let mut i = 1;
                 // write!(f, "?")?;
-                for (key, _vals) in map {
+                for key in map.keys() {
                     // let mut j = 1;
                     // for val in vals {
                     //     if val != "" {
@@ -215,11 +214,11 @@ impl PostParams {
                     "full" => RefreshMode::FullReload,
                     "set" => RefreshMode::SetBody,
                     "diff" => RefreshMode::Diff,
-                    s => Err(ParseError::Custom(
+                    s => return Err(ParseError::Custom(
                         "refresh",
                         s.to_string(),
                         "one of 'full', 'set', or 'diff'",
-                    ))?,
+                    )),
                 },
             };
             constrain_to_keys(params, &["title", "refresh"])?;
@@ -259,7 +258,7 @@ fn param_as_str<'a>(
 /// Parse a query string into a mapping from key to list of values. The syntax
 /// expected for an individual key-value mapping is one of `k`, `k=`, `k=v`, and
 /// mappings are concatenated by `&`, as in: `k1=v1&k2=v2`.
-pub(crate) fn query_params<'a>(query: &'a str) -> HashMap<String, Vec<String>> {
+pub(crate) fn query_params(query: &str) -> HashMap<String, Vec<String>> {
     let mut map: HashMap<String, Vec<String>> = HashMap::new();
     let raw: Vec<(String, String)> = serde_urlencoded::from_str(query).unwrap();
     for (key, value) in raw {

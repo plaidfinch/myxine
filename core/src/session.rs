@@ -30,9 +30,12 @@ pub struct Config {
 pub struct Session {
     touch_path: mpsc::UnboundedSender<String>,
     active_paths: Arc<Mutex<HashSet<String>>>,
-    pages: Arc<Mutex<HashMap<String, (Instant, Arc<Page>)>>>,
+    pages: Arc<Mutex<PageMap>>,
     default_buffer_len: usize,
 }
+
+/// The map from paths to pages tagged with last-touched instants.
+type PageMap = HashMap<String, (Instant, Arc<Page>)>;
 
 impl Session {
     /// Create a new session, starting a thread to maintain heartbeats to any
@@ -91,7 +94,7 @@ async fn heartbeat_loop(
     keep_alive: Duration,
     mut recv_path: mpsc::UnboundedReceiver<String>,
     active_paths: Arc<Mutex<HashSet<String>>>,
-    pages: Arc<Mutex<HashMap<String, (Instant, Arc<Page>)>>>,
+    pages: Arc<Mutex<PageMap>>,
 ) {
     // Receive all new paths into the set of known active paths
     let recv_paths = async {

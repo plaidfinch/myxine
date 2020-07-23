@@ -57,7 +57,7 @@ fn page(
 /// there is not any query string.
 fn query() -> impl Filter<Extract = (String,), Error = std::convert::Infallible> + Clone {
     warp::query::raw()
-        .or(warp::any().map(|| String::new()))
+        .or(warp::any().map(String::new))
         .unify()
 }
 
@@ -243,7 +243,7 @@ fn post(
                                 Some(Err(err)) => {
                                     Ok(Response::builder()
                                        .status(StatusCode::BAD_REQUEST)
-                                       .body(format!("{}", err).into())
+                                       .body(err.into())
                                        .unwrap())
                                 },
                                 None => {
@@ -285,13 +285,9 @@ fn websocket(
                 let (mut tx, mut rx) = websocket.split();
                 if let Some(mut commands) = page.commands().await {
                     tokio::spawn(async move {
-                        loop {
-                            if let Some(command) = commands.next().await {
-                                let message = serde_json::to_string(&command).unwrap();
-                                if tx.send(warp::ws::Message::text(message)).await.is_err() {
-                                    break;
-                                }
-                            } else {
+                        while let Some(command) = commands.next().await {
+                            let message = serde_json::to_string(&command).unwrap();
+                            if tx.send(warp::ws::Message::text(message)).await.is_err() {
                                 break;
                             }
                         }
@@ -299,26 +295,21 @@ fn websocket(
                 }
                 // Forward responses from the browser to their handlers
                 tokio::spawn(async move {
-                    loop {
-                        if let Some(Ok(message)) = rx.next().await {
-                            if let Ok(text) = message.to_str() {
-                                if let Ok(response) = serde_json::from_str(text) {
-                                    match response {
-                                        myxine_core::Response::Event(event) => {
-                                            page.send_event(event).await
-                                        }
-                                        myxine_core::Response::EvalResult { id, result } => {
-                                            page.send_eval_result(id, result).await
-                                        }
+                    while let Some(Ok(message)) = rx.next().await {
+                        if let Ok(text) = message.to_str() {
+                            if let Ok(response) = serde_json::from_str(text) {
+                                match response {
+                                    myxine_core::Response::Event(event) => {
+                                        page.send_event(event).await
                                     }
-                                } else {
-                                    // Couldn't parse response.
-                                    break;
+                                    myxine_core::Response::EvalResult { id, result } => {
+                                        page.send_eval_result(id, result).await
+                                    }
                                 }
+                            } else {
+                                // Couldn't parse response.
+                                break;
                             }
-                        } else {
-                            // End of stream.
-                            break;
                         }
                     }
                 });

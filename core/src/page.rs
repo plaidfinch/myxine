@@ -47,8 +47,13 @@ pub struct Page {
     queries: Mutex<Queries<(String, bool), Result<Value, String>>>,
     /// The current buffer of events in the page, paired with the maximum buffer
     /// size limiter.
-    events: RwLock<(BufferParams, hopscotch::Queue<String, Arc<Event>, ArcK>)>, // TODO: preload events and use u16 tags
+    events: RwLock<(BufferParams, EventBuffer)>, // TODO: preload events and use u16 tags
 }
+
+/// The event buffer stores recent events, and because it's implemented as a
+/// hopscotch queue, allows quickly querying things like "next event with one of
+/// these tags, after this index."
+type EventBuffer = hopscotch::Queue<String, Arc<Event>, ArcK>;
 
 /// The parameters defining the memory behavior of the event buffer.
 #[derive(Debug, Clone)]
@@ -136,7 +141,7 @@ impl Page {
                     let command = content::Command::Evaluate {
                         script: script.clone(),
                         statement_mode: *statement_mode,
-                        id: id.clone(),
+                        id: *id,
                     };
                     other_commands.send(command).unwrap_or(0);
                 }
