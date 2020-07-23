@@ -320,12 +320,6 @@ getPage page = do
 --
 -- * Any exception in the given JavaScript
 --
--- * Absence of any browser window currently viewing the page (since there's no
---   way to evaluate JavaScript without a JavaScript engine)
---
--- * Evaluation timeout (default is 1000 milliseconds, but can be overridden in
---   the timeout parameter to this function
---
 -- * Invalid JSON response for the result type inferred (use 'JSON.Value' if you
 --   don't know what shape of data you're waiting to receive).
 --
@@ -366,12 +360,11 @@ getPage page = do
 evalInPage ::
   JSON.FromJSON a =>
   Page model {- ^ The 'Page' in which to evaluate the JavaScript -} ->
-  Maybe Int {- ^ An optional override for the default timeout of 1000 milliseconds -} ->
   JavaScript {- ^ The JavaScript to evaluate: either a 'JsExpression' or a 'JsBlock' -} ->
   IO (Either String a)
-evalInPage page@Page{pageLocation} timeout js =
+evalInPage page@Page{pageLocation} js =
   do v <- newEmptyMVar
      modifyPageIO page \model ->
-       do putMVar v =<< evaluateJs pageLocation timeout js
+       do putMVar v =<< evaluateJs pageLocation js
           pure model
      takeMVar v

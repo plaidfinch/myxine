@@ -1,6 +1,6 @@
 cabal-version:       2.4
 name:                myxine-client
-version:             0.0.0.2
+version:             0.0.1.0
 synopsis:            A Haskell client for the Myxine GUI server
 homepage:            https://github.com/GaloisInc/myxine
 bug-reports:         https://github.com/GaloisInc/myxine/issues/new
@@ -55,7 +55,8 @@ common deps
                        http-client          ^>= 0.6,
                        http-types           ^>= 0.12,
                        modern-uri           ^>= 0.3,
-                       constraints          >= 0.10 && <= 0.12
+                       constraints          >= 0.10 && <= 0.12,
+                       salve                ^>= 1.0
 
 common options
   default-language:    Haskell2010

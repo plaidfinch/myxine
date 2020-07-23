@@ -19,11 +19,14 @@ module Myxine.Direct
   , PageContent, pageBody, pageTitle, update, events
     -- * Evaluating raw JavaScript in the context of a page
   , JavaScript(..), evaluateJs
+    -- * Exceptions thrown if the server ever misbehaves
+  , ProtocolException(..)
     -- * The @Some@ existential
   , Some(..)
   ) where
 
 import Data.Maybe
+import Control.Monad
 import Data.Monoid
 import Data.String
 import Data.List
@@ -32,6 +35,7 @@ import Control.Monad.IO.Class
 import Control.Exception
 import Data.Constraint
 import Data.Dependent.Map (Some(..))
+import qualified Data.ByteString.Char8
 import qualified Data.ByteString.Lazy.Char8 as ByteString
 import Data.ByteString.Lazy.Char8 (ByteString)
 import Data.Text (Text)
@@ -41,9 +45,12 @@ import qualified Data.Text.Encoding as Text
 import qualified Data.Aeson as JSON
 import qualified Network.HTTP.Req as Req
 import qualified Text.URI as URI
+import qualified Salve
+import Data.Version (showVersion)
 
 import Myxine.Event
 import Myxine.Target
+import Paths_myxine_client (version)
 
 -- | The view of a page, as rendered in the browser. Create page content with
 -- 'pageBody' and 'pageTitle', and combine content using the 'Semigroup'
@@ -186,8 +193,9 @@ update ::
 update PageLocation{pageLocationPort = Last maybePort,
                         pageLocationPath = Last maybePath} updateContent =
   wrapCaughtReqException $
-  do _ <- Req.runReq Req.defaultHttpConfig $
+  do response <- Req.runReq Req.defaultHttpConfig $
        Req.req Req.POST url body Req.ignoreResponse options
+     checkServerVersion response
      pure ()
   where
     url = pageUrl (fromMaybe "" maybePath)
@@ -226,8 +234,6 @@ data JavaScript
 -- * Any exception in the given JavaScript
 -- * Absence of any browser window currently viewing the page (since there's no
 --   way to evaluate JavaScript without a JavaScript engine)
--- * Evaluation timeout (default is 1000 milliseconds, but can be overridden in
---   the timeout parameter to this function
 -- * Invalid JSON response for the result type inferred (use 'JSON.Value' if you
 --   don't know what shape of data you're waiting to receive).
 --
@@ -245,24 +251,23 @@ data JavaScript
 evaluateJs ::
   JSON.FromJSON a =>
   PageLocation {- ^ The location of the page in which to evaluate the JavaScript -} ->
-  Maybe Int {- ^ An optional override for the default timeout of 1000 milliseconds -} ->
   JavaScript {- ^ The JavaScript to evaluate: either a 'JsExpression' or a 'JsBlock' -} ->
   IO (Either String a)
 evaluateJs PageLocation{pageLocationPort = Last maybePort,
-                        pageLocationPath = Last maybePath} timeout js =
+                        pageLocationPath = Last maybePath} js =
   wrapCaughtReqException $
-  do result <- Req.runReq Req.defaultHttpConfig $
+  do response <- Req.runReq Req.defaultHttpConfig $
        Req.req Req.POST url body Req.lbsResponse options
-     pure if Req.responseStatusCode result == 200
-       then JSON.eitherDecode (Req.responseBody result)
-       else Left (ByteString.unpack (Req.responseBody result))
+     checkServerVersion response
+     pure if Req.responseStatusCode response == 200
+       then JSON.eitherDecode (Req.responseBody response)
+       else Left (ByteString.unpack (Req.responseBody response))
   where
     url = pageUrl (fromMaybe "" maybePath)
 
     options =
       Req.port (maybe defaultPort (\(PagePort p) -> p) maybePort) <>
       Req.responseTimeout maxBound <>
-      foldMap ("timeout" Req.=:) timeout <>
       exprOption
 
     body :: Req.ReqBodyLbs
@@ -302,11 +307,12 @@ events PageLocation{pageLocationPort = Last maybePort,
     go moment eventList =
       do currentMoment <- liftIO (readIORef moment)
          (url, options) <-
-           maybe (liftIO . throwIO . ProtocolException $
+           maybe (liftIO . throwIO . MyxineProtocolException $
                   "Invalid Content-Location:" <> show currentMoment)
                  pure
                  (urlAndOptions currentMoment eventList)
          response <- Req.req Req.GET url Req.NoReqBody Req.jsonResponse options
+         liftIO $ checkServerVersion response
          let nextMoment =
                Text.decodeUtf8 <$>
                  Req.responseHeader response "Content-Location"
@@ -366,7 +372,7 @@ wrapCaughtReqException action =
   catch @Req.HttpException action $
   \case
     Req.VanillaHttpException e -> throwIO e
-    Req.JsonHttpException message -> throwIO (ProtocolException message)
+    Req.JsonHttpException message -> throwIO (MyxineProtocolException message)
 
 -- | If the response from the server cannot be processed appropriately, this
 -- exception is thrown. This should never happen in ordinary circumstances; if
@@ -376,21 +382,49 @@ wrapCaughtReqException action =
 --
 -- If you encounter this exception in the wild, please file a bug report at
 -- <https://github.com/GaloisInc/myxine/issues/new>. Thanks!
-newtype ProtocolException
-  = ProtocolException String
+data ProtocolException
+  = MyxineProtocolException String
+  | MyxineServerVersionClashException Salve.Version
+  | MyxineUnknownServerException
   deriving stock (Eq, Ord)
   deriving anyclass (Exception)
 
+-- | The supported versions of the Myxine server for this version of the client
+-- library. This needs to be bumped whenever the library is updated to match a
+-- new server release.
+supportedServers :: Salve.Constraint
+supportedServers = Salve.unsafeParseConstraint ">=0.2.0 <0.3.0"
+
+-- | Check a response to ensure that it originated from a server which describes
+-- itself as being the correct server version for this client library. If this
+-- check fails, throw an exception; otherwise, do nothing.
+checkServerVersion :: Req.HttpResponse response => response -> IO ()
+checkServerVersion response =
+  case Data.ByteString.Char8.split '/' <$> Req.responseHeader response "server" of
+    Nothing -> throwIO MyxineUnknownServerException
+    Just ["myxine", versionString] ->
+      case Salve.parseVersion (Data.ByteString.Char8.unpack (versionString <> ".0")) of
+        Nothing -> throwIO MyxineUnknownServerException
+        Just serverVersion ->
+          when (not (Salve.satisfiesConstraint supportedServers serverVersion)) $
+          throwIO (MyxineServerVersionClashException serverVersion)
+    _ -> throwIO MyxineUnknownServerException
+
 instance Show ProtocolException where
-  show (ProtocolException details) =
-       "*** Myxine client panic: Failed to process event! This means one of:\n\n"
-    <> "  1) You connected to an event source that is not the Myxine server\n"
-    <> "  2) You connected to a Myxine server process with an incompatible version\n"
-    <> "  3) There is a bug in the Myxine server or client library (totally possible!)\n\n"
-    <> "  If you suspect it's (3), please file a bug report at:\n\n    " <> bugReportURL <> "\n\n"
-    <> "  Please include the version of this library, the version of the Myxine server,\n"
-    <> "  and the following error message:\n\n"
-    <> details
+  show MyxineUnknownServerException =
+       "*** Refusing to connect to a server that doesn't self-identify as a Myxine server.\n"
+    <> "Ensure that the address and port are correct and try again."
+  show (MyxineServerVersionClashException serverVersion) =
+       "*** Myxine client/server version mismatch: myxine-client library " <> showVersion version
+    <> " is incompatible with myxine server version " <> Salve.renderVersion serverVersion <> ".\n"
+    <> "Either connect to a server in the compatible range of " <> Salve.renderConstraint supportedServers <> ","
+    <> " or update this application to use a compatible client library version."
+  show (MyxineProtocolException details) =
+       "*** Myxine client panic: Failed to process event!\n"
+    <> "This likely means there is a bug in the Myxine server or client library.\n"
+    <> "Please file a bug report at: " <> bugReportURL <> ".\n"
+    <> "Please include the version of this library (" <> showVersion version <> "), "
+    <> "and the following error message: \n" <> details
     where
       bugReportURL :: String
       bugReportURL = "https://github.com/GaloisInc/myxine/issues/new"
