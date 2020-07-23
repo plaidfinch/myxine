@@ -9,6 +9,6 @@
 mod page;
 mod session;
 
-pub use session::{Session, Config};
-pub use page::{Page, content::Command, Response, RefreshMode};
-pub use page::subscription::{Subscription, Event};
+pub use page::subscription::{Event, Subscription};
+pub use page::{content::Command, Page, RefreshMode, Response};
+pub use session::{Config, Session};

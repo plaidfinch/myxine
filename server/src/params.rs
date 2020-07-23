@@ -175,14 +175,9 @@ fn parse_subscription<'a>(params: &'a HashMap<String, Vec<String>>) -> Subscript
 /// Parsed parameters from a query string for a POST request.
 #[derive(Debug, Clone)]
 pub enum PostParams {
-    DynamicPage {
-        title: String,
-        refresh: RefreshMode,
-    },
+    DynamicPage { title: String, refresh: RefreshMode },
     StaticPage,
-    Evaluate {
-        expression: Option<String>,
-    },
+    Evaluate { expression: Option<String> },
 }
 
 impl PostParams {

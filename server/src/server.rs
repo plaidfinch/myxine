@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use futures::{SinkExt, StreamExt, FutureExt};
+use futures::{FutureExt, SinkExt, StreamExt};
 use http::{Response, StatusCode, Uri};
 use hyper::body::Body;
 use lazy_static::lazy_static;
@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tokio::time::Duration;
 use warp::{self, path::FullPath, reject::Reject, Filter, Rejection};
 
-use myxine_core::{Session, Page};
+use myxine_core::{Page, Session};
 
 use crate::params;
 
@@ -125,26 +125,21 @@ fn get(
                                 response.body(DYNAMIC_PAGE.as_str().into())
                             }
                         }
-                        Connect => {
-                            response
-                                .header("Content-Type", "application/javascript; charset=utf8")
-                                .body(include_str!("connect.js").into())
-                        }
+                        Connect => response
+                            .header("Content-Type", "application/javascript; charset=utf8")
+                            .body(include_str!("connect.js").into()),
                         Subscribe {
                             subscription,
                             stream_or_after: Stream,
                         } => {
                             let events = page.events(subscription).await;
-                            let stream =
-                                hyper::body::Body::wrap_stream(
-                                    events.map(|event| {
-                                        let mut line = serde_json::to_vec(&*event).unwrap();
-                                        line.push(b'\n');
-                                        Ok::<Vec<u8>, std::convert::Infallible>(line)
-                                    })
-                                );
+                            let stream = hyper::body::Body::wrap_stream(events.map(|event| {
+                                let mut line = serde_json::to_vec(&*event).unwrap();
+                                line.push(b'\n');
+                                Ok::<Vec<u8>, std::convert::Infallible>(line)
+                            }));
                             response.body(stream)
-                        },
+                        }
                         Subscribe {
                             subscription,
                             stream_or_after: After(after),
@@ -343,7 +338,7 @@ const SERVER: &str = concat!(
     env!("CARGO_PKG_VERSION_MINOR")
 );
 
-pub(crate) async fn run(addr: impl Into<SocketAddr> + 'static) -> Result<(), warp::Error>{
+pub(crate) async fn run(addr: impl Into<SocketAddr> + 'static) -> Result<(), warp::Error> {
     // The session holding all the pages for this instantiation of the server
     let session = Arc::new(
         Session::start(myxine_core::Config {
@@ -385,7 +380,7 @@ pub(crate) async fn run(addr: impl Into<SocketAddr> + 'static) -> Result<(), war
             println!("http://{}", actual_addr);
             server.await;
             Ok(())
-        },
+        }
         Err(err) => Err(err),
     }
 }

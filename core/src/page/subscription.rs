@@ -2,8 +2,8 @@ use futures::{Future, Stream};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
-use tokio::sync::{mpsc, oneshot};
 use std::sync::Arc;
+use tokio::sync::{mpsc, oneshot};
 
 /// An incoming event sent from the browser, intended to be forwarded directly
 /// to listeners. While there is more structure here than merely a triple of

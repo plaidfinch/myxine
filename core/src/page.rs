@@ -1,10 +1,10 @@
-use futures::{Stream, Future, FutureExt, select, join, pin_mut};
 use bytes::Bytes;
+use futures::{join, pin_mut, select, Future, FutureExt, Stream};
 use hopscotch::{self, ArcK};
 use serde::Deserialize;
 use serde_json::Value;
-use tokio::sync::{Mutex, RwLock};
 use std::sync::Arc;
+use tokio::sync::{Mutex, RwLock};
 use uuid::Uuid;
 
 pub mod content;
@@ -140,7 +140,7 @@ impl Page {
                     };
                     other_commands.send(command).unwrap_or(0);
                 }
-            },
+            }
             Content::Static { .. } => {
                 // Don't do anything if the content is static, because there's
                 // no way to evaluate pending JavaScript on a static page
@@ -175,7 +175,11 @@ impl Page {
     /// *before* the buffer, returns `Err(u64)`, to indicate the canonical
     /// moment for the event requested. The user-agent is responsible for
     /// retrying a request redirected to this moment.
-    pub async fn event_after(&self, subscription: Subscription, moment: u64) -> Result<(u64, Arc<Event>), u64> {
+    pub async fn event_after(
+        &self,
+        subscription: Subscription,
+        moment: u64,
+    ) -> Result<(u64, Arc<Event>), u64> {
         let lagged = {
             // Scope for ensuring we drop events read-lock
             let events = &self.events.read().await.1;
@@ -254,9 +258,13 @@ impl Page {
     /// waiting on an event of this kind.
     pub async fn send_event(&self, event: Event) {
         let event = Arc::new(event);
-        let (BufferParams{size: max_buffer_size, deallocation_rate},
-             ref mut events) =
-            &mut *self.events.write().await;
+        let (
+            BufferParams {
+                size: max_buffer_size,
+                deallocation_rate,
+            },
+            ref mut events,
+        ) = &mut *self.events.write().await;
         self.subscribers
             .lock()
             .await
@@ -329,7 +337,11 @@ impl Page {
         abort: impl Future<Output = ()>,
     ) -> Option<Result<Value, String>> {
         let script = expression.to_string();
-        let (id, fut) = self.queries.lock().await.request((script.clone(), statement_mode));
+        let (id, fut) = self
+            .queries
+            .lock()
+            .await
+            .request((script.clone(), statement_mode));
         match *self.content.lock().await {
             Content::Dynamic {
                 ref mut other_commands,
@@ -382,8 +394,10 @@ impl Page {
     /// to panic.
     pub async fn set_buffer_size(&self, size: usize, deallocation_rate: usize) {
         if deallocation_rate >= 2 {
-            self.events.write().await.0 =
-                BufferParams { size, deallocation_rate };
+            self.events.write().await.0 = BufferParams {
+                size,
+                deallocation_rate,
+            };
         } else {
             panic!("Cannot set buffer size with a deallocation rate of < 2");
         }
