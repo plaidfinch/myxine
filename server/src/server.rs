@@ -13,14 +13,14 @@ use myxine_core::{Page, Session};
 use crate::params;
 
 /// The interval between heartbeats.
-const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(10);
+const HEARTBEAT_INTERVAL: Duration = Duration::from_millis(100);
 
 /// The duration we should wait before marking a page as stale.
-const KEEP_ALIVE_DURATION: Duration = Duration::from_secs(10);
+const KEEP_ALIVE_DURATION: Duration = Duration::from_secs(1);
 
 /// The maximum size of the event buffer for each page: a consumer of events via
 /// the polling interface can lag by this many events before dropping events.
-const DEFAULT_BUFFER_LEN: usize = 1_000;
+const DEFAULT_BUFFER_LEN: usize = 512;
 
 /// A custom rejection for when the path ended with a slash
 #[derive(Debug, Clone)]
