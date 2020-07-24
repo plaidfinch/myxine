@@ -85,10 +85,11 @@ drawCircles circles = do
       , ("height", "100vh")
       , ("width", "100vw")
       , ("overflow", "hidden")
-      , ("background", "black")]
+      , ("background", "black") ]
     greetingStyles =
       [ ("transform", "translate(-50%, -100%)")
       , ("text-align", "center")
+      , ("select", "none")
       , ("width", "100vw")
       , ("position", "absolute")
       , ("top", "50%")
@@ -118,7 +119,7 @@ drawCircle circle =
     radius = fromIntegral (round @_ @Int (circle^.r))
     diameter = radius * 2
     borderWidth = 2
-    background = "hsla(" <> show (circle^.hue) <> ", 100%, 75%, 50%)"
+    background = "hsla(" <> show (circle^.hue) <> ", 100%, 70%, 55%)"
     borderColor = "hsla(" <> show (circle^.hue) <> ", 50%, 50%, 100%)"
     circleStyles =
       [ ("position", "absolute")
@@ -130,7 +131,7 @@ drawCircle circle =
       , ("background", background)
       , ("border", show borderWidth <> "px solid " <> borderColor)
       , ("border-radius", show radius <> "px")
-      , ("box-shadow", "0px 0px " <> show (radius / 3) <> "px " <> borderColor)
+      , ("box-shadow", "0px 0px 150px " <> borderColor)
       ]
 
 styles :: [(String, String)] -> Attribute
