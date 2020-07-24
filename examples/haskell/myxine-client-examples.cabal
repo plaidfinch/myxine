@@ -59,6 +59,8 @@ common deps
                        blaze-html,
                        lens,
                        mtl,
+                       uuid,
+                       containers,
                        myxine-client
 
 executable circles

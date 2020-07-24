@@ -16,21 +16,25 @@ import Text.Blaze.Html5 hiding (main, style, title, map, html)
 import Text.Blaze.Html5.Attributes hiding (span, title)
 import qualified Text.Blaze.Html5 as Html
 import Control.Lens
+import Data.UUID (UUID)
+import Data.Map (Map)
+import qualified Data.Map as Map
 
 import Myxine
-import Myxine.Widget
+import Myxine.Reactive
 
 data Circle = Circle
-  { _x :: Double
+  { _identity :: UUID
+  , _x :: Double
   , _y :: Double
+  , _z :: Int
   , _r :: Double
   , _hue :: Word8
   } deriving (Eq, Ord, Show)
 
 data Circles = Circles
-  { _current :: Maybe Circle
-  , _mouse   :: (Double, Double)
-  , _rest    :: [Circle]
+  { _current   :: Maybe Circle
+  , _rest      :: Map UUID Circle
   } deriving (Eq, Ord, Show)
 
 $(makeLenses ''Circle)
@@ -39,73 +43,95 @@ $(makeLenses ''Circles)
 main :: IO ()
 main = do
   page <- runPage mempty
-    Circles { _current = Nothing, _mouse = (0, 0), _rest = [] }
-    \circles -> widget do
-      let count = maybe 0 (const 1) (circles^.current) + length (circles^.rest)
-      title $ "Circles: " <> fromString (show count)
-      html (toMarkup circles)
-      listen do
-        on MouseMove \MouseEvent{clientX, clientY} ->
-          do mouse .= (clientX, clientY)
-             zoom (current._Just) do
-               circle <- get
-               r .= sqrt ((circle^.x - clientX)**2 + (circle^.y - clientY)**2)
-        on MouseDown \MouseEvent{clientX, clientY} ->
-          do randomHue <- liftIO randomIO
-             current .= Just (Circle clientX clientY 0 randomHue)
-        on MouseUp \MouseEvent{} ->
-          use current >>= \case
-            Nothing -> pure ()
-            Just circle ->
-              do current .= Nothing
-                 rest %= (circle :)
+    Circles { _current = Nothing, _rest = mempty }
+    (reactive . drawCircles)
   print =<< waitPage page
 
-instance ToMarkup Circle where
-  toMarkup circle =
-    div ! styles circleStyles $ ""
-    where
-      radius = fromIntegral (round @_ @Int (circle^.r))
-      diameter = radius * 2
-      borderWidth = 2
-      circleStyles =
-        [ ("position", "absolute")
-        , ("top", show (circle^.y - radius - borderWidth/2) <> "px")
-        , ("left", show (circle^.x - radius - borderWidth/2) <> "px")
-        , ("width", show diameter <> "px")
-        , ("height", show diameter <> "px")
-        , ("background", "hsla(" <> show (circle^.hue) <> ", 100%, 75%, 25%)")
-        , ("border", show borderWidth <> "px solid hsla(" <> show (circle^.hue) <> ", 50%, 50%, 75%)")
-        , ("border-radius", show radius <> "px")
-        ]
-
-instance ToMarkup Circles where
-  toMarkup circles | circles^.current == Nothing && circles^.rest == [] =
-    span ! styles greetingStyles $ "Click and drag to make art!"
-    where
-      greetingStyles =
-        [ ("transform", "translate(-50%, -100%)")
-        , ("text-align", "center")
-        , ("width", "100vw")
-        , ("position", "absolute")
-        , ("top", "50%")
-        , ("left", "50%")
-        , ("font-family", "Helvetica Neue")
-        , ("font-size", "50pt")
-        , ("color", "darkgrey") ]
-
-  toMarkup circles =
-    div ! styles canvasStyles $
+drawCircles :: Circles -> Reactive Circles
+drawCircles circles = do
+  title $ "Circles: " <> fromString (show count)
+  if circles^.current == Nothing && null (circles^.rest)
+    then
+      html $
+      div ! styles canvasStyles $
+      span ! styles greetingStyles $
+      "Click and drag to make art!"
+    else
+      div ! styles canvasStyles @@
       foldr (>>)
-        (maybe (pure ()) toMarkup (circles^.current))
-        (reverse (map toMarkup (circles^.rest)))
-    where
-      canvasStyles =
-        [ ("position", "relative")
-        , ("padding", "0px")
-        , ("height", "100vh")
-        , ("width", "100vw")
-        , ("overflow", "hidden") ]
+        (maybe (pure ()) drawCircle (circles^.current))
+        (reverse (map drawCircle (Map.elems (circles^.rest))))
+  on MouseMove \MouseEvent{clientX, clientY, buttons} ->
+    when (buttons == 1) $
+      zoom (current._Just) do
+        circle <- get
+        r .= sqrt ((circle^.x - clientX)**2 + (circle^.y - clientY)**2)
+  on MouseDown \MouseEvent{clientX, clientY, shiftKey} ->
+    when (not shiftKey) $
+    do randomHue <- liftIO randomIO
+       randomUUID <- liftIO randomIO
+       current .= Just (Circle randomUUID clientX clientY count 0 randomHue)
+  on MouseUp \MouseEvent{} ->
+    use current >>= \case
+      Nothing -> pure ()
+      Just circle ->
+        do current .= Nothing
+           rest %= Map.insert (circle^.identity) circle
+  where
+    count = maybe 0 (const 1) (circles^.current) + length (circles^.rest)
+    canvasStyles =
+      [ ("position", "relative")
+      , ("padding", "0px")
+      , ("height", "100vh")
+      , ("width", "100vw")
+      , ("overflow", "hidden")
+      , ("background", "black")]
+    greetingStyles =
+      [ ("transform", "translate(-50%, -100%)")
+      , ("text-align", "center")
+      , ("width", "100vw")
+      , ("position", "absolute")
+      , ("top", "50%")
+      , ("left", "50%")
+      , ("font-family", "Helvetica Neue")
+      , ("font-size", "50pt")
+      , ("color", "darkgrey") ]
+
+drawCircle :: Circle -> Reactive Circles
+drawCircle circle =
+  div ! styles circleStyles @@ do
+    on MouseOver \MouseEvent{buttons} ->
+      when (buttons == 0) $
+        zoom (rest . at (circle^.identity) . _Just) do
+          randomHue <- liftIO randomIO
+          hue .= randomHue
+    on' MouseDown \MouseEvent{shiftKey} ->
+      if shiftKey
+      then do
+        rest %= fmap \c ->
+          if c^.identity == circle^.identity
+          then c & z .~ 0
+          else c & z +~ 1
+        pure Stop
+      else pure Bubble
+  where
+    radius = fromIntegral (round @_ @Int (circle^.r))
+    diameter = radius * 2
+    borderWidth = 2
+    background = "hsla(" <> show (circle^.hue) <> ", 100%, 75%, 50%)"
+    borderColor = "hsla(" <> show (circle^.hue) <> ", 50%, 50%, 100%)"
+    circleStyles =
+      [ ("position", "absolute")
+      , ("top", show (circle^.y - radius - borderWidth/2) <> "px")
+      , ("left", show (circle^.x - radius - borderWidth/2) <> "px")
+      , ("width", show diameter <> "px")
+      , ("height", show diameter <> "px")
+      , ("z-index", show (circle^.z))
+      , ("background", background)
+      , ("border", show borderWidth <> "px solid " <> borderColor)
+      , ("border-radius", show radius <> "px")
+      , ("box-shadow", "0px 0px " <> show (radius / 3) <> "px " <> borderColor)
+      ]
 
 styles :: [(String, String)] -> Attribute
 styles pairs =

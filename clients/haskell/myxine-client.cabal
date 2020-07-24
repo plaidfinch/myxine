@@ -101,7 +101,7 @@ library
   import:              deps, options
   exposed-modules:     Myxine
                        Myxine.Direct
-                       Myxine.Widget
+                       Myxine.Reactive
   other-modules:       Myxine.Page
                        Myxine.Target
                        Myxine.Handlers
