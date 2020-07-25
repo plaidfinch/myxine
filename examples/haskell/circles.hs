@@ -118,7 +118,7 @@ drawCircle circle =
   where
     radius = fromIntegral (round @_ @Int (circle^.r))
     diameter = radius * 2
-    borderWidth = 2
+    borderWidth = 3
     background = "hsla(" <> show (circle^.hue) <> ", 100%, 70%, 55%)"
     borderColor = "hsla(" <> show (circle^.hue) <> ", 50%, 50%, 100%)"
     circleStyles =
@@ -131,7 +131,7 @@ drawCircle circle =
       , ("background", background)
       , ("border", show borderWidth <> "px solid " <> borderColor)
       , ("border-radius", show radius <> "px")
-      , ("box-shadow", "0px 0px 150px " <> borderColor)
+      , ("box-shadow", "0px 0px 25px " <> borderColor)
       ]
 
 styles :: [(String, String)] -> Attribute

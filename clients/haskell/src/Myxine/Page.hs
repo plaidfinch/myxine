@@ -13,7 +13,7 @@ module Myxine.Page
 @
 type Model = ...
 
-do page <- 'runPage' location initialModel handlers draw
+do page <- 'runPage' location initialModel drawAndHandle
   ...
   finalModel <- 'waitPage' page
   ...
@@ -24,11 +24,8 @@ where
   initialModel :: Model
   initialModel = ...  -- model
 
-  handlers :: 'Handlers'
-  handlers     = ...  -- controller
-
-  draw :: Model -> 'PageContent'
-  draw         = ...  -- view
+  drawAndHandle :: Model -> ('PageContent', 'Handlers')
+  drawAndHandle = ...  -- view and controller
 @
 
       To describe the interactive behavior of the page, we need to define:
@@ -39,6 +36,8 @@ where
 
       * @initialModel@: the starting value for the model of the page, which can
         be any Haskell data type of your choice.
+
+      FIXME: this documentation is out of date!!!!!
 
       * @handlers@: the set of 'Handlers' for page events, which describe how to
         react to events like mouse clicks, form inputs, and more. A handler can
