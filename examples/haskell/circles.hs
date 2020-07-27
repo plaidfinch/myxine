@@ -22,6 +22,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import System.Random (randomIO)
 import Data.List (intercalate)
+import System.Exit
 
 data Circle = Circle
   { _identity :: UUID
@@ -63,21 +64,24 @@ drawCircles circles = do
   on MouseDown \MouseEvent{clientX, clientY, shiftKey = False} ->
     do randomHue <- liftIO randomIO
        randomUUID <- liftIO randomIO
-       liftIO $ putStrLn "DOWN"
        current .= Just (Circle randomUUID clientX clientY count 0 randomHue)
   on MouseMove \MouseEvent{clientX, clientY, buttons = 1} ->
     zoom (current._Just) do
       circle <- get
       r .= sqrt ((circle^.x - clientX)**2 + (circle^.y - clientY)**2)
   on MouseUp \MouseEvent{} -> do
-    liftIO $ putStrLn "UP"
     use current >>= \case
       Nothing -> pure ()
       Just circle ->
         do current .= Nothing
            rest %= Map.insert (circle^.identity) circle
-  -- on KeyUp \KeyboardEvent{key = " "} ->
-  --   liftIO . print @(Either String Int) =<< eval "window.innerWidth"
+  on KeyUp \KeyboardEvent
+    { key = "c"
+    , ctrlKey = True
+    , shiftKey = False
+    , altKey = False
+    , metaKey = False
+    } -> liftIO exitFailure  -- end the program on Ctrl-C in the browser too!
   where
     count = maybe 0 (const 1) (circles^.current) + length (circles^.rest)
     canvasStyles =
