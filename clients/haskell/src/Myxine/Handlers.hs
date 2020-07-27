@@ -6,6 +6,7 @@ module Myxine.Handlers
   , TargetFact
   , tagIs
   , attrIs
+  , window
   , Propagation(..)
   ) where
 
@@ -72,6 +73,11 @@ tagIs t = HasTag (Text.toLower t)
 attrIs :: Text -> Text -> TargetFact
 attrIs a v = AttributeEquals a v
 
+-- | A 'TargetFact' specifying that the target must be the root DOM element,
+-- that is, the @window@ object.
+window :: TargetFact
+window = Window
+
 -- | Dispatch all the event handler callbacks for a given event type and its
 -- corresponding data. Event handlers for this event type will be called in the
 -- order they were registered (left to right) with the result of the previous
@@ -84,7 +90,7 @@ handle ::
 handle (Handlers allHandlers) PageEvent{event, properties, targets} model =
   let PerEventHandlers targetMap =
         fromMaybe mempty (DMap.lookup event allHandlers)
-      facts = map targetFacts targets
+      facts = map targetFacts targets ++ [[Window]]
       handlers = map (flip ConjMap.lookup targetMap) facts
   in processHandlers handlers model
   where

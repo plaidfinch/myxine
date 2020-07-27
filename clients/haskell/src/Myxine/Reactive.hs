@@ -127,8 +127,7 @@ wrap @@ ReactiveM inner = ReactiveM do
   pure result
   where
     wrapInTarget :: NonEmpty Word -> Html -> Html
-    wrapInTarget loc =
-      (! dataAttribute clientDataAttr (showLoc (NonEmpty.toList loc)))
+    wrapInTarget loc = (! dataAttribute clientDataAttr (showLoc loc))
 infixr 5 @@
 
 -- | Create a scope for event listeners without wrapping any enclosing HTML. Any
@@ -162,7 +161,8 @@ title t = ReactiveM (modify \wb -> wb { pageTitle = Last (Just t) })
 -- the @(StateT model m Propagation)@ monad, where @m@ is 'MonadIO' and
 -- additionally @MonadEval@, a sealed typeclass that provides the 'eval' and
 -- 'evalBlock' methods to evaluate JavaScript within the context of the current
--- page.
+-- page. Changes made to the @model@ state will alter the model at the
+-- completion of the listener function.
 --
 -- __Exception behavior:__ This function catches @PatternMatchFail@ exceptions
 -- thrown by the passed function. That is, if there is a partial pattern match
@@ -181,11 +181,13 @@ on' event reaction = ReactiveM do
   loc <- gets (NonEmpty.tail . location)
   evalHandle <- ask
   let selector =
-        ("data-" <> clientDataAttr) `attrIs`
-        Text.toStrict (Text.pack (showLoc loc))
+        case loc of
+          [] -> window
+          (h : t) -> ("data-" <> clientDataAttr) `attrIs`
+            Text.toStrict (Text.pack (showLoc (h :| t)))
   modify \builder ->
     builder { handlers = mappend (handlers builder) $
-              onEvent event selector $
+              onEvent event [selector] $
               \props model ->
                 -- We need to do a pure and impure catch, because GHC might
                 -- decide to inline things inside the IO action, or it might
@@ -210,7 +212,8 @@ on' event reaction = ReactiveM do
 -- the @(StateT model m Propagation)@ monad, where @m@ is 'MonadIO' and
 -- additionally @MonadEval@, a sealed typeclass that provides the 'eval' and
 -- 'evalBlock' methods to evaluate JavaScript within the context of the current
--- page.
+-- page. Changes made to the @model@ state will alter the model at the
+-- completion of the listener function.
 --
 -- __Exception behavior:__ This function catches @PatternMatchFail@ exceptions
 -- thrown by the passed function. That is, if there is a partial pattern match
@@ -286,8 +289,7 @@ reactive ::
 reactive (ReactiveM action) evaluate =
   let ReactiveBuilder{handlers, pageMarkup, pageTitle = pageContentTitle} =
         execState (runReaderT action (EvaluateHandle evaluate)) initialBuilder
-      pageContentBody =
-        renderMarkup (pageMarkup ! dataAttribute clientDataAttr (showLoc []))
+      pageContentBody = renderMarkup pageMarkup
   in (Direct.pageBody (Text.toStrict pageContentBody)
       <> foldMap Direct.pageTitle pageContentTitle,
       handlers)
@@ -320,6 +322,5 @@ clientDataAttr = "myxine-client-widget-id"
 
 -- | Helper function to show a location in the page: add hyphens between every
 -- number.
-showLoc :: IsString a => [Word] -> a
-showLoc [] = "root"
-showLoc locs = fromString . intercalate "-" . map show $ locs
+showLoc :: IsString a => (NonEmpty Word) -> a
+showLoc = fromString . intercalate "-" . map show . NonEmpty.toList

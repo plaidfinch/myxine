@@ -21,7 +21,6 @@ description:
 common options
   default-language:    Haskell2010
   ghc-options:         -Wall
-                       -Wincomplete-uni-patterns
                        -Wincomplete-record-updates
                        -Wcompat
                        -Widentities

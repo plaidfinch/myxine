@@ -37,6 +37,7 @@ tag Target{tagName} = tagName
 data TargetFact
   = HasTag !Text
   | AttributeEquals !Text !Text
+  | Window
   deriving (Eq, Ord, Show, Generic, Hashable)
 
 targetFacts :: Target -> [TargetFact]
