@@ -21,10 +21,13 @@ where
   location :: 'PageLocation'
   location     = 'pagePort' ... <> 'pagePath' ...  -- where to connect to the server
 
-  initialModel :: Model
+  initialModel :: model
   initialModel = ...  -- model
 
-  drawAndHandle :: Model -> ('PageContent', 'Handlers')
+  drawAndHandle ::
+    model ->
+
+    ('PageContent', 'Handlers')
   drawAndHandle = ...  -- view and controller
 @
 
@@ -37,25 +40,29 @@ where
       * @initialModel@: the starting value for the model of the page, which can
         be any Haskell data type of your choice.
 
-      FIXME: this documentation is out of date!!!!!
+      * @drawAndHandle@: a pure function mapping from the current state of the
+        page's model to a rendered HTML view of the page in its entirety, and
+        the new set of 'Handlers' for page events, which describe how to react
+        to events like mouse clicks, form inputs, and more. A handler can modify
+        the model of the page, and perform arbitrary 'IO' actions (though of
+        course it's better style to be as pure as you can). After each handler
+        is invoked, the page is immediately re-rendered to the browser if the
+        model has changed. The @drawAndHandle@ function is also supplied with a
+        function that can be called to evaluate JavaScript code in the context
+        of the current page, which is sometimes useful when building handlers.
+        The @drawAndHandle@ function will be called on every update to the
+        model, so it's good to make it reasonably fast.
 
-      * @handlers@: the set of 'Handlers' for page events, which describe how to
-        react to events like mouse clicks, form inputs, and more. A handler can
-        modify the model of the page, and perform arbitrary 'IO' actions (though
-        of course it's better style to be as pure as you can). After each
-        handler is invoked, the page is immediately re-rendered to the browser
-        if the model has changed. See the sections on [handling
-        events](#Handling) and [manipulating pages](#Manipulating).
+      This library doesn't bind you into a specific approach for HTML
+      generation: you can construct some 'PageContent' by generating any
+      'Data.Text.Text'. However, a good approach to creating the @drawAndHandle@
+      function is to use the DSL defined in 'Myxine.Reactive', which augments
+      the [@blaze-html@](https://hackage.haskell.org/package/blaze-html) package
+      with extra constructs for declaring scoped event handlers inline with page
+      markup.
 
-      * @draw@: a pure function mapping from the current state of the page's
-        model to a rendered HTML view of the page in its entirety. This function
-        will be called on every update to the model, so it's good to make it
-        reasonably fast. This library takes an agnostic approach to HTML
-        generation: it's up to you to create some 'PageContent' by generating
-        some 'Data.Text.Text'. I recommend the
-        [@blaze-html@](https://hackage.haskell.org/package/blaze-html) package
-        for this purpose, but you can do this however you like. See the section
-        on [rendering page views](#Rendering).
+      See also the sections on [rendering page views](#Rendering), [handling
+      events](#Handling) and [manipulating pages](#Manipulating).
   -}
   Page, runPage, waitPage, stopPage
 
@@ -172,7 +179,9 @@ runPage :: forall model.
     {- ^ The location of the 'Page' ('pagePort' and/or 'pagePath') -} ->
   model
     {- ^ The initial @model@ of the model for the 'Page' -} ->
-  (model -> (PageContent, Handlers model))
+  (model ->
+   (forall a. JSON.FromJSON a => JavaScript -> IO (Either String a)) ->
+   (PageContent, Handlers model))
     {- ^ A function to draw the @model@ as some rendered 'PageContent' (how you
          do this is up to you), and produce the set of handlers for events on
          that new view of the page. -} ->
@@ -190,7 +199,7 @@ runPage pageLocation initialModel drawAndHandle =
        catch @SomeException
          (forever $
           do model <- readChan models
-             let (content, handlers) = drawAndHandle model
+             let (content, handlers) = drawAndHandle model (evaluateJs pageLocation)
              update pageLocation (Dynamic content)
              case SomeEvents <$> nonEmpty (handledEvents handlers) of
                Nothing -> pure ()
@@ -216,7 +225,8 @@ runPage pageLocation initialModel drawAndHandle =
      -- Kick off the cycle by "updating" the intial model
      writeChan pageActions (Just pure)
 
-     pure (Page{..})
+     let page = Page{..}
+     pure page
 
 
 -- | Wait for a 'Page' to finish executing and return its resultant @model@, or

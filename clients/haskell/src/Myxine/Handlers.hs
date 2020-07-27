@@ -3,7 +3,7 @@ module Myxine.Handlers
   , onEvent
   , handle
   , handledEvents
-  , HandlerOption
+  , TargetFact
   , tagIs
   , attrIs
   , Propagation(..)
@@ -24,11 +24,16 @@ import qualified Myxine.ConjMap as ConjMap
 -- | Create a handler for a specific event type by specifying the type of event
 -- and the monadic callback to be invoked when the event occurs.
 --
--- The provided callback will be given the @'EventType' props@ of the event, the
--- properties @props@ of this particular event, a list of 'Target's on which the
--- event fired, in order from most to least specific, and the current @model@ of
--- a page. It has the option to do arbitrary 'IO', and to return a
--- possibly-changed @model@.
+-- The provided callback will be given the properties @props@ of this particular
+-- event, and the current @model@ of a page. It has the option to do arbitrary
+-- 'IO', and to return a possibly-changed @model@. It also must specify whether
+-- or not the event should continue to propagate outwards to other handlers, by
+-- giving a 'Propagation' (either 'Bubble', 'Stop', or 'StopImmediately').
+--
+-- The callback will only be invoked when an event occurs which matches the
+-- conjunction of the specified list of 'TargetFact's. For instance, to
+-- constrain a handler to only events on @<div>@ elements with @class="foo"@, we
+-- would use the 'TargetFact' @[tagIs "div", class" `attrIs` "foo"]@.
 --
 -- Notice that each variant of 'EventType' has a type-level index describing
 -- what kind of data is carried by events of that type. This means that, for
@@ -49,27 +54,23 @@ import qualified Myxine.ConjMap as ConjMap
 -- events](#Types).
 onEvent ::
   EventType props ->
-  HandlerOption ->
+  [TargetFact] ->
   (props -> model -> IO (Propagation, model)) ->
   Handlers model
-onEvent event (HandlerOption eventFacts) h =
+onEvent event eventFacts h =
   Handlers . DMap.singleton event . PerEventHandlers $
     ConjMap.insert eventFacts h mempty
 {-# INLINE onEvent #-}
 
-newtype HandlerOption
-  = HandlerOption [TargetFact]
-  deriving newtype (Semigroup, Monoid)
-
--- | A 'HandlerOption' specifying that the target must have the HTML tag given;
+-- | A 'TargetFact' specifying that the target must have the HTML tag given;
 -- otherwise, this handler will not fire.
-tagIs :: Text -> HandlerOption
-tagIs t = HandlerOption [HasTag (Text.toLower t)]
+tagIs :: Text -> TargetFact
+tagIs t = HasTag (Text.toLower t)
 
--- | A 'HandlerOption' specifying that the target must have the HTML attribute
+-- | A 'TargetFact' specifying that the target must have the HTML attribute
 -- given, with the exact value specified; otherwise, this handler will not fire.
-attrIs :: Text -> Text -> HandlerOption
-attrIs a v = HandlerOption [AttributeEquals a v]
+attrIs :: Text -> Text -> TargetFact
+attrIs a v = AttributeEquals a v
 
 -- | Dispatch all the event handler callbacks for a given event type and its
 -- corresponding data. Event handlers for this event type will be called in the
