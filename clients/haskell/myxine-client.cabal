@@ -59,7 +59,8 @@ common deps
                        constraints          >= 0.10 && <= 0.12,
                        salve                ^>= 1.0,
                        blaze-markup         ^>= 0.8,
-                       blaze-html           ^>= 0.9
+                       blaze-html           ^>= 0.9,
+                       spoon                ^>= 0.3
 
 
 common options
