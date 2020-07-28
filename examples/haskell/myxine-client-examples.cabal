@@ -64,4 +64,8 @@ common deps
 
 executable circles
   import:              options, deps
-  main-is:             circles.hs
+  main-is:             Circles.hs
+
+executable counter
+  import:              options, deps
+  main-is:             Counter.hs

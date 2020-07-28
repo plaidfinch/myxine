@@ -58,9 +58,8 @@ drawCircles circles = do
       "Click and drag to make art!"
     else
       div ! styles canvasStyles @@
-      foldr (>>)
-        (maybe (pure ()) drawCircle (circles^.current))
-        (reverse (map drawCircle (Map.elems (circles^.rest))))
+        maybe mempty drawCircle (circles^.current) <>
+        mconcat (reverse (map drawCircle (Map.elems (circles^.rest))))
   on MouseDown \MouseEvent{clientX, clientY, shiftKey = False} ->
     do randomHue <- liftIO randomIO
        randomUUID <- liftIO randomIO
