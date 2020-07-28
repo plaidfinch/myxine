@@ -34,7 +34,7 @@ import qualified Myxine.ConjMap as ConjMap
 -- The callback will only be invoked when an event occurs which matches the
 -- conjunction of the specified list of 'TargetFact's. For instance, to
 -- constrain a handler to only events on @<div>@ elements with @class="foo"@, we
--- would use the 'TargetFact' @[tagIs "div", class" `attrIs` "foo"]@.
+-- would use the 'TargetFact' @['tagIs' "div", "class" `'attrIs'` "foo"]@.
 --
 -- Notice that each variant of 'EventType' has a type-level index describing
 -- what kind of data is carried by events of that type. This means that, for
@@ -43,10 +43,11 @@ import qualified Myxine.ConjMap as ConjMap
 -- access to a 'MouseEvent' data structure when it is invoked. That is to say:
 --
 -- @
--- 'on' 'Click' (\properties@'MouseEvent'{} targets model ->
---                 do print properties
---                    print targets
---                    print model)
+-- 'on' 'Click'
+--      ['tagIs' "div", "class" `'attrIs'` "foo"]
+--      (\properties@'MouseEvent'{} model ->
+--         do print properties
+--            print model)
 --   :: 'Show' model => 'Handlers' model
 -- @
 --
@@ -103,6 +104,8 @@ handle (Handlers allHandlers) PageEvent{event, properties, targets} model =
            Stop   -> processHandlers (hs : [     ]) m'
            StopImmediately -> pure m'
 {-# INLINE handle #-}
+
+-- TODO: add zoom combinator!
 
 -- | Get a list of all the events which are handled by these handlers.
 handledEvents :: Handlers model -> [Some EventType]

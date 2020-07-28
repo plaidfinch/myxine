@@ -34,6 +34,9 @@ tag Target{tagName} = tagName
 
 -- | A fact about a 'Target', such as it having a particular tag or having a
 -- particular attribute equal to a particular value.
+--
+-- You can construct a 'TargetFact' using 'Myxine.tagIs', 'Myxine.attrIs', or
+-- 'Myxine.window'.
 data TargetFact
   = HasTag !Text
   | AttributeEquals !Text !Text

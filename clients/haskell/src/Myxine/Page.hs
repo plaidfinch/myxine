@@ -24,10 +24,7 @@ where
   initialModel :: model
   initialModel = ...  -- model
 
-  drawAndHandle ::
-    model ->
-
-    ('PageContent', 'Handlers')
+  drawAndHandle :: JsEval => model -> ('PageContent', 'Handlers')
   drawAndHandle = ...  -- view and controller
 @
 
@@ -47,17 +44,18 @@ where
         the model of the page, and perform arbitrary 'IO' actions (though of
         course it's better style to be as pure as you can). After each handler
         is invoked, the page is immediately re-rendered to the browser if the
-        model has changed. The @drawAndHandle@ function is also supplied with a
-        function that can be called to evaluate JavaScript code in the context
-        of the current page, which is sometimes useful when building handlers.
-        The @drawAndHandle@ function will be called on every update to the
-        model, so it's good to make it reasonably fast.
+        model has changed. The @drawAndHandle@ function will be called on every
+        update to the model, so it's good to make it reasonably fast.
+
+        The @drawAndHandle@ function is run in a 'JsEval' context, which means
+        that the 'eval' and 'evalBlock' functions may be used within handlers to
+        evaluate JavaScript within the context of the current page.
 
       This library doesn't bind you into a specific approach for HTML
       generation: you can construct some 'PageContent' by generating any
       'Data.Text.Text'. However, a good approach to creating the @drawAndHandle@
       function is to use the DSL defined in 'Myxine.Reactive', which augments
-      the [@blaze-html@](https://hackage.haskell.org/package/blaze-html) package
+      the [blaze-html](https://hackage.haskell.org/package/blaze-html) package
       with extra constructs for declaring scoped event handlers inline with page
       markup.
 
@@ -88,7 +86,7 @@ where
       the 'on' function, and they can be joined together using their 'Monoid'
       instance.
   -}
-  , Handlers, onEvent, Propagation(..)
+  , Handlers, onEvent, TargetFact, tagIs, attrIs, window, Propagation(..)
   , module Myxine.Target
 
   -- * #Manipulating# Manipulating Running Pages
@@ -117,12 +115,17 @@ where
       browser. You merely need say how you want your model to be rendered, and
       let it take care of the rest.
 
-      The @draw@ function required as the last argument to 'runPage' has the
-      type @(model -> 'PageContent')@. As the library user, it's up to you how
-      you want to render your model as 'Data.Text.Text'. Then, just wrap your
-      desired @body@ contents with a call to 'pageBody' (and optionally
-      combine this via 'Semigroup' with a call to 'pageTitle' to set the
-      @title@), and return the resultant 'PageContent'.
+      The @drawAndHandle@ function required as the last argument to 'runPage'
+      returns the type @('PageContent', 'Handlers' model)@. As the library user,
+      it's up to you how you want to render your model as 'Data.Text.Text'.
+      Then, just wrap your desired @body@ contents with a call to 'pageBody'
+      (and optionally combine this via 'Semigroup' with a call to 'pageTitle' to
+      set the @title@), and return the resultant 'PageContent', pairing it with
+      the handlers for any events you wish to listen to.
+
+      Manually constructing 'PageContent' and 'Handlers' is not usually
+      necessary; most of the time, the most succinct way to build a page is to
+      use the DSL provided in 'Myxine.Reactive'.
   -}
   , PageContent, pageBody, pageTitle
 
@@ -139,14 +142,19 @@ do Right width <- evalInPage (JsExpression "window.innerWidth")
    print (width :: Int)
 @
    -}
-  , JavaScript(..), evalInPage
+  , JavaScript(..), evalInPage, JsEval, eval, evalBlock
   ) where
 
 import Control.Monad
-import Control.Exception (SomeException, throwIO, catch)
+import Control.Monad.IO.Class
+import Control.Exception (SomeException, finally, throwIO, catch)
 import qualified Data.Aeson as JSON
 import Control.Concurrent
+import Control.Concurrent.Async
 import Data.List.NonEmpty (nonEmpty)
+import Data.Text (Text)
+import Data.Foldable
+import qualified Unsafe.Coerce as Unsafe
 
 import Myxine.Direct
 import Myxine.Target (Target)
@@ -179,48 +187,67 @@ runPage :: forall model.
     {- ^ The location of the 'Page' ('pagePort' and/or 'pagePath') -} ->
   model
     {- ^ The initial @model@ of the model for the 'Page' -} ->
-  (model ->
-   (forall a. JSON.FromJSON a => JavaScript -> IO (Either String a)) ->
-   (PageContent, Handlers model))
-    {- ^ A function to draw the @model@ as some rendered 'PageContent' (how you
-         do this is up to you), and produce the set of handlers for events on
-         that new view of the page. -} ->
+  (JsEval => model -> (PageContent, Handlers model))
+    {- ^ A function to draw the @model@ as some rendered 'PageContent' and produce the
+         set of handlers for events on that new view of the page. Note the
+         presence of the 'JsEval' context, which means the 'eval' and
+         'evalBlock' functions are available to evaluate JavaScript in the
+         context of the page within 'Handlers'.
+    -} ->
   IO (Page model)
     {- ^ A 'Page' handle to permit further interaction with the running page -}
 runPage pageLocation initialModel drawAndHandle =
-  do pageActions  :: Chan (Maybe (model -> IO model))  <- newChan
-     models       :: Chan model                        <- newChan
-     pageFinished :: MVar (Either SomeException model) <- newEmptyMVar
+  do pageActions   :: Chan (Maybe (model -> IO model))  <- newChan
+     currentUpdate :: Chan (Either PageEvent model)     <- newChan
+     frames        :: Chan PageContent                  <- newChan
+     eventLists    :: Chan (Maybe EventList)            <- newChan
+     pageFinished  :: MVar (Either SomeException model) <- newEmptyMVar
 
      -- The stream of events from the page
      nextEvent <- events pageLocation
 
-     pollThread <- forkIO $
-       catch @SomeException
-         (forever $
-          do model <- readChan models
-             let (content, handlers) = drawAndHandle model (evaluateJs pageLocation)
-             update pageLocation (Dynamic content)
-             case SomeEvents <$> nonEmpty (handledEvents handlers) of
-               Nothing -> pure ()
-               Just eventList ->
-                 do event <- nextEvent eventList
-                    writeChan pageActions (Just (handle handlers event)))
-         (putMVar pageFinished . Left)
+     -- Renders the page:
+     renderThread <- forkIO $
+       forever (update pageLocation . Dynamic =<< readChan frames)
 
+     -- Polls for the next event:
+     pollThread <- forkIO $
+       onLatest (writeChan currentUpdate . Left) $
+         maybe (forever (threadDelay maxBound)) nextEvent <$>
+           readChan eventLists
+
+     -- Handles events and sends update actions to the model thread:
+     updateThread <- forkIO $
+       let loop handlers = do
+             writeChan eventLists $
+               SomeEvents <$> nonEmpty (handledEvents handlers)
+             readChan currentUpdate >>= \case
+               Left event -> do
+                 writeChan pageActions (Just (handle handlers event))
+                 loop handlers
+               Right model ->
+                 do let (content, handlers') =
+                          withJsEvalContext
+                            (JsEvalContext (evaluateJs pageLocation))
+                            (drawAndHandle model)
+                    writeChan frames content
+                    loop handlers'
+       in catch @SomeException (loop mempty)
+            (putMVar pageFinished . Left)
+
+     -- Processes update actions to the model and sends to update thread:
      _modelThread <- forkIO $
        let loop model =
              readChan pageActions >>= \case
-               Nothing ->
-                 do putMVar pageFinished (Right model)
-                    killThread pollThread
+               Nothing -> putMVar pageFinished (Right model)
                Just action ->
                  do model' <- action model
-                    writeChan models model
+                    writeChan currentUpdate (Right model')
                     loop model'
-       in catch @SomeException
-            (loop initialModel)
-            (putMVar pageFinished . Left)
+       in finally
+            (catch @SomeException (loop initialModel)
+              (putMVar pageFinished . Left))
+            (traverse_ killThread [renderThread, pollThread, updateThread])
 
      -- Kick off the cycle by "updating" the intial model
      writeChan pageActions (Just pure)
@@ -228,6 +255,17 @@ runPage pageLocation initialModel drawAndHandle =
      let page = Page{..}
      pure page
 
+onLatest :: (a -> IO ()) -> IO (IO a) -> IO ()
+onLatest action rest = go =<< rest
+  where
+    go first =
+      race first rest >>= \case
+        Left a -> do
+          action a
+          next <- rest
+          go next
+        Right preempt -> do
+          go preempt
 
 -- | Wait for a 'Page' to finish executing and return its resultant @model@, or
 -- re-throw any exception the page encountered.
@@ -316,8 +354,9 @@ getPage page = do
 -- | Evaluate some 'JavaScript' in the context of a running 'Page', blocking
 -- until the result is returned.
 --
--- Returns either a deserialized Haskell type, or a human-readable string
--- describing any error that occurred. Possible errors include:
+-- Returns either a deserialized Haskell type, or throws a 'JsException'
+-- containing a human-readable string describing any error that occurred.
+-- Possible errors include:
 --
 -- * Any exception in the given JavaScript
 --
@@ -331,7 +370,7 @@ getPage page = do
 -- * 'JsBlock' inputs which don't explicitly return a value result in @null@
 --
 -- * Return types are limited to those which can be serialized via
---   [@JSON.stringify@](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify),
+--   [JSON.stringify](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify),
 --   which does not work for cyclic objects (like @window@, @document@, and all
 --   DOM nodes), and may fail to serialize some properties for other non-scalar
 --   values. If you want to return a non-scalar value like a list or dictionary,
@@ -362,10 +401,67 @@ evalInPage ::
   JSON.FromJSON a =>
   Page model {- ^ The 'Page' in which to evaluate the JavaScript -} ->
   JavaScript {- ^ The JavaScript to evaluate: either a 'JsExpression' or a 'JsBlock' -} ->
-  IO (Either String a)
+  IO a
 evalInPage page@Page{pageLocation} js =
   do v <- newEmptyMVar
      modifyPageIO page \model ->
        do putMVar v =<< evaluateJs pageLocation js
           pure model
      takeMVar v
+
+-- Borrowing a technique from Data.Reflection:
+
+-- | The @JsEval@ class, when it is present in a context, enables the use of the
+-- 'eval' and 'evalBlock' functions, which evaluate JavaScript in the context of
+-- the current page. Only in the body of a call to 'runPage' is there a
+-- canonical current page to refer to, which means that these functions can only
+-- be used there.
+class JsEval where jsEvalContext :: JsEvalContext
+
+-- Specialized version of Data.Reflection.Gift:
+newtype JsEvalGift r = JsEvalGift (JsEval => r)
+
+-- Specialized version of Data.Reflection.give:
+withJsEvalContext :: forall r. JsEvalContext -> (JsEval => r) -> r
+withJsEvalContext c k = Unsafe.unsafeCoerce (JsEvalGift k :: JsEvalGift r) c
+{-# NOINLINE withJsEvalContext #-}
+
+-- A "handle" that closes over the page location and encapsulates what it takes
+-- to evaluate some JavaScript in the page (outside the page event queue, or
+-- else deadlock will occur!)
+newtype JsEvalContext =
+  JsEvalContext (forall a. JSON.FromJSON a => JavaScript -> IO a)
+
+eval, evalBlock :: (JsEval, JSON.FromJSON a, MonadIO m) => Text -> m a
+-- | Evaluate some JavaScript in the context of the __current page__. See the
+-- documentation for 'evalInPage' for further caveats.
+--
+-- Returns either a deserialized Haskell type, or throws a 'JsException'
+-- containing a human-readable string describing any error that occurred.
+--
+-- This treats the input as an __expression__, which means that it
+-- implicitly wraps it in @return (...);@. To evaluate a block of JavaScript
+-- without this wrapping, use 'evalBlock'.
+--
+-- This function can only be called within 'runPage', because it requires a
+-- specific @'JsEval'@ context to know where to run the JavaScript code.
+eval expression =
+  let JsEvalContext evaluate = jsEvalContext
+  in liftIO (evaluate (JsExpression expression))
+  
+-- | Evaluate some JavaScript in the context of the current page, returning
+-- either a JavaScript error or the decoded result from the page.
+--
+-- Returns either a deserialized Haskell type, or throws a 'JsException'
+-- containing a human-readable string describing any error that occurred.
+--
+-- This treats the input as a __block__, which means that it /does/
+-- /not/ implicitly wrap it in @return (...);@. To evaluate a JavaScript
+-- expression without needing to explicitly write a return statement, use
+-- 'eval'.
+--
+-- This function can only be called within 'runPage', because it requires a
+-- specific @'JsEval'@ context to know where to run the JavaScript code.
+evalBlock block =
+  let JsEvalContext evaluate = jsEvalContext
+  in liftIO (evaluate (JsBlock block))

@@ -18,8 +18,8 @@ module Myxine.Direct
   , Update(..), EventList(..), PageEvent(..)
   , PageContent, pageBody, pageTitle, update, events
     -- * Evaluating raw JavaScript in the context of a page
-  , JavaScript(..), evaluateJs
-    -- * Exceptions thrown if the server ever misbehaves
+  , JavaScript(..), evaluateJs, JsException(..)
+    -- * Exceptions thrown if the server misbehaves
   , ProtocolException(..)
     -- * The @Some@ existential
   , Some(..)
@@ -144,6 +144,10 @@ instance Monoid PageLocation where
     { pageLocationPort = mempty
     , pageLocationPath = mempty }
 
+-- | A @PageEvent@ is an event that occurred in the browser: a triple of the
+-- 'EventType', any associated properties of the event (this varies depending on
+-- the event type), and the list of 'Target's of the event, in order from most
+-- to least specific.
 data PageEvent where
   PageEvent :: { event :: EventType props
                , properties :: props
@@ -226,10 +230,18 @@ data JavaScript
   | JsBlock Text      -- ^ A block of JavaScript statements
   deriving (Eq, Ord, Show)
 
--- | Evaluate some raw JavaScript in the context of a given page
+-- | An exception thrown by evaluating JavaScript. This may be a deserialization
+-- error, or an error that occurred in the JavaScript runtime itself.
+newtype JsException =
+  JsException String
+  deriving newtype (Eq, Ord, Show)
+  deriving anyclass (Exception)
+
+-- | Evaluate some raw JavaScript in the context of a given page.
 --
--- Returns either a deserialized Haskell type, or a human-readable string
--- describing any error that occurred. Possible errors include:
+-- Returns either a deserialized Haskell type, or throws a 'JsException'
+-- containing a human-readable string describing any error that occurred.
+-- Possible errors include:
 --
 -- * Any exception in the given JavaScript
 -- * Absence of any browser window currently viewing the page (since there's no
@@ -252,16 +264,17 @@ evaluateJs ::
   JSON.FromJSON a =>
   PageLocation {- ^ The location of the page in which to evaluate the JavaScript -} ->
   JavaScript {- ^ The JavaScript to evaluate: either a 'JsExpression' or a 'JsBlock' -} ->
-  IO (Either String a)
+  IO a
 evaluateJs PageLocation{pageLocationPort = Last maybePort,
                         pageLocationPath = Last maybePath} js =
   wrapCaughtReqException $
   do response <- Req.runReq Req.defaultHttpConfig $
        Req.req Req.POST url body Req.lbsResponse options
      checkServerVersion response
-     pure if Req.responseStatusCode response == 200
-       then JSON.eitherDecode (Req.responseBody response)
-       else Left (ByteString.unpack (Req.responseBody response))
+     if Req.responseStatusCode response == 200
+       then either (throwIO . JsException) pure $
+            JSON.eitherDecode (Req.responseBody response)
+       else throwIO (JsException (ByteString.unpack (Req.responseBody response)))
   where
     url = pageUrl (fromMaybe "" maybePath)
 
@@ -316,8 +329,17 @@ events PageLocation{pageLocationPort = Last maybePort,
          let nextMoment =
                Text.decodeUtf8 <$>
                  Req.responseHeader response "Content-Location"
-         liftIO (writeIORef moment nextMoment)
-         pure (Req.responseBody response)
+         -- If any async exception happens before here, we won't increment the
+         -- moment. We make sure that if an exception happens during the
+         -- increment or the return, we roll back the increment before
+         -- re-throwing the exception, which ensures this function is safe to
+         -- use inside an Async task (that is, cancellation won't skip events).
+         liftIO $ catch @SomeException
+           (do writeIORef moment nextMoment
+               pure (Req.responseBody response))
+           (\e -> do
+               writeIORef moment currentMoment
+               throwIO e)
 
     urlAndOptions ::
       Maybe Text ->
