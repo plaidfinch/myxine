@@ -49,8 +49,11 @@ any Haskell data type of your choice.
 interleaved description in the 'Reactive' monad explaining both how to render it
 as HTML and how to handle events that occur within that selfsame HTML.
 
-__Using 'Page' without 'Reactive':__
-
+See also the sections on [building reactive pages](#Building) and [manipulating
+pages](#Manipulating).
+-}
+-- ** #NoReactive# Using 'Page' without 'Reactive'
+{-|
 Although the 'Reactive' abstraction is typically the most convenient way to
 build a 'Page', the 'runPage' abstraction is not bound to a specific way of
 formatting HTML 'Direct.PageContent' or gathering a set of 'Handlers'. Instead,
@@ -66,9 +69,6 @@ This might not always suit your desires, though, and that's precisely why it's
 not baked in. You are free to construct 'PageContent' using 'pageTitle' and
 'pageBody', and to construct 'Handlers' using 'Myxine.Handlers.onEvent' and
 '<>', avoiding the 'Reactive' abstraction altogether if you so choose.
-
-See also the sections on [building reactive pages](#Building) and [manipulating
-pages](#Manipulating).
 -}
   -- * #Pages# Creating and Waiting For Pages
   Page, runPage, waitPage, stopPage
@@ -244,6 +244,14 @@ data Page model
 -- interacted further, via the functions in this module (e.g. 'waitPage',
 -- 'modifyPage', etc.).
 --
+-- This function takes as input a 'PageLocation', an initial model, and a pure
+-- function from the current state of the page's model to a rendered HTML view
+-- of the page in its entirety, and the new set of 'Handlers' for page events. A
+-- handler can modify the model of the page, and perform arbitrary 'IO' actions,
+-- including evaluating JavaScript in the page using 'eval'. After each all
+-- pertinent handlers for an event are dispatched, the page is re-rendered to
+-- the browser.
+--
 -- This function itself is non-blocking: it immediately kicks off threads to
 -- start running the page. It will not throw exceptions by itself. All
 -- exceptions thrown by page threads (such as issues with connecting to the
@@ -252,6 +260,14 @@ data Page model
 -- __Important:__ Because the GHC runtime does not wait for all threads to
 -- finish when ending the main thread, you probably need to use 'waitPage' to
 -- make sure your program stays alive to keep processing events.
+--
+-- Typical use of this function embeds a 'Reactive' page by using the 'reactive'
+-- function to adapt it as the last argument (but this is not the only way to
+-- use it, see [Using Page without Reactive](#NoReactive)):
+--
+-- @
+-- 'runPage' location initialModel ('reactive' . component)
+-- @
 runPage :: forall model.
   PageLocation
     {- ^ The location of the 'Page' ('pagePort' and/or 'pagePath') -} ->
@@ -260,9 +276,6 @@ runPage :: forall model.
   (WithinPage => model -> (PageContent, Handlers model))
     {- ^ A function to draw the @model@ as some rendered 'Direct.PageContent' and
          produce the set of handlers for events on that new view of the page.
-         Note the presence of the 'WithinPage' context, which means the 'eval'
-         and 'evalBlock' functions are available to evaluate JavaScript in the
-         context of the page within 'Handlers'.
     -} ->
   IO (Page model)
     {- ^ A 'Page' handle to permit further interaction with the running page -}
