@@ -29,7 +29,7 @@ import qualified Myxine.ConjMap as ConjMap
 -- event, and the current @model@ of a page. It has the option to do arbitrary
 -- 'IO', and to return a possibly-changed @model@. It also must specify whether
 -- or not the event should continue to propagate outwards to other handlers, by
--- giving a 'Propagation' (either 'Bubble', 'Stop', or 'StopImmediately').
+-- giving a 'Propagation' (either 'Bubble' or 'Stop').
 --
 -- The callback will only be invoked when an event occurs which matches the
 -- conjunction of the specified list of 'TargetFact's. For instance, to
@@ -43,11 +43,12 @@ import qualified Myxine.ConjMap as ConjMap
 -- access to a 'MouseEvent' data structure when it is invoked. That is to say:
 --
 -- @
--- 'on' 'Click'
+-- 'onEvent' 'Click'
 --      ['tagIs' "div", "class" `'attrIs'` "foo"]
 --      (\properties@'MouseEvent'{} model ->
 --         do print properties
---            print model)
+--            print model
+--            pure (Bubble, model))
 --   :: 'Show' model => 'Handlers' model
 -- @
 --
@@ -102,7 +103,6 @@ handle (Handlers allHandlers) PageEvent{event, properties, targets} model =
          case propagation of
            Bubble -> processHandlers (hs : parents) m'
            Stop   -> processHandlers (hs : [     ]) m'
-           StopImmediately -> pure m'
 {-# INLINE handle #-}
 
 -- TODO: add zoom combinator!
@@ -129,7 +129,6 @@ data Propagation
   = Bubble  -- ^ Continue to trigger the event on parent elements
   | Stop    -- ^ Continue to trigger the event for all handlers of this element,
             -- but stop before triggering it on any parent elements
-  | StopImmediately  -- ^ Do not trigger any other event handlers
   deriving (Eq, Ord, Show)
 
 instance Semigroup Propagation where
