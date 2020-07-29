@@ -24,7 +24,7 @@ where
   initialModel :: model
   initialModel = ...  -- model
 
-  drawAndHandle :: JsEval => model -> ('PageContent', 'Handlers')
+  drawAndHandle :: WithinPage => model -> ('PageContent', 'Handlers')
   drawAndHandle = ...  -- view and controller
 @
 
@@ -47,7 +47,7 @@ where
         model has changed. The @drawAndHandle@ function will be called on every
         update to the model, so it's good to make it reasonably fast.
 
-        The @drawAndHandle@ function is run in a 'JsEval' context, which means
+        The @drawAndHandle@ function is run in a 'WithinPage' context, which means
         that the 'eval' and 'evalBlock' functions may be used within handlers to
         evaluate JavaScript within the context of the current page.
 
@@ -142,7 +142,7 @@ do Right width <- evalInPage (JsExpression "window.innerWidth")
    print (width :: Int)
 @
    -}
-  , JavaScript(..), evalInPage, JsEval, eval, evalBlock
+  , JavaScript(..), evalInPage, WithinPage, eval, evalBlock
   ) where
 
 import Control.Monad
@@ -187,10 +187,10 @@ runPage :: forall model.
     {- ^ The location of the 'Page' ('pagePort' and/or 'pagePath') -} ->
   model
     {- ^ The initial @model@ of the model for the 'Page' -} ->
-  (JsEval => model -> (PageContent, Handlers model))
+  (WithinPage => model -> (PageContent, Handlers model))
     {- ^ A function to draw the @model@ as some rendered 'PageContent' and produce the
          set of handlers for events on that new view of the page. Note the
-         presence of the 'JsEval' context, which means the 'eval' and
+         presence of the 'WithinPage' context, which means the 'eval' and
          'evalBlock' functions are available to evaluate JavaScript in the
          context of the page within 'Handlers'.
     -} ->
@@ -227,8 +227,8 @@ runPage pageLocation initialModel drawAndHandle =
                  loop handlers
                Right model ->
                  do let (content, handlers') =
-                          withJsEvalContext
-                            (JsEvalContext (evaluateJs pageLocation))
+                          withPageContext
+                            (WithinPageContext pageLocation)
                             (drawAndHandle model)
                     writeChan frames content
                     loop handlers'
@@ -252,8 +252,7 @@ runPage pageLocation initialModel drawAndHandle =
      -- Kick off the cycle by "updating" the intial model
      writeChan pageActions (Just pure)
 
-     let page = Page{..}
-     pure page
+     pure Page{..}
 
 onLatest :: (a -> IO ()) -> IO (IO a) -> IO ()
 onLatest action rest = go =<< rest
@@ -411,57 +410,47 @@ evalInPage page@Page{pageLocation} js =
 
 -- Borrowing a technique from Data.Reflection:
 
--- | The @JsEval@ class, when it is present in a context, enables the use of the
--- 'eval' and 'evalBlock' functions, which evaluate JavaScript in the context of
--- the current page. Only in the body of a call to 'runPage' is there a
--- canonical current page to refer to, which means that these functions can only
--- be used there.
-class JsEval where jsEvalContext :: JsEvalContext
+-- | The @WithinPage@ class, when it is present in a context, enables the use of
+-- the 'eval' and 'evalBlock' functions, which evaluate JavaScript in the
+-- context of the current page. Only in the body of a call to 'runPage' is there
+-- a canonical current page to refer to, which means that these functions can
+-- only be used there.
+class WithinPage where
+  -- | Acquire the JavaScript evaluation context from the ambient page. This is
+  -- only possible within a call to 'runPage', which is where the 'WithinPage'
+  -- context is present.
+  --
+  -- This function cannot be called directly; use 'eval' or 'evalBlock' to
+  -- evaluate JavaScript within a page.
+  withinPageContext :: WithinPageContext
 
 -- Specialized version of Data.Reflection.Gift:
-newtype JsEvalGift r = JsEvalGift (JsEval => r)
+newtype WithinPageGift r = WithinPageGift (WithinPage => r)
 
 -- Specialized version of Data.Reflection.give:
-withJsEvalContext :: forall r. JsEvalContext -> (JsEval => r) -> r
-withJsEvalContext c k = Unsafe.unsafeCoerce (JsEvalGift k :: JsEvalGift r) c
-{-# NOINLINE withJsEvalContext #-}
+withPageContext :: forall r. WithinPageContext -> (WithinPage => r) -> r
+withPageContext c k = Unsafe.unsafeCoerce (WithinPageGift k :: WithinPageGift r) c
+{-# NOINLINE withPageContext #-}
 
--- A "handle" that closes over the page location and encapsulates what it takes
--- to evaluate some JavaScript in the page (outside the page event queue, or
--- else deadlock will occur!)
-newtype JsEvalContext =
-  JsEvalContext (forall a. JSON.FromJSON a => JavaScript -> IO a)
+-- A "handle" that closes over the page location
+newtype WithinPageContext =
+  WithinPageContext PageLocation
 
-eval, evalBlock :: (JsEval, JSON.FromJSON a, MonadIO m) => Text -> m a
--- | Evaluate some JavaScript in the context of the __current page__. See the
--- documentation for 'evalInPage' for further caveats.
---
--- Returns either a deserialized Haskell type, or throws a 'JsException'
--- containing a human-readable string describing any error that occurred.
---
--- This treats the input as an __expression__, which means that it
--- implicitly wraps it in @return (...);@. To evaluate a block of JavaScript
--- without this wrapping, use 'evalBlock'.
+eval, evalBlock :: (WithinPage, JSON.FromJSON a, MonadIO m) => Text -> m a
+-- | Evaluate a JavaScript __expression__ in the context of the __current__
+-- __page__. See the documentation for 'evalInPage' for further caveats.
 --
 -- This function can only be called within 'runPage', because it requires a
--- specific @'JsEval'@ context to know where to run the JavaScript code.
+-- specific @'WithinPage'@ context to know where to run the JavaScript code.
 eval expression =
-  let JsEvalContext evaluate = jsEvalContext
-  in liftIO (evaluate (JsExpression expression))
+  let WithinPageContext location = withinPageContext
+  in liftIO (evaluateJs location (JsExpression expression))
   
--- | Evaluate some JavaScript in the context of the current page, returning
--- either a JavaScript error or the decoded result from the page.
---
--- Returns either a deserialized Haskell type, or throws a 'JsException'
--- containing a human-readable string describing any error that occurred.
---
--- This treats the input as a __block__, which means that it /does/
--- /not/ implicitly wrap it in @return (...);@. To evaluate a JavaScript
--- expression without needing to explicitly write a return statement, use
--- 'eval'.
+-- | Evaluate a JavaScript __block__ in the context of the __current page__.
+-- See the documentation for 'evalInPage' for further caveats.
 --
 -- This function can only be called within 'runPage', because it requires a
--- specific @'JsEval'@ context to know where to run the JavaScript code.
+-- specific @'WithinPage'@ context to know where to run the JavaScript code.
 evalBlock block =
-  let JsEvalContext evaluate = jsEvalContext
-  in liftIO (evaluate (JsBlock block))
+  let WithinPageContext location = withinPageContext
+  in liftIO (evaluateJs location (JsBlock block))

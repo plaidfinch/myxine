@@ -45,6 +45,8 @@ module Myxine
 -- Myxine's documentation and/or the [MDN web API documentation for events and
 -- their interfaces](https://developer.mozilla.org/docs/Web/Events).
   , module Event
+  , module Data.Aeson
+  , module Control.Monad.IO.Class
   ) where
 
 import Myxine.Event
@@ -52,3 +54,6 @@ import Myxine.Direct
 import Myxine.Page
 import qualified Myxine.Event as Event
   hiding (decodeSomeEventType, eventPropertiesDict, encodeEventType)
+
+import Data.Aeson (FromJSON)
+import Control.Monad.IO.Class (MonadIO(..))

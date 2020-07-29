@@ -23,13 +23,17 @@ the return type of its last function argument:
 'Myxine.Page.runPage' ::
   'Direct.PageLocation' ->
   model ->
-  ('Myxine.JsEval' => model -> ('Direct.PageContent', 'Handlers' model) ->
+  ('Myxine.WithinPage' => model -> ('Direct.PageContent', 'Handlers' model)) ->
   IO ('Myxine.Page.Page' model)
 @
 
 This means that running a page using this technique looks like:
 
-> runPage location initialModel (reactive (... :: Reactive model))
+@
+runPage location initialModel (reactive . component)
+@
+
+where @component :: 'Myxine.WithinPage' => model -> 'Reactive' model@.
 
 __Helpful companions:__
 
@@ -46,19 +50,44 @@ combinators, in particular the stateful 'Control.Lens.Setter..=' and friends.
 __A small example:__
 
 Here's a simple 'Reactive' page that uses some of the combinators in this
-library.
+library, as well as the Lens combinators 'Control.Lens._1', 'Control.Lens._2',
+'Control.Lens.^.', 'Control.Lens..=', 'Control.Lens.+=', and 'Control.Lens.*='.
+
+In this demonstration, you can see how the '@@' and 'on' functions work together
+to allow you to define event handlers scoped to specific regions of the page:
+handlers defined via 'on' receive only events from within the region delineated
+by the enclosing '@@'. As such, clicking on the background does not increment
+the counter, but clicking on the button does.
 
 @
-component :: (Int, Bool) -> 'Reactive' (Int, Bool)
+{-# language OverloadedStrings, DuplicateRecordFields, NamedFieldPuns #-}
+
+module Main (main) where
+
+import Text.Blaze.Html5 ((!))
+import qualified Text.Blaze.Html5 as H
+import qualified Text.Blaze.Html5.Attributes as A
+import Control.Lens
+
+import Myxine
+import Myxine.Reactive
+
+main :: IO ()
+main = do
+  page <- runPage mempty (0, False) (reactive . component)
+  print =<< waitPage page
+
+component :: (Integer, Bool) -> Reactive (Integer, Bool)
 component model = do
-  div ! color (if snd model then "red" else "green") '@@' do
-    'on' MouseOver \_ -> _2 .= True
-    'on' MouseOut  \_ -> _2 .= False
-    button ! style "margin: 20pt" '@@' do
-      'on' Click \_ -> _1 += 1
-      'markup' do
-        span ! style "font-size: 20pt" $
-          string (show (fst model))
+  H.div ! A.style ("background: " <> if model^._2 then "red" else "green") '@@' do
+    'on' 'MouseOver' \_ -> _2 .= True
+    'on' 'MouseOut'  \_ -> _2 .= False
+    H.button ! A.style "margin: 20pt" '@@' do
+      'on' 'Click' \'MouseEvent'{shiftKey = False} -> _1 += 1
+      'on' 'Click' \'MouseEvent'{shiftKey = True} -> _1 *= 2
+      'markup' $ do
+        H.span ! A.style "font-size: 20pt" $
+          H.string (show (model^._1))
 @
 -}
 
