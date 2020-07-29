@@ -161,23 +161,3 @@ instance Monoid Propagation where
 newtype PerEventHandlers model props
   = PerEventHandlers (ConjMap TargetFact (props -> model -> IO (Propagation, model)))
   deriving newtype (Semigroup, Monoid)
-
--- a pure function from the current state of the page's
---         model to a rendered HTML view of the page in its entirety, and the new
---         set of 'Handlers' for page events. A handler can modify the model of the
---         page, and perform arbitrary 'IO' actions. After each all pertinent
---         handlers for an event are dispatched, the page is re-rendered to the
---         browser. The @drawAndHandle@ function is run in a 'WithinPage' context,
---         which means that the 'eval' and 'evalBlock' functions may be used within
---         handlers to evaluate JavaScript within the context of the current page.
-
---       This library doesn't bind you into a specific approach for HTML
---       generation: you can construct some 'Direct.PageContent' from
---       'Data.Text.Text' using 'pageTitle' and 'pageBody', and you can build a set
---       of 'Handlers' by combining calls to 'Myxine.Handlers.onEvent' with the
---       'Monoid' instance for 'Handlers'.
-
---       __However__, the above manual method for constructing page logic can get
---       messy as pages get more complex. To solve this issue, this package also
---       provides the optional 'Reactive' DSL for describing pages by
---       /interleaving/ content and event handling:
