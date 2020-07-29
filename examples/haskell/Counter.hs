@@ -12,7 +12,6 @@ import Control.Monad
 import Control.Monad.IO.Class
 
 import Myxine
-import Myxine.Reactive
 
 data Counter =
   Counter { _highlighted :: Bool, _count :: Int }
@@ -35,7 +34,7 @@ interval i action =
 countdown :: Int -> IO () -> IO (IO ())
 countdown i action =
   do interrupts <- newChan
-     forkIO $ forever do
+     _ <- forkIO $ forever do
        tid <- interval i action
        () <- readChan interrupts
        killThread tid

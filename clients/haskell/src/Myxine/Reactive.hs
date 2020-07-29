@@ -1,99 +1,6 @@
-{-|
-Description : An opinionated widget builder for 'Myxine.Page.Page'
-
-While in theory, it is equally possible to write the content of your page and
-its event listeners separately, it is often most intelligible to connect them
-together, as many pages have event listeners that are scoped to a particular
-section of their HTML. This module provides a tiny DSL for describing pages in
-these terms, with event handlers inline with the elements to which they pertain.
-
-In our nomenclature, a reactive component is an interleaving of a description of
-the literal HTML structure of the page, and the event handlers which are scoped
-to various sections of that page. They are built in the 'ReactiveM' monad, and
-once built, are interpreted using:
-
-@
-'reactive' :: 'Reactive' model -> ('Direct.PageContent', 'Handlers' model)
-@
-
-Note that this output type is precisely the right type to hand to 'runPage' in
-the return type of its last function argument:
-
-@
-'Myxine.Page.runPage' ::
-  'Direct.PageLocation' ->
-  model ->
-  ('Myxine.WithinPage' => model -> ('Direct.PageContent', 'Handlers' model)) ->
-  IO ('Myxine.Page.Page' model)
-@
-
-This means that running a page using this technique looks like:
-
-@
-runPage location initialModel (reactive . component)
-@
-
-where @component :: 'Myxine.WithinPage' => model -> 'Reactive' model@.
-
-__Helpful companions:__
-
-This module is meant to be imported alongside the 'Text.Blaze.Html5' and
-'Text.Blaze.Html5.Attributes' modules from the
-[blaze-html](https://hackage.haskell.org/package/blaze-html), which provide
-the HTML combinators required for building markup.
-
-While nothing about this module hard-codes the use of
-[lenses](https://hackage.haskell.org/package/lens), it is often useful in the
-body of handlers given to 'on' to manipulate the model state using lens
-combinators, in particular the stateful 'Control.Lens.Setter..=' and friends.
-
-__A small example:__
-
-Here's a simple 'Reactive' page that uses some of the combinators in this
-library, as well as the Lens combinators 'Control.Lens._1', 'Control.Lens._2',
-'Control.Lens.^.', 'Control.Lens..=', 'Control.Lens.+=', and 'Control.Lens.*='.
-
-In this demonstration, you can see how the '@@' and 'on' functions work together
-to allow you to define event handlers scoped to specific regions of the page:
-handlers defined via 'on' receive only events from within the region delineated
-by the enclosing '@@'. As such, clicking on the background does not increment
-the counter, but clicking on the button does.
-
-@
-{-# language OverloadedStrings, DuplicateRecordFields, NamedFieldPuns #-}
-
-module Main (main) where
-
-import Text.Blaze.Html5 ((!))
-import qualified Text.Blaze.Html5 as H
-import qualified Text.Blaze.Html5.Attributes as A
-import Control.Lens
-
-import Myxine
-import Myxine.Reactive
-
-main :: IO ()
-main = do
-  page <- runPage mempty (0, False) (reactive . component)
-  print =<< waitPage page
-
-component :: (Integer, Bool) -> Reactive (Integer, Bool)
-component model = do
-  H.div ! A.style ("background: " <> if model^._2 then "red" else "green") '@@' do
-    'on' 'MouseOver' \_ -> _2 .= True
-    'on' 'MouseOut'  \_ -> _2 .= False
-    H.button ! A.style "margin: 20pt" '@@' do
-      'on' 'Click' \'MouseEvent'{shiftKey = False} -> _1 += 1
-      'on' 'Click' \'MouseEvent'{shiftKey = True} -> _1 *= 2
-      'markup' $ do
-        H.span ! A.style "font-size: 20pt" $
-          H.string (show (model^._1))
-@
--}
-
 module Myxine.Reactive
-  ( Reactive, ReactiveM, reactive, title, markup, on, on', target, (@@)
-  , Html, ToMarkup(..)
+  ( Reactive, ReactiveM, reactive, title, markup,
+    on, on', Propagation(..), target, (@@)
   ) where
 
 import Text.Blaze.Html5 (Html, ToMarkup(..), string, (!), dataAttribute)
@@ -130,9 +37,10 @@ data ReactiveBuilder model =
     -- ^ The most-recently set title for the page (via 'title').
     }
 
--- | The underlying builder monad for the 'Reactive' type. This is almost always
--- used with a return type of @()@, hence you will usually see it aliased as
--- 'Reactive' @model@.
+-- | The underlying builder monad for the 'Reactive' type.
+--
+-- This is almost always used with a return type of @()@, hence you will usually
+-- see it aliased as 'Reactive' @model@.
 newtype ReactiveM model a =
   ReactiveM (State (ReactiveBuilder model) a)
   deriving newtype (Functor, Applicative, Monad)
@@ -147,6 +55,21 @@ type Reactive model = ReactiveM model ()
 -- | Wrap an inner reactive component in some enclosing HTML. Any listeners
 -- created via 'on' in the wrapped component will be scoped to only events that
 -- occur within this chunk of HTML.
+--
+-- In the following example, we install a 'Click' handler for the whole page,
+-- then build a @<div>@ with /another/ 'Click' handler inside that page, which
+-- returns 'Stop' from 'on'' to stop the 'Click' event from bubbling out to the
+-- outer handler when the inner @<div>@ is clicked.
+--
+-- @
+-- do 'on' 'Click' $ \\_ ->
+--      liftIO $ putStrLn "Clicked outside!"
+--    div ! style "background: lightblue;" '@@' do
+--      "Click here, or elsewhere..."
+--      'on'' 'Click' $ \\_ -> do
+--        liftIO $ putStrLn "Clicked inside!"
+--        pure 'Stop'
+-- @
 (@@) :: (Html -> Html) -> ReactiveM model a -> ReactiveM model a
 wrap @@ ReactiveM inner = ReactiveM do
   builder <- get
@@ -203,9 +126,11 @@ title t = ReactiveM (modify \wb -> wb { pageTitle = Last (Just t) })
 -- update will be silently skipped. This is useful as a shorthand to select only
 -- events of a certain sort, for instance:
 --
--- > on' Click \MouseEvent{shiftKey = True} ->
--- >   do putStrLn "Shift + Click!"
--- >      pure Bubble
+-- @
+-- 'on'' 'Click' \\'MouseEvent'{shiftKey = True} ->
+--   do putStrLn "Shift + Click!"
+--      pure 'Bubble'
+-- @
 on' ::
   EventType props ->
   (props -> StateT model IO Propagation) ->
@@ -246,17 +171,20 @@ on' event reaction = ReactiveM do
 -- update will be silently skipped. This is useful as a shorthand to select only
 -- events of a certain sort, for instance:
 --
--- > on Click \MouseEvent{shiftKey = True} ->
--- >   putStrLn "Shift + Click!"
+-- @
+-- 'on' 'Click' \\'MouseEvent'{shiftKey = True} ->
+--   putStrLn "Shift + Click!"
+-- @
 on ::
   EventType props ->
   (props -> StateT model IO ()) ->
   Reactive model
 on event action = on' event (\props -> action props >> pure Bubble)
 
--- | Evaluate a reactive component to produce a pair of 'PageContent' and
--- 'Handlers'. This is the bridge between the 'runPage' abstraction and the
--- 'Reactive' abstraction: use this to run a reactive component in a 'Page'.
+-- | Evaluate a reactive component to produce a pair of 'Direct.PageContent' and
+-- 'Handlers'. This is the bridge between the 'Direct.runPage' abstraction and
+-- the 'Reactive' abstraction: use this to run a reactive component in a
+-- 'Myxine.Page'.
 reactive :: Reactive model -> (Direct.PageContent, Handlers model)
 reactive (ReactiveM action) =
   let ReactiveBuilder{handlers, pageMarkup, pageTitle = pageContentTitle} =
@@ -272,17 +200,26 @@ reactive (ReactiveM action) =
       , pageMarkup = pure ()
       , pageTitle = Last Nothing }
 
+-- | 'Reactive' pages can be combined using '<>', which concatenates their HTML
+-- content and merges their sets of 'Handlers'.
 instance Semigroup a => Semigroup (ReactiveM model a) where
   m <> n = (<>) <$> m <*> n
 
+-- | The empty 'Reactive' page, with no handlers and no content, is 'mempty'.
 instance Monoid a => Monoid (ReactiveM model a) where mempty = pure mempty
 
+-- | You can apply an HTML attribute to any 'Reactive' page using '!'.
 instance Attributable (ReactiveM model a) where
   w ! a = (! a) @@ w
 
+-- | You can apply an HTML attribute to any function between 'Reactive' pages
+-- using '!'. This is useful when building re-usable widget libraries, allowing
+-- their attributes to be modified after the fact but before they are filled
+-- with contents.
 instance Attributable (ReactiveM model a -> ReactiveM model a) where
   f ! a = (! a) . f
 
+-- | A string literal is a 'Reactive' page containing that selfsame text.
 instance (a ~ ()) => IsString (ReactiveM model a) where
   fromString = markup . string
 

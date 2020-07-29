@@ -7,15 +7,15 @@ model-view-controller approach may not be appropriate for all needs. The
 functions below are a one-to-one mapping to the API of the Myxine server.
 
 Like the Myxine server API itself, this interface has a small surface area. You
-can send a new page 'Update' using 'sendUpdate', you can loop over all page
-events using 'withEvents', and you can evaluate raw JavaScript using
+can send a new page 'Update' using 'update', you can loop over all page
+events using 'events', and you can evaluate raw JavaScript using
 'evaluateJs'.
 -}
 module Myxine.Direct
   ( -- * Page locations on @localhost@
     PageLocation, pagePort, PagePort, pagePath, PagePath
     -- * Sending updates to pages and getting events from pages
-  , Update(..), EventList(..), PageEvent(..)
+  , Update(..), EventList(..), PageEvent(..), Target, tag, attribute
   , PageContent, pageBody, pageTitle, update, events
     -- * Evaluating raw JavaScript in the context of a page
   , JavaScript(..), evaluateJs, JsException(..)
@@ -23,6 +23,7 @@ module Myxine.Direct
   , ProtocolException(..)
     -- * The @Some@ existential
   , Some(..)
+  , module Myxine.Event
   ) where
 
 import Data.Maybe
@@ -48,6 +49,7 @@ import qualified Text.URI as URI
 import qualified Salve
 import Data.Version (showVersion)
 
+import Myxine.Internal.Event
 import Myxine.Event
 import Myxine.Target
 import Paths_myxine_client (version)
@@ -113,6 +115,7 @@ newtype PagePath
   = PagePath Text
   deriving newtype (IsString, Eq, Ord, Show)
 
+-- TODO: Allow remote connections!
 -- | The options for connecting to the Myxine server. This is an opaque
 -- 'Monoid': set options by combining 'pagePort' and/or 'pagePath' using their
 -- 'Semigroup' instance.
@@ -241,25 +244,42 @@ newtype JsException =
 --
 -- Returns either a deserialized Haskell type, or throws a 'JsException'
 -- containing a human-readable string describing any error that occurred.
+--
 -- Possible errors include:
 --
--- * Any exception in the given JavaScript
--- * Absence of any browser window currently viewing the page (since there's no
---   way to evaluate JavaScript without a JavaScript engine)
--- * Invalid JSON response for the result type inferred (use 'JSON.Value' if you
+-- Possible errors, which manifest as 'JsException's:
+--
+--   * Any exception in the given JavaScript
+--
+--   * Invalid JSON response for the result type inferred (use 'JSON.Value' if you
 --   don't know what shape of data you're waiting to receive).
 --
 -- Further caveats:
 --
--- * JavaScript @undefined@ is translated to @null@ in the results
--- * 'JsBlock' inputs which don't explicitly return a value result in @null@
--- * Return types are limited to those which can be serialized via
---   [@JSON.stringify@](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify),
+--   * JavaScript @undefined@ is translated to @null@ in the results
+--
+--   * Return types are limited to those which can be serialized via
+--   [JSON.stringify](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify),
 --   which does not work for cyclic objects (like @window@, @document@, and all
 --   DOM nodes), and may fail to serialize some properties for other non-scalar
 --   values. If you want to return a non-scalar value like a list or dictionary,
 --   construct it explicitly yourself by copying from the fields of the object
 --   you're interested in.
+--
+--   * You're evaluating an arbitrary string as JavaScript, which means there
+--   are no guarantees about type safety or purity.
+--
+--   * It is possible that you could break the Myxine server code running in
+--   the page that makes it update properly, or hang the page by passing a
+--   non-terminating piece of code.
+--
+--   * Any modifications you make to the DOM will be immediately overwritten on
+--   the next re-draw of the page. Don't do this.
+--
+--   * If there are multiple browser windows pointed at the same page, and the
+--   result of your query differs between them, it's nondeterministic which
+--   result you get back.
+
 evaluateJs ::
   JSON.FromJSON a =>
   PageLocation {- ^ The location of the page in which to evaluate the JavaScript -} ->

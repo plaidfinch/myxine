@@ -1,3 +1,21 @@
+{-| Description : Declarative handlers for page events (usually not necessary
+  unless you're making an alternative to the 'Myxine.Reactive' builder)
+
+In order to react to user events in the browser, we need to specify what effect
+each event of interest should have on the model in our 'Myxine.Page'. To do
+this, 'Myxine.runPage' asks that we construct up-front a set of 'Handlers'
+describing this.
+
+'Handlers' is a 'Monoid': the 'mempty' 'Handlers' listens to no events.
+Singleton 'Handlers' can be created using the 'onEvent' function, and they can
+be joined together using '<>'.
+
+This module is useful when you are building your own page event handling
+abstraction, for instance, if "Myxine.Reactive" isn't right for your purposes.
+However, it is not necessary to usee this module directly if you are buliding a
+reactive page using that high-level abstraction.
+-}
+
 module Myxine.Handlers
   ( Handlers
   , onEvent
@@ -34,21 +52,22 @@ import qualified Myxine.ConjMap as ConjMap
 -- The callback will only be invoked when an event occurs which matches the
 -- conjunction of the specified list of 'TargetFact's. For instance, to
 -- constrain a handler to only events on @<div>@ elements with @class="foo"@, we
--- would use the 'TargetFact' @['tagIs' "div", "class" `'attrIs'` "foo"]@.
+-- would use the 'TargetFact' @[tagIs "div", "class" `attrIs` "foo"]@.
 --
 -- Notice that each variant of 'EventType' has a type-level index describing
 -- what kind of data is carried by events of that type. This means that, for
 -- instance, if you want to handle a 'Click' event, which has the type
--- 'EventType MouseEvent', your event handler as created by 'on' will be given
--- access to a 'MouseEvent' data structure when it is invoked. That is to say:
+-- 'EventType MouseEvent', your event handler as created by 'Myxine.on' will be
+-- given access to a 'MouseEvent' data structure when it is invoked. That is to
+-- say:
 --
 -- @
 -- 'onEvent' 'Click'
---      ['tagIs' "div", "class" `'attrIs'` "foo"]
---      (\properties@'MouseEvent'{} model ->
---         do print properties
---            print model
---            pure (Bubble, model))
+--    [tagIs "div", "class" `attrIs` "foo"]
+--    (\properties@'MouseEvent'{} model ->
+--       do print properties
+--          print model
+--          pure (Bubble, model))
 --   :: 'Show' model => 'Handlers' model
 -- @
 --
@@ -112,7 +131,7 @@ handledEvents :: Handlers model -> [Some EventType]
 handledEvents (Handlers handlers) = DMap.keys handlers
 
 -- | A set of handlers for events, possibly empty. Create new 'Handlers' using
--- 'on', and combine 'Handlers' together using their 'Monoid' instance.
+-- 'onEvent', and combine 'Handlers' together using their 'Monoid' instance.
 newtype Handlers model
   = Handlers (DMap EventType (PerEventHandlers model))
 
@@ -124,12 +143,13 @@ instance Monoid (Handlers model) where
   mempty = Handlers mempty
 
 -- | Indicator for whether an event should continue to be triggered on parent
--- elements in the path
+-- elements in the path. An event handler can signal that it wishes the event to
+-- stop propagating by returning 'Stop'.
 data Propagation
   = Bubble  -- ^ Continue to trigger the event on parent elements
   | Stop    -- ^ Continue to trigger the event for all handlers of this element,
             -- but stop before triggering it on any parent elements
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Enum, Bounded)
 
 instance Semigroup Propagation where
   l <> r | l > r = l

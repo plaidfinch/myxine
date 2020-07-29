@@ -102,14 +102,15 @@ common options
 library
   import:              deps, options
   exposed-modules:     Myxine
-                       Myxine.Direct
-                       Myxine.Reactive
-  other-modules:       Myxine.Page
-                       Myxine.Target
-                       Myxine.Handlers
                        Myxine.Event
+                       Myxine.Direct
+                       Myxine.Handlers
+  other-modules:       Myxine.Reactive
+                       Myxine.Page
+                       Myxine.Target
                        Myxine.ConjMap
                        Myxine.Internal.TH
+                       Myxine.Internal.Event
                        Paths_myxine_client
   autogen-modules:     Paths_myxine_client
   hs-source-dirs:      src

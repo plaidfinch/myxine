@@ -13,7 +13,6 @@ import Control.Lens
 
 -- Myxine itself:
 import Myxine
-import Myxine.Reactive
 
 -- Specific to this application:
 import Data.Word
