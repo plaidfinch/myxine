@@ -12,7 +12,7 @@ be joined together using '<>'.
 
 This module is useful when you are building your own page event handling
 abstraction, for instance, if 'Myxine.Reactive' isn't right for your purposes.
-However, it is not necessary to usee this module directly if you are buliding a
+However, it is not necessary to use this module directly if you are building a
 reactive page using that high-level abstraction.
 -}
 
