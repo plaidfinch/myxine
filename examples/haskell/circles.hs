@@ -43,7 +43,7 @@ $(makeLenses ''Circles)
 main :: IO ()
 main = do
   page <- runPage mempty
-    Circles { _current = Nothing, _rest = mempty }
+    (pure Circles { _current = Nothing, _rest = mempty })
     (reactive allCircles)
   print =<< waitPage page
 
