@@ -14,7 +14,7 @@ import           Data.Bifunctor
 import qualified Data.ByteString      as ByteString.Strict
 import           Data.ByteString.Lazy (ByteString)
 import qualified Data.Char            as Char
-import           Data.Dependent.Map   (Some(..))
+import           Data.Some.Newtype    (Some(..))
 import           Data.Either
 import           Data.Foldable
 import           Data.GADT.Compare
@@ -29,6 +29,7 @@ import           Data.Ord
 import           Data.Text            (Text)
 import           Data.Traversable
 import           Data.Constraint
+import           Data.Type.Equality
 import qualified GHC.Generics         as Generic
 import           Language.Haskell.TH
 

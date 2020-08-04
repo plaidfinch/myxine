@@ -9,6 +9,7 @@ import Text.Blaze.Html5.Attributes hiding (span, title)
 import Data.String
 import Control.Monad.IO.Class
 import Control.Monad.State
+import Control.Monad.Reader
 import Control.Lens
 
 -- Myxine itself:
@@ -43,12 +44,13 @@ main :: IO ()
 main = do
   page <- runPage mempty
     Circles { _current = Nothing, _rest = mempty }
-    (\circles -> reactive (drawCircles circles))
+    (reactive allCircles)
   print =<< waitPage page
 
-drawCircles :: Circles -> Reactive Circles
-drawCircles circles = do
-  title $ "Circles: " <> fromString (show count)
+allCircles :: Reactive Circles
+allCircles = do
+  circles <- ask
+  title $ "Circles: " <> fromString (show (count circles))
   if circles^.current == Nothing && null (circles^.rest)
     then
       markup $
@@ -62,7 +64,7 @@ drawCircles circles = do
   on MouseDown \MouseEvent{clientX, clientY, shiftKey = False} ->
     do randomHue <- liftIO randomIO
        randomUUID <- liftIO randomIO
-       current .= Just (Circle randomUUID clientX clientY count 0 randomHue)
+       current .= Just (Circle randomUUID clientX clientY (count circles) 0 randomHue)
   on MouseMove \MouseEvent{clientX, clientY, buttons = 1} ->
     zoom (current._Just) do
       circle <- get
@@ -81,7 +83,8 @@ drawCircles circles = do
     , metaKey = False
     } -> liftIO exitFailure  -- end the program on Ctrl-C in the browser too!
   where
-    count = maybe 0 (const 1) (circles^.current) + length (circles^.rest)
+    count circles =
+      maybe 0 (const 1) (circles^.current) + length (circles^.rest)
     canvasStyles =
       [ ("position", "relative")
       , ("padding", "0px")

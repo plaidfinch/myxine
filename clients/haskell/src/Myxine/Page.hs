@@ -23,7 +23,7 @@ The beginning of a typical @myxine-client@ app looks something like:
 @
 data Model = ...  -- the model that defines the page's current state
 
-do page <- 'runPage' location initialModel ('reactive' . component)
+do page <- 'runPage' location (pure initialModel) ('reactive' . component)
    finalModel <- 'waitPage' page
 where
   location :: 'PageLocation'
@@ -32,7 +32,7 @@ where
   initialModel :: Model
   initialModel = ...  -- the initial state of the model
 
-  component :: 'WithinPage' => Model -> 'Reactive' Model
+  component :: 'WithinPage' => 'Reactive' Model
   component = ...  -- how to render the model and listen for events that would update it
 @
 
@@ -45,9 +45,10 @@ locations](#Locations).
 * __@initialModel@:__ the starting value for the model of the page, which can be
 any Haskell data type of your choice.
 
-* __@component@:__ a function from the current state of the model to an
-interleaved description in the 'Reactive' monad explaining both how to render it
-as HTML and how to handle events that occur within that selfsame HTML.
+* __@component@:__ an interleaved description in the 'Reactive' monad explaining
+both how to render the current state of the model as HTML, and how to handle
+events that occur within that selfsame HTML by updating the model and performing
+IO.
 
 See also the sections on [building reactive pages](#Building) and [manipulating
 pages](#Manipulating).
@@ -62,7 +63,7 @@ as noted above, 'runPage' takes as input any function of type
 provide the 'Reactive'-built pages to 'runPage' by /evaluating/ them using:
 
 @
-'reactive' :: 'Reactive' model -> ('Direct.PageContent', 'Handlers' model)
+'reactive' :: 'Reactive' model -> model -> ('Direct.PageContent', 'Handlers' model)
 @
 
 This might not always suit your desires, though, and that's precisely why it's
@@ -101,7 +102,13 @@ not baked in. You are free to construct 'PageContent' using 'pageTitle' and
 import Text.Blaze.Html5 ((!))
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
+
+import Control.Monad.IO.Class
+import Control.Monad.State
+import Control.Monad.Reader
+
 import Control.Lens
+
 import Myxine
 @
 
@@ -122,11 +129,12 @@ import Myxine
 @
 main :: IO ()
 main = do
-  page <- 'runPage' 'mempty' (0, False) ('reactive' . component)
+  page <- 'runPage' 'mempty' (0, False) ('reactive' component)
   print =<< 'waitPage' page
 
-component :: (Integer, Bool) -> Reactive (Integer, Bool)
-component model = do
+component :: Reactive (Integer, Bool)
+component = do
+  model <- 'ask'
   H.div ! A.style ("background: " '<>' if model 'Control.Lens.^.' 'Control.Lens._2' then "red" else "green") '@@' do
     'on' 'MouseOver' $ \\_ -> 'Control.Lens._2' 'Control.Lens..=' True
     'on' 'MouseOut'  $ \\_ -> 'Control.Lens._2' 'Control.Lens..=' False
@@ -150,8 +158,9 @@ component model = do
       every 'Resize' event:
 
 @
-windowWidth :: 'WithinPage' => Int -> 'Reactive' Int
-windowWidth currentWidth = do
+windowWidth :: 'WithinPage' => 'Reactive' Int
+windowWidth = do
+  currentWidth <- ask
   'markup' currentWidth
   'on' 'Resize' $ \\_ -> do
     width <- 'eval' "window.innerWidth"
@@ -236,9 +245,15 @@ import Myxine.Handlers
 -- etc.
 data Page model
   = Page
-    { pageActions     :: !(Chan (Maybe (model -> IO model)))
+    { pageActions     :: !(Chan (PageAction model))
     , pageFinished    :: !(MVar (Either SomeException model))
     , pageLocation    :: !PageLocation }
+
+-- | An action to be performed in the page context. Either a call to stop the
+-- page, or an effectful function to be performed on the model of the page.
+data PageAction model
+  = StopPage
+  | PageAction !(WithinPage => model -> IO model)
 
 -- | Run an interactive page, returning a handle 'Page' through which it can be
 -- interacted further, via the functions in this module (e.g. 'waitPage',
@@ -266,25 +281,31 @@ data Page model
 -- use it, see [Using Page without Reactive](#NoReactive)):
 --
 -- @
--- 'runPage' location initialModel ('reactive' . component)
+-- 'runPage' location (pure initialModel) ('reactive' component)
 -- @
 runPage :: forall model.
   PageLocation
-    {- ^ The location of the 'Page' ('pagePort' and/or 'pagePath') -} ->
-  model
-    {- ^ The initial @model@ of the model for the 'Page' -} ->
+    {- ^ The location of the 'Page' (built using 'pagePort' and/or 'pagePath'). -} ->
+  (WithinPage => IO model)
+    {- ^ An IO action to return the initial @model@ for the 'Page'.
+         Note that this is in a 'WithinPage' context and therefore can use
+         'eval' and 'evalBlock'. -} ->
   (WithinPage => model -> (PageContent, Handlers model))
-    {- ^ A function to draw the @model@ as some rendered 'Direct.PageContent' and
-         produce the set of handlers for events on that new view of the page.
+    {- ^ A function to draw the @model@ as some rendered 'Direct.PageContent'
+         and produce the set of 'Handlers' for events on that new view of the
+         page. Note that this is in a 'WithinPage' context and therefore can use
+         'eval' and 'evalBlock'.
     -} ->
   IO (Page model)
     {- ^ A 'Page' handle to permit further interaction with the running page -}
-runPage pageLocation initialModel drawAndHandle =
-  do pageActions   :: Chan (Maybe (model -> IO model))  <- newChan
+runPage pageLocation getInitialModel drawAndHandle =
+  do pageActions   :: Chan (PageAction model)           <- newChan
      currentUpdate :: Chan (Either PageEvent model)     <- newChan
      frames        :: Chan PageContent                  <- newChan
      eventLists    :: Chan (Maybe EventList)            <- newChan
      pageFinished  :: MVar (Either SomeException model) <- newEmptyMVar
+     let inPage :: (WithinPage => a) -> a
+         inPage = withPageContext (WithinPageContext pageLocation)
 
      -- The stream of events from the page
      nextEvent <- events pageLocation
@@ -306,13 +327,10 @@ runPage pageLocation initialModel drawAndHandle =
                SomeEvents <$> nonEmpty (handledEvents handlers)
              readChan currentUpdate >>= \case
                Left event -> do
-                 writeChan pageActions (Just (handle handlers event))
+                 writeChan pageActions (PageAction (handle handlers event))
                  loop handlers
                Right model ->
-                 do let (content, handlers') =
-                          withPageContext
-                            (WithinPageContext pageLocation)
-                            (drawAndHandle model)
+                 do let (content, handlers') = inPage (drawAndHandle model)
                     writeChan frames content
                     loop handlers'
        in catch @SomeException (loop mempty)
@@ -322,18 +340,19 @@ runPage pageLocation initialModel drawAndHandle =
      _modelThread <- forkIO $
        let loop model =
              readChan pageActions >>= \case
-               Nothing -> putMVar pageFinished (Right model)
-               Just action ->
-                 do model' <- action model
+               StopPage -> putMVar pageFinished (Right model)
+               PageAction action ->
+                 do model' <- inPage (action model)
                     writeChan currentUpdate (Right model')
                     loop model'
        in finally
-            (catch @SomeException (loop initialModel)
+            (catch @SomeException
+              (loop =<< inPage getInitialModel)
               (putMVar pageFinished . Left))
             (traverse_ killThread [renderThread, pollThread, updateThread])
 
      -- Kick off the cycle by "updating" the intial model
-     writeChan pageActions (Just pure)
+     writeChan pageActions (PageAction pure)
 
      pure Page{..}
 
@@ -371,8 +390,9 @@ waitPage Page{pageFinished} =
 -- Before the page is stopped, all events and modifications which were pending
 -- at the time of this command will be processed.
 stopPage :: Page model -> IO ()
-stopPage Page{pageActions} =
-  writeChan pageActions Nothing
+stopPage Page{pageActions, pageFinished} = do
+  running <- isEmptyMVar pageFinished
+  when running $ writeChan pageActions StopPage
 
 -- | Modify the model of the page with a pure function, and update the view in
 -- the browser to reflect the new model.
@@ -380,16 +400,20 @@ stopPage Page{pageActions} =
 -- This function is non-blocking; the page view may not yet have been updated by
 -- the time it returns.
 modifyPage :: Page model -> (model -> model) -> IO ()
-modifyPage page f = modifyPageIO page (pure . f)
+modifyPage page f = do
+  running <- isEmptyMVar (pageFinished page)
+  when running $ modifyPageIO page (pure . f)
 
 -- | Modify the model of the page, potentially doing arbitrary other effects in
--- the 'IO' monad, then re-draw the page to the browser.
+-- the 'IO' monad, then re-draw the page to the browser. The functions 'eval'
+-- and 'evalBlock' are available for evaluating JavaScript within the context of
+-- the current page.
 --
 -- This function is non-blocking; the page view may not yet have been updated by
 -- the time it returns.
-modifyPageIO :: Page model -> (model -> IO model) -> IO ()
+modifyPageIO :: Page model -> (WithinPage => model -> IO model) -> IO ()
 modifyPageIO Page{pageActions} action =
-  writeChan pageActions (Just action)
+  writeChan pageActions (PageAction action)
 
 -- | Set the model of the page to a particular value, and update the view in the
 -- browser to reflect the new model.
@@ -428,11 +452,12 @@ getPage page = do
 
 -- Borrowing a technique from Data.Reflection:
 
--- | The @WithinPage@ class, when it is present, enables the use of the 'eval'
--- and 'evalBlock' functions. Only in the body of a call to 'runPage' is there a
--- canonical current page, and it's a type error to use them anywhere else.
+-- | The @WithinPage@ constraint, when it is present, enables the use of the
+-- 'eval' and 'evalBlock' functions. Only in the body of a call to 'runPage' or
+-- 'modifyPageIO' is there a canonical current page, and it's a type error to
+-- use these functions anywhere else.
 class WithinPage where
-  -- | Acquire the JavaScript evaluation context from the ambient page. This
+  -- Acquire the JavaScript evaluation context from the ambient page. This
   -- function cannot be called directly; use 'eval' or 'evalBlock' to evaluate
   -- JavaScript within a page.
   withinPageContext :: WithinPageContext
@@ -449,13 +474,13 @@ withPageContext c k = Unsafe.unsafeCoerce (WithinPageGift k :: WithinPageGift r)
 newtype WithinPageContext =
   WithinPageContext PageLocation
 
-eval, evalBlock :: forall a m. (WithinPage, JSON.FromJSON a, MonadIO m) => Text -> m a
+eval, evalBlock :: (WithinPage, JSON.FromJSON a, MonadIO m) => Text -> m a
 -- | Evaluate a JavaScript __expression__ in the context of the current page.
 -- The given text is automatically wrapped in a @return@ statement before being
 -- evaluated in the browser.
 --
--- If you try to call 'eval' outside of a call to 'runPage', you'll get a
---  type error like the following:
+-- If you try to call 'eval' outside of a call to 'runPage' or 'modifyPageIO',
+--  you'll get a type error like the following:
 --
 -- > • No instance for WithinPage arising from a use of ‘eval’
 -- > • In a stmt of a 'do' block: x <- eval @Int "1 + 1"
@@ -471,8 +496,8 @@ eval expression =
 -- statement, which means that you can evaluate multi-line statements, but you
 -- must provide your own @return@.
 --
--- If you try to call 'evalBlock' outside of a call to 'runPage', you'll get a
---  type error like the following:
+-- If you try to call 'evalBlock' outside of a call to 'runPage' or
+--  'modifyPageIO', you'll get a type error like the following:
 --
 -- > • No instance for WithinPage arising from a use of ‘evalBlock’
 -- > • In a stmt of a 'do' block: x <- evalBlock @Int "return 1;"

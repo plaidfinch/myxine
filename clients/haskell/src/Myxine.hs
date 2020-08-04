@@ -17,10 +17,11 @@
 -}
 module Myxine
   ( -- ** Required Extensions
-{-| This library relies on the __@OverloadedRecordFields@__ language extension,
-since a variety of browser event interfaces share field names/types. Without
-enabling it, you'll see many bewildering errors about ambiguous names. You may
-also find useful for concision the extensions __@NamedFieldPuns@__ and
+{-| This library relies on the extension __@OverloadedRecordFields@__, since a
+variety of browser event interfaces share field names/types. Without enabling
+it, you'll see many bewildering errors about ambiguous names.
+
+You may also find useful for concision the extensions __@NamedFieldPuns@__ and
 __@RecordWildCards@__.
 -}
     module Myxine.Page

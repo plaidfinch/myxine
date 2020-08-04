@@ -15,7 +15,7 @@ import Data.HashMap.Strict (HashMap)
 
 data ConjMap k a
   = ConjMap [a] (HashMap k (ConjMap k a))
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 empty :: ConjMap k a
 empty = ConjMap [] HashMap.empty

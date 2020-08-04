@@ -1,6 +1,6 @@
 module Myxine.Reactive
   ( Reactive, ReactiveM, reactive, title, markup,
-    on, on', Propagation(..), target, (@@)
+    on, on', Propagation(..), target, (@@), (##)
   ) where
 
 import Text.Blaze.Html5 (Html, ToMarkup(..), string, (!), dataAttribute)
@@ -10,6 +10,7 @@ import Text.Blaze.Internal (Attributable)
 import Data.String
 import Data.List hiding (span)
 import Control.Monad.State
+import Control.Monad.Reader
 import Data.Monoid
 import Data.Text (Text)
 import Data.List.NonEmpty (NonEmpty(..), (<|))
@@ -17,6 +18,7 @@ import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Text.Lazy as Text
 import Control.Spoon (teaspoonWithHandles)
 import qualified Control.Exception as Exception
+import Control.Lens hiding ((<|))
 
 import Myxine.Event
 import qualified Myxine.Direct as Direct (PageContent, pageBody, pageTitle)
@@ -42,14 +44,16 @@ data ReactiveBuilder model =
 -- This is almost always used with a return type of @()@, hence you will usually
 -- see it aliased as 'Reactive' @model@.
 newtype ReactiveM model a =
-  ReactiveM (State (ReactiveBuilder model) a)
-  deriving newtype (Functor, Applicative, Monad)
+  ReactiveM (ReaderT model (State (ReactiveBuilder model)) a)
+  deriving newtype (Functor, Applicative, Monad, MonadReader model)
 
 -- | The 'Reactive' type interleaves the description of page markup with the
--- specification of event handlers for the page. It is a 'Monoid' and its
--- underlying type 'ReactiveM' is a 'Monad', which means that just like the
--- Blaze templating library, it can be (and is designed to be!) used in
--- @do@-notation.
+-- specification of event handlers for the page.
+--
+-- It is a 'Monoid' and its underlying type 'ReactiveM' is a 'Monad', which
+-- means that just like the Blaze templating library, it can be (and is designed
+-- to be!) used in @do@-notation. Importantly, it is also a 'MonadReader'
+-- @model@, where the current model is returned by 'ask'.
 type Reactive model = ReactiveM model ()
 
 -- | Wrap an inner reactive component in some enclosing HTML. Any listeners
@@ -73,13 +77,16 @@ type Reactive model = ReactiveM model ()
 (@@) :: (Html -> Html) -> ReactiveM model a -> ReactiveM model a
 wrap @@ ReactiveM inner = ReactiveM do
   builder <- get
+  model <- ask
   let originalLoc = location builder
       (result, builder') =
-        runState inner builder
-          { location = 0 <| originalLoc  -- descend a level in location cursor
-          , pageMarkup = mempty
-          -- handlers & pageTitle are threaded through and preserved
-          }
+        runState
+          (runReaderT inner model)
+          builder
+            { location = 0 <| originalLoc  -- descend a level in location cursor
+            , pageMarkup = mempty
+            -- handlers & pageTitle are threaded through and preserved
+            }
   put builder'
     { location = let (h :| t) = originalLoc in (h + 1 :| t)  -- move sideways
     , pageMarkup =
@@ -181,14 +188,61 @@ on ::
   Reactive model
 on event action = on' event (\props -> action props >> pure Bubble)
 
+-- | Focus a reactive page fragment to manipulate a piece of a larger model,
+-- using a 'Traversal'' to specify what part(s) of the larger model to
+-- manipulate.
+--
+-- This is especially useful when creating generic components which can be
+-- re-used in the context of many different models. For instance, we can define
+-- a toggle button and specify separately which part of a model it toggles:
+--
+-- @
+-- toggle :: 'Reactive' Bool
+-- toggle =
+--   button '@@' do
+--     active <- 'ask'
+--     if active then \"ON\" else \"OFF\"
+--     'on' 'Click' \\_ -> 'modify' not
+--
+-- twoToggles :: 'Reactive' (Bool, Bool)
+-- twoToggles = do
+--   _1 '##' toggle
+--   _2 '##' toggle
+-- @
+--
+-- This function takes a 'Traversal'', which is strictly more general than a
+-- 'Lens''. This means you can use traversals with zero or more than one target,
+-- and this many replicas of the given 'Reactive' fragment will be generated,
+-- each separately controlling its corresponding portion of the model. This
+-- means the above example could also be phrased:
+--
+-- @
+-- twoToggles :: 'Reactive' (Bool, Bool)
+-- twoToggles = 'each' '##' toggle
+-- @
+(##) :: Traversal' model model' -> Reactive model' -> Reactive model
+l ## ReactiveM action =
+  ReactiveM $
+    ReaderT \model ->
+      iforOf_ (indexing l) model \i model' ->
+        StateT \b@ReactiveBuilder{handlers = priorHandlers} ->
+          let b' = flip execState (b {handlers = mempty}) $
+                runReaderT action model'
+          in Identity $
+            ((), b' { handlers =
+                      priorHandlers <>
+                      focusHandlers (indexing l . index i) (handlers b')
+                    })
+infixr 4 ##
+
 -- | Evaluate a reactive component to produce a pair of 'Direct.PageContent' and
 -- 'Handlers'. This is the bridge between the 'Direct.runPage' abstraction and
 -- the 'Reactive' abstraction: use this to run a reactive component in a
 -- 'Myxine.Page'.
-reactive :: Reactive model -> (Direct.PageContent, Handlers model)
-reactive (ReactiveM action) =
+reactive :: Reactive model -> model -> (Direct.PageContent, Handlers model)
+reactive (ReactiveM action) model =
   let ReactiveBuilder{handlers, pageMarkup, pageTitle = pageContentTitle} =
-        execState action initialBuilder
+        execState (runReaderT action model) initialBuilder
       pageContentBody = renderMarkup pageMarkup
   in (Direct.pageBody (Text.toStrict pageContentBody)
       <> foldMap Direct.pageTitle pageContentTitle,

@@ -11,7 +11,7 @@ Singleton 'Handlers' can be created using the 'onEvent' function, and they can
 be joined together using '<>'.
 
 This module is useful when you are building your own page event handling
-abstraction, for instance, if "Myxine.Reactive" isn't right for your purposes.
+abstraction, for instance, if 'Myxine.Reactive' isn't right for your purposes.
 However, it is not necessary to usee this module directly if you are buliding a
 reactive page using that high-level abstraction.
 -}
@@ -21,6 +21,7 @@ module Myxine.Handlers
   , onEvent
   , handle
   , handledEvents
+  , focusHandlers
   , TargetFact
   , tagIs
   , attrIs
@@ -33,6 +34,8 @@ import qualified Data.Text as Text
 import Data.Text (Text)
 import Data.Dependent.Map (DMap)
 import qualified Data.Dependent.Map as DMap
+import Control.Lens
+import Control.Monad.State
 
 import Myxine.Event
 import Myxine.Direct
@@ -123,7 +126,26 @@ handle (Handlers allHandlers) PageEvent{event, properties, targets} model =
            Stop   -> processHandlers (hs : [     ]) m'
 {-# INLINE handle #-}
 
--- TODO: add zoom combinator!
+-- | Extend a set of 'Handlers' that manipulate some smaller @model'@ to
+-- manipulate some larger @model@, using a 'Traversal'' between the two model
+-- types. Whenever a handler is invoked, it will be called with each extant
+-- target of the specified 'Traversal''.
+focusHandlers ::
+  forall model model'. Traversal' model model' -> Handlers model' -> Handlers model
+focusHandlers l (Handlers m) = Handlers $
+  DMap.map (\(PerEventHandlers cm) -> PerEventHandlers (fmap zoomOut cm)) m
+  where
+    zoomOut ::
+      (props -> model' -> IO (Propagation, model')) ->
+      (props -> model -> IO (Propagation, model))
+    zoomOut h props model = do
+      (finalModel, finalPropagation) <-
+        flip runStateT mempty $
+          forOf l model \model' -> do
+            (propagation, finalModel') <- liftIO (h props model')
+            modify (propagation <>)
+            pure finalModel'
+      pure (finalPropagation, finalModel)
 
 -- | Get a list of all the events which are handled by these handlers.
 handledEvents :: Handlers model -> [Some EventType]

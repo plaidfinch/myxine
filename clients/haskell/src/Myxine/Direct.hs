@@ -16,7 +16,8 @@ module Myxine.Direct
     PageLocation, pagePort, PagePort, pagePath, PagePath
     -- * Sending updates to pages and getting events from pages
   , Update(..), EventList(..), PageEvent(..), Target, tag, attribute
-  , PageContent, pageBody, pageTitle, update, events
+  , PageContent, pageBody, pageTitle, pageContentBody, pageContentTitle
+  , update, events
     -- * Evaluating raw JavaScript in the context of a page
   , JavaScript(..), evaluateJs, JsException(..)
     -- * Exceptions thrown if the server misbehaves
@@ -35,7 +36,7 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Control.Monad.IO.Class
 import Control.Exception
 import Data.Constraint
-import Data.Dependent.Map (Some(..))
+import Data.Some.Newtype (Some(..))
 import qualified Data.ByteString.Char8
 import qualified Data.ByteString.Lazy.Char8 as ByteString
 import Data.ByteString.Lazy.Char8 (ByteString)
@@ -62,8 +63,8 @@ import Paths_myxine_client (version)
 -- 'pageTitle' (if any), and concatenates in order each specified 'pageBody'.
 data PageContent
   = PageContent
-    { pageContentBody  :: Text
-    , pageContentTitle :: Last Text
+    { _pageContentBody  :: Text
+    , _pageContentTitle :: Last Text
     } deriving (Eq, Ord, Show)
 
 instance Semigroup PageContent where
@@ -76,12 +77,20 @@ instance Monoid PageContent where
 -- | Create a rendered 'PageContent' with an empty @title@ and the specified
 -- text as its @body@.
 pageBody :: Text -> PageContent
-pageBody body = mempty { pageContentBody = body }
+pageBody body = mempty { _pageContentBody = body }
 
 -- | Create a rendered 'PageContent' with an empty @body@ and the specified
 -- text as its @title@.
 pageTitle :: Text -> PageContent
-pageTitle title = mempty { pageContentTitle = Last (Just title) }
+pageTitle title = mempty { _pageContentTitle = Last (Just title) }
+
+-- | Get the rendered @body@ of a 'PageContent'.
+pageContentBody :: PageContent -> Text
+pageContentBody = _pageContentBody
+
+-- | Get the @title@ of a 'PageContent'.
+pageContentTitle :: PageContent -> Maybe Text
+pageContentTitle = getLast . _pageContentTitle
 
 -- | A full page update as ready-to-send to the Myxine server.
 data Update
@@ -215,8 +224,8 @@ update PageLocation{pageLocationPort = Last maybePort,
     body :: Req.ReqBodyLbs
     updateOptions :: Req.Option 'Req.Http
     (body, updateOptions) = case updateContent of
-      Dynamic (PageContent{pageContentTitle = Last maybeTitle,
-                           pageContentBody = text}) ->
+      Dynamic (PageContent{_pageContentTitle = Last maybeTitle,
+                           _pageContentBody = text}) ->
         ( Req.ReqBodyLbs (ByteString.fromStrict (Text.encodeUtf8 text))
         , foldMap ("title" Req.=:) maybeTitle )
       Static contentType content ->
@@ -316,8 +325,7 @@ evaluateJs PageLocation{pageLocationPort = Last maybePort,
 -- a "stream" of sequential events matching the event list. The state maintained
 -- within the stream is used to coordinate with the server to return a
 -- sequential event from each poll of the stream. It is strongly recommended to
--- create one such "get next" action and poll it repeatedly. The latter, unlike
--- the former, might skip arbitrary numbers of events when repeatedly invoked!
+-- create only one such "get next" action and to poll it repeatedly.
 --
 -- Calls to the "get next" action returned will block until the next event
 -- matching the given description is available. Provided that the "get next"
@@ -328,8 +336,10 @@ evaluateJs PageLocation{pageLocationPort = Last maybePort,
 -- tight-looping thread and buffer them client-side.
 events ::
   PageLocation
-    {- ^ The location of the page to listen for events from -} ->
+    {- ^ The location of the page to listen for events from. -} ->
   IO (EventList -> IO PageEvent)
+    {- ^ An action which polls for the next event matching the given list, and
+         blocks until such an event arrives. -}
 events PageLocation{pageLocationPort = Last maybePort,
                     pageLocationPath = Last maybePath} =
   do moment <- newIORef Nothing

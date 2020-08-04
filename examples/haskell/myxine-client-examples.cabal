@@ -69,3 +69,7 @@ executable circles
 executable counter
   import:              options, deps
   main-is:             Counter.hs
+
+executable toggles
+  import:              options, deps
+  main-is:             Toggles.hs

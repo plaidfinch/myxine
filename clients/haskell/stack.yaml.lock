@@ -5,29 +5,29 @@
 
 packages:
 - completed:
-    hackage: dependent-map-0.3@sha256:dc745864d5116bbd59ad29100faec74c79e681d35808547023619544c0e9f9b7,1574
+    hackage: dependent-map-0.4.0.0@sha256:ca2b131046f4340a1c35d138c5a003fe4a5be96b14efc26291ed35fd08c62221,1657
     pantry-tree:
       size: 551
-      sha256: 33ba69f91b54e7d64953b236d1de4ac31477b5b164f2990bfce308914006eac3
+      sha256: 5defa30010904d2ad05a036f3eaf83793506717c93cbeb599f40db1a3632cfc5
   original:
-    hackage: dependent-map-0.3
+    hackage: dependent-map-0.4.0.0
 - completed:
-    hackage: constraints-extras-0.3@sha256:cafdfcd003885f8aacc7431ec645541fda0f71c351f86cb239d4b76bf923ad93,1593
+    hackage: constraints-extras-0.3.0.2@sha256:013b8d0392582c6ca068e226718a4fe8be8e22321cc0634f6115505bf377ad26,1853
     pantry-tree:
       size: 594
-      sha256: b76e7d3859c50a7f094311bb4ff911136f67dc55893c537fd264d21c0aeefbf6
+      sha256: 3ce1012bfb02e4d7def9df19ce80b8cd2b472c691b25b181d9960638673fecd1
   original:
-    hackage: constraints-extras-0.3
+    hackage: constraints-extras-0.3.0.2
 - completed:
-    hackage: dependent-sum-0.6@sha256:b51eb95b5f026d50e74a561066b1c57ef4dfaaccdb7e32dbed907e95122f3b6d,1852
+    hackage: dependent-sum-0.7.1.0@sha256:5599aa89637db434431b1dd3fa7c34bc3d565ee44f0519bfbc877be1927c2531,2068
     pantry-tree:
-      size: 474
-      sha256: 2a57d3a2382c8d568089318e6d49148393d2eddb3efc7227ca37078580b92dfb
+      size: 290
+      sha256: 9cbfb32b5a8a782b7a1c941803fd517633cb699159b851c1d82267a9e9391b50
   original:
-    hackage: dependent-sum-0.6
+    hackage: dependent-sum-0.7.1.0
 snapshots:
 - completed:
-    size: 491372
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/15/2.yaml
-    sha256: a98d091d911606d0d8adccbeb811b81bbd8cc2d888f99ef9e273350e8e9692a8
-  original: lts-15.2
+    size: 532379
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/16/8.yaml
+    sha256: 2ad3210d2ad35f3176005d68369a18e4d984517bfaa2caade76f28ed0b2e0521
+  original: lts-16.8
