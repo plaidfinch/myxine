@@ -23,8 +23,8 @@ main = mdo
   interrupt <-
     countdown 1000000 (modifyPage page (count %~ max 0 . subtract 1))
   page <- runPage mempty
-    Counter { _highlighted = False, _count = 0 }
-    (reactive . counter interrupt)
+    (pure Counter { _highlighted = False, _count = 0 })
+    (reactive (counter interrupt))
   print =<< waitPage page
 
 interval :: Int -> IO () -> IO ThreadId
@@ -40,10 +40,11 @@ countdown i action =
        killThread tid
      pure (writeChan interrupts ())
 
-counter :: IO () -> Counter -> Reactive Counter
-counter interrupt model = do
+counter :: IO () -> Reactive Counter
+counter interrupt = do
+  isHighlighted <- view highlighted
   H.button
-    ! A.style ("background: " <> (if model^.highlighted then "red" else "yellow") <> ";"
+    ! A.style ("background: " <> (if isHighlighted then "red" else "yellow") <> ";"
               <> "font-size: 50pt; margin: 40pt;")
     @@ do
       on Click \_ ->
@@ -51,4 +52,4 @@ counter interrupt model = do
            liftIO interrupt
       on MouseOver \_ -> highlighted .= True
       on MouseOut \_ -> highlighted .= False
-      markup (show (model^.count))
+      markup =<< view count
