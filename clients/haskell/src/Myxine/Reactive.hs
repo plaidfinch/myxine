@@ -1,6 +1,6 @@
 module Myxine.Reactive
   ( Reactive, ReactiveM, reactive, title, markup,
-    on, on', Propagation(..), target, (@@), (##)
+    on', on, Propagation(..), (@@), (##), target
   ) where
 
 import Text.Blaze.Html5 (Html, ToMarkup(..), string, (!), dataAttribute)
@@ -123,9 +123,16 @@ title :: Text -> Reactive model
 title t = ReactiveM (modify \wb -> wb { pageTitle = Last (Just t) })
 
 -- | Listen to a particular event and react to it by modifying the model for the
--- page. This function's returned @Propagation@ value specifies whether or not
+-- page. This function's returned 'Propagation' value specifies whether or not
 -- to propagate the event outwards to other enclosing contexts. The event target
 -- is scoped to the enclosing '@@', or the whole page if at the top level.
+--
+-- When the specified 'EventType' occurs, the event handler will be called with
+-- that event type's corresponding property record, e.g. a 'Click' event's
+-- handler will receive a 'MouseEvent' record. A handler can modify the page's
+-- model via 'State'ful actions and perform arbitrary IO using 'liftIO'. In the
+-- context of a running page, a handler also has access to the 'eval' and
+-- 'evalBlock' functions to evaluate JavaScript in that page.
 --
 -- __Exception behavior:__ This function catches @PatternMatchFail@ exceptions
 -- thrown by the passed function. That is, if there is a partial pattern match
@@ -168,20 +175,10 @@ on' event reaction = ReactiveM do
       [Exception.Handler \(_ :: Exception.PatternMatchFail) -> pure Nothing]
 
 -- | Listen to a particular event and react to it by modifying the model for the
--- page. This event will bubble out to listeners in enclosing contexts; to
--- prevent this, use 'on''. The event target is scoped to the enclosing '@@', or
--- the whole page if it is at the top level.
+-- page. This is a special case of 'on'' where the event is always allowed to
+-- bubble out to listeners in enclosing contexts.
 --
--- __Exception behavior:__ This function catches @PatternMatchFail@ exceptions
--- thrown by the passed function. That is, if there is a partial pattern match
--- in the pure function from event properties to stateful update, the stateful
--- update will be silently skipped. This is useful as a shorthand to select only
--- events of a certain sort, for instance:
---
--- @
--- 'on' 'Click' \\'MouseEvent'{shiftKey = True} ->
---   putStrLn "Shift + Click!"
--- @
+-- See the documentation for 'on''.
 on ::
   EventType props ->
   (props -> StateT model IO ()) ->

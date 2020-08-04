@@ -28,15 +28,11 @@ description:
   assumes that it is already running in the background (either started by an
   end-user, or managed by your own Haskell application).
   .
-  __Required extensions:__ This library relies on the @OverloadedRecordFields@
+  __Required extensions:__ This library relies on the __@OverloadedRecordFields@__
   language extension, since a variety of browser event interfaces share field
   names/types. Without enabling it, you'll see many bewildering errors about
   ambiguous names. You may also find useful for concision the extensions
-  @NamedFieldPuns@ and @RecordWildCards@.
-  .
-  __Package versioning and stability:__ This package should be considered in
-  "alpha" stability at present. No compatibility between alpha versions is
-  guaranteed.
+  __@NamedFieldPuns@__ and __@RecordWildCards@__.
 
 common deps
   build-depends:       base                 >= 4.12.0.0 && <= 4.14.0.0,
