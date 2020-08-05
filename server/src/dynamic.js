@@ -140,8 +140,7 @@ function myxine(enabledEvents) {
                             .forEach(([property, formatter]) => {
                                 data[property] = formatter(event[property]);
                             });
-                        // Prevent any default action
-                        event.preventDefault();
+
                         // Send the event to the server
                         worker.postMessage({
                             type: "event",
