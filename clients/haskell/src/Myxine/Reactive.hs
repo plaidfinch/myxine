@@ -1,6 +1,6 @@
 module Myxine.Reactive
   ( Reactive, ReactiveM, reactive, title, markup,
-    on', on, Propagation(..), (@@), (##), target
+    on', on, Propagation(..), (@@), (##), target, this
   ) where
 
 import Text.Blaze.Html5 (Html, ToMarkup(..), string, (!), dataAttribute)
@@ -8,7 +8,7 @@ import Text.Blaze.Renderer.Text
 import Text.Blaze.Internal (Attributable)
 
 import Data.String
-import Data.List hiding (span)
+import Data.List (intercalate)
 import Control.Monad.State
 import Control.Monad.Reader
 import Data.Monoid
@@ -107,6 +107,34 @@ infixr 5 @@
 -- >>> target === (id @@)
 target :: ReactiveM model a -> ReactiveM model a
 target = (id @@)
+
+-- | Return a piece of JavaScript code which looks up the object corresponding
+-- to the current scope's location in the page. This is suitable to be used in
+-- 'eval', for instance, to retrieve properties of a particular element.
+--
+-- If there is no enclosing '@@', then this is the @window@ object; otherwise,
+-- it is the outermost HTML element object created by the first argument to the
+-- enclosing '@@'. If there are multiple elements at the root of the enclosing
+-- '@@', then the first of these is selected.
+--
+-- For example, here's an input which reports its own contents:
+--
+-- @
+-- textbox :: Reactive Text
+-- textbox = input @@ do
+--   e <- this
+--   on Input \_ -> do
+--     value <- eval $ this <> ".value"
+--     put value
+-- @
+this :: ReactiveM model Text
+this = ReactiveM do
+  loc <- gets (NonEmpty.tail . location)
+  pure case loc of
+    [] -> "window"
+    h : t ->
+      let selector = "[data-" <> clientDataAttr <> "=\"" <> showLoc (h :| t) <> "\"]"
+      in "(document.querySelector('" <> selector <> "'))"
 
 -- | Write an atomic piece of HTML (or anything that can be converted to it) to
 -- the page in this location. Event listeners for its enclosing scope can be
@@ -230,7 +258,7 @@ l ## ReactiveM action =
                       priorHandlers <>
                       focusHandlers (indexing l . index i) (handlers b')
                     })
-infixr 4 ##
+infixr 5 ##
 
 -- | Evaluate a reactive component to produce a pair of 'Direct.PageContent' and
 -- 'Handlers'. This is the bridge between the 'Direct.runPage' abstraction and

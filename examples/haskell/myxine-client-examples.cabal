@@ -73,3 +73,7 @@ executable counter
 executable toggles
   import:              options, deps
   main-is:             Toggles.hs
+
+executable todo
+  import:              options, deps
+  main-is:             Todo.hs
