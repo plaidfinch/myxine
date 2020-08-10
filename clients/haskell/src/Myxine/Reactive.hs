@@ -258,6 +258,7 @@ l ## ReactiveM action =
                       priorHandlers <>
                       focusHandlers (indexing l . index i) (handlers b')
                     })
+-- TODO: make this more efficient using a pre-applied Traversal?
 infixr 5 ##
 
 -- | Evaluate a reactive component to produce a pair of 'Direct.PageContent' and
