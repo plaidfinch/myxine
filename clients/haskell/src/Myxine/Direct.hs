@@ -31,7 +31,7 @@ import Data.Maybe
 import Control.Monad
 import Data.Monoid
 import Data.String
-import Data.List
+import Data.List (foldl')
 import Data.List.NonEmpty (NonEmpty(..))
 import Control.Monad.IO.Class
 import Control.Exception
@@ -207,7 +207,7 @@ update ::
     {- ^ The new content of the page to display -} ->
   IO ()
 update PageLocation{pageLocationPort = Last maybePort,
-                        pageLocationPath = Last maybePath} updateContent =
+                    pageLocationPath = Last maybePath} updateContent =
   wrapCaughtReqException $
   do response <- Req.runReq Req.defaultHttpConfig $
        Req.req Req.POST url body Req.ignoreResponse options
@@ -297,8 +297,9 @@ evaluateJs ::
 evaluateJs PageLocation{pageLocationPort = Last maybePort,
                         pageLocationPath = Last maybePath} js =
   wrapCaughtReqException $
-  do response <- Req.runReq Req.defaultHttpConfig $
-       Req.req Req.POST url body Req.lbsResponse options
+  do response <- Req.runReq
+       Req.defaultHttpConfig { Req.httpConfigCheckResponse = \_ _ _ -> Nothing } $
+         Req.req Req.POST url body Req.lbsResponse options
      checkServerVersion response
      if Req.responseStatusCode response == 200
        then either (throwIO . JsException) pure $

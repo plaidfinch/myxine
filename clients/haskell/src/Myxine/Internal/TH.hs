@@ -24,7 +24,7 @@ import qualified Data.HashMap.Lazy    as HashMap
 import           Data.HashSet         (HashSet)
 import qualified Data.HashSet         as HashSet
 import qualified Data.Kind
-import           Data.List
+import           Data.List            (sortBy, sortOn, sort, intercalate)
 import           Data.Ord
 import           Data.Text            (Text)
 import           Data.Traversable
