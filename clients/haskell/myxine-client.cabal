@@ -1,6 +1,6 @@
 cabal-version:       2.4
 name:                myxine-client
-version:             0.0.1.1
+version:             0.0.1.2
 synopsis:            A Haskell client for the Myxine GUI server
 homepage:            https://github.com/kwf/myxine
 bug-reports:         https://github.com/kwf/myxine/issues/new

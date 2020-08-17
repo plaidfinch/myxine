@@ -19,7 +19,7 @@ URL = 'https://github.com/kwf/myxine'
 EMAIL = 'kwf@very.science'
 AUTHOR = 'Kenny Foner'
 REQUIRES_PYTHON = '>=3.6.0'
-VERSION = '0.2.0'
+VERSION = '0.2.1'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
