@@ -1,19 +1,19 @@
 cabal-version:       2.4
 name:                myxine-client
-version:             0.0.1.0
+version:             0.0.1.1
 synopsis:            A Haskell client for the Myxine GUI server
-homepage:            https://github.com/GaloisInc/myxine
-bug-reports:         https://github.com/GaloisInc/myxine/issues/new
+homepage:            https://github.com/kwf/myxine
+bug-reports:         https://github.com/kwf/myxine/issues/new
 license:             MIT
 license-file:        LICENSE
 author:              Kenny Foner
-maintainer:          kwf@galois.com
-copyright:           Copyright (c) 2020 Galois, Inc.
+maintainer:          kwf@very.science
+copyright:           Copyright (c) 2020 Kenny Foner and Galois, Inc.
 category:            GUI
 stability:           alpha
 extra-source-files:  CHANGELOG.md, enabled-events.json
 description:
-  [Myxine](https://github.com/GaloisInc/myxine) is a language-agnostic local
+  [Myxine](https://github.com/kwf/myxine) is a language-agnostic local
   server that lets you build interactive applications in the browser using a
   RESTful API. This package defines high-level typed Haskell bindings for using
   Myxine to quickly prototype surprisingly high-performance GUIs.

@@ -10,7 +10,7 @@ mod server;
          in your browser using any language under the sea!\n\
          \n\
          DOCUMENTATION:\
-         \n    https://github.com/GaloisInc/myxine")]
+         \n    https://github.com/kwf/myxine")]
 struct Options {
     /// Run on this port
     #[structopt(short, long, default_value = "1123")]
