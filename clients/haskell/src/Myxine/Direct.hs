@@ -434,7 +434,7 @@ wrapCaughtReqException action =
 -- this library.
 --
 -- If you encounter this exception in the wild, please file a bug report at
--- <https://github.com/GaloisInc/myxine/issues/new>. Thanks!
+-- <https://github.com/kwf/myxine/issues/new>. Thanks!
 data ProtocolException
   = MyxineProtocolException String
   | MyxineServerVersionClashException Salve.Version
@@ -480,4 +480,4 @@ instance Show ProtocolException where
     <> "and the following error message: \n" <> details
     where
       bugReportURL :: String
-      bugReportURL = "https://github.com/GaloisInc/myxine/issues/new"
+      bugReportURL = "https://github.com/kwf/myxine/issues/new"

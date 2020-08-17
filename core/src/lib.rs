@@ -1,5 +1,5 @@
 //! This package is the heart of the [Myxine GUI
-//! server](https://github.com/GaloisInc/myxine). It does not contain any code
+//! server](https://github.com/kwf/myxine). It does not contain any code
 //! for directly implementing the web server or browser-side JavaScript.
 //!
 //! You probably only need to depend on this library if you are yourself

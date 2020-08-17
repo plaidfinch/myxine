@@ -1,11 +1,11 @@
 {-|
     Description : High-level "model-view-controller" interface to the Myxine server
 
-    This library implements well-typed bindings to the
-    [Myxine](https://github.com/GaloisInc/myxine) server for creating local
-    interactive GUIs in the web browser. For more details on Myxine-the-program, see
-    the package description of this library, or [its own
-    homepage](https://github.com/GaloisInc/myxine).
+    This library implements typed bindings to the
+    [Myxine](https://github.com/kwf/myxine) server for creating local
+    interactive GUIs in the web browser. For more details on Myxine-the-program,
+    see the package description of this library, or [its own
+    homepage](https://github.com/kwf/myxine).
 
     This module defines a higher level interface which abstracts over the direct
     calls to the Myxine server to allow a more declarative style of programming.

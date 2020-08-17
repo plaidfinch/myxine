@@ -3,7 +3,7 @@
 <table style="border: 0">
 <tr style="border: 0">
   <td width="40%" style="border: 0">
-    <img src="https://github.com/GaloisInc/myxine/raw/master/images/myxine_glutinosa.png" target="_blank" width="425px" alt="woodcut sketch of myxine glutinosa, the hagfish">
+    <img src="https://github.com/kwf/myxine/raw/master/images/myxine_glutinosa.png" target="_blank" width="425px" alt="woodcut sketch of myxine glutinosa, the hagfish">
   </td>
   <td style="border: 0">
     <p>Hagfish, a.k.a. <a href="https://en.wikipedia.org/wiki/Hagfish"><i>myxine glutinosa</i></a>, are eel-like sea creatures best known for their ability to make a lot of slime.</p/>
@@ -74,7 +74,7 @@ client libraries officially maintained by the Myxine project are those for
 If you're interested in writing Myxine bindings for a new language, you'll want
 to read the [API documentation](API.md), and perhaps reference one or more of
 the [existing client libraries](clients/). Don't be afraid to ask for help by
-[opening an issue](https://github.com/GaloisInc/myxine/issues/new), and please
+[opening an issue](https://github.com/kwf/myxine/issues/new), and please
 do contribute back your work by submitting a pull request!
 
 ### An example in Python

@@ -1,6 +1,6 @@
 # A Python client for Myxine
 
-[Myxine](https://github.com/GaloisInc/myxine) is a language-agnostic local
+[Myxine](https://github.com/kwf/myxine) is a language-agnostic local
 server that lets you build interactive applications in the browser using a
 RESTful API. This package defines simple Python bindings for using Myxine to
 quickly prototype surprisingly high-performance GUIs.

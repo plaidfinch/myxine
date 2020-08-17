@@ -2,19 +2,19 @@ cabal-version:       2.4
 name:                myxine-client-examples
 version:             0.1.0.0
 synopsis:            Examples of use for the Haskell client to the Myxine UI server
-homepage:            https://github.com/galoisinc/myxine
-bug-reports:         https://github.com/GaloisInc/myxine/issues/new
+homepage:            https://github.com/kwf/myxine
+bug-reports:         https://github.com/kwf/myxine/issues/new
 license:             MIT
 license-file:        LICENSE
 author:              Kenny Foner
 maintainer:          kwf@very.science
-copyright:           Copyright (c) 2020 Galois, Inc.
+copyright:           Copyright (c) 2020 Kenny Foner and Galois, Inc.
 category:            GUI
 extra-source-files:  CHANGELOG.md
 description:
   This package is a collection of examples of using the Haskell language
   bindings to the Myxine GUI server. For more information on Myxine itself, see
-  [its homepage](https://github.com/GaloisInc/myxine). To read the library
+  [its homepage](https://github.com/kwf/myxine). To read the library
   documentation for the Haskell bindings used here, see [the documentation on
   Hackage](https://hackage.haskell.org/package/myxine-client).
 
