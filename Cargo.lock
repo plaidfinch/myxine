@@ -648,7 +648,7 @@ dependencies = [
 
 [[package]]
 name = "myxine"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "bytes",
  "futures",
@@ -665,7 +665,7 @@ dependencies = [
 
 [[package]]
 name = "myxine-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bytes",
  "futures",
